@@ -6,32 +6,17 @@
 #include <string>
 #include <vector>
 
+#include "Tile.h"
 #include "olcPixelGameEngine.h"
 
 enum class TileType { Empty, Wire, ChargedWire };
-enum class TileSide { Empty = 0, Top = 1, Bottom = 2, Left = 4, Right = 16 };
-
-constexpr TileSide flipSide(TileSide side) {
-  switch (side) {
-    case TileSide::Top:
-      return TileSide::Bottom;
-    case TileSide::Bottom:
-      return TileSide::Top;
-    case TileSide::Left:
-      return TileSide::Left;
-    case TileSide::Right:
-      return TileSide::Left;
-    default:
-      return TileSide::Empty;
-  }
-}
 
 // A tile. Can manage drawing and simulation itself.
-class Tile {
+class OldTile {
  private:
   struct Neighbour {
     TileSide side;
-    std::shared_ptr<Tile> tile;
+    std::shared_ptr<OldTile> tile;
   };
   std::vector<Neighbour> neighbours;
 
@@ -57,7 +42,7 @@ class Tile {
   }
 
  public:
-  Tile() {
+  OldTile() {
     pos = {0, 0};
     size = {0, 0};
     type = TileType::Empty;
@@ -66,7 +51,7 @@ class Tile {
     ignoredSides = TileSide::Empty;
   }
 
-  Tile(int x, int y, int size, TileType type) {
+  OldTile(int x, int y, int size, TileType type) {
     pos = {x, y};
     this->size = {size, size};
     this->type = type;
@@ -75,7 +60,7 @@ class Tile {
     ignoredSides = TileSide::Empty;
   }
 
-  ~Tile() {}
+  ~OldTile() {}
   olc::vi2d Pos() { return pos; }
   int32_t Size() { return size.x; }
   TileType Type() { return type; }
@@ -91,7 +76,7 @@ class Tile {
     }
   }
 
-  void SetNeighbour(TileSide side, std::shared_ptr<Tile> tile) {
+  void SetNeighbour(TileSide side, std::shared_ptr<OldTile> tile) {
     neighbours.push_back((Neighbour){.side = side, .tile = tile});
   }
 
@@ -131,6 +116,104 @@ class Tile {
   }
 };
 
+#define TILE_SIZE 16
+class Wire : public Tile {
+ private:
+  olc::Pixel unpulsedColor = olc::WHITE;
+  olc::Pixel pulsedColor = olc::YELLOW;
+  olc::Pixel highlightColor = olc::RED;
+
+ public:
+  Wire() {
+    vPos = olc::vi2d(0, 0);
+    uPixelSize = TILE_SIZE;
+    wasPulsed = false;
+    pulsed = false;
+    std::cout << "Creating new wire at " << vPos / uPixelSize << std::endl;
+  }
+
+  Wire(uint32_t x, uint32_t y) {
+    vPos = olc::vi2d(x, y);
+    uPixelSize = TILE_SIZE;
+    wasPulsed = false;
+    pulsed = false;
+    std::cout << "Creating new wire at " << vPos / uPixelSize << std::endl;
+  }
+
+  Wire(olc::vi2d pos) {
+    vPos = pos;
+    uPixelSize = TILE_SIZE;
+    wasPulsed = false;
+    pulsed = false;
+    std::cout << "Creating new wire at " << vPos / uPixelSize << std::endl;
+  }
+
+  void Draw(olc::PixelGameEngine* renderer, bool highlighted = false) override {
+    auto fillColor = pulsed ? pulsedColor : unpulsedColor;
+    // std::cout << "Rendering " << pulsed << " at " << vPos / uPixelSize
+    //           << std::endl;
+    renderer->FillRect(vPos, olc::vi2d(uPixelSize, uPixelSize), fillColor);
+    if (highlighted) {
+      renderer->DrawRect(vPos, olc::vi2d(uPixelSize - 1, uPixelSize - 1),
+                         highlightColor);
+    }
+  }
+
+  void Simulate() override {
+    if (true) {
+      for (auto& rawNeighbour : neighbours) {
+        if (rawNeighbour.expired()) {
+          continue;
+        }
+        auto neighbour = rawNeighbour.lock();
+        neighbour->Update(true);
+      }
+    }
+  }
+
+  ~Wire() {}
+};
+
+class EmptyTile : public Tile {
+ private:
+  olc::Pixel color = olc::BLUE;
+  olc::Pixel highlightColor = olc::RED;
+
+ public:
+  EmptyTile() {
+    vPos = olc::vi2d(0, 0);
+    uPixelSize = TILE_SIZE;
+    wasPulsed = false;
+    pulsed = false;
+  }
+  EmptyTile(uint32_t x, uint32_t y) {
+    vPos = olc::vi2d(x, y);
+    uPixelSize = TILE_SIZE;
+    wasPulsed = false;
+    pulsed = false;
+  }
+
+  EmptyTile(olc::vi2d pos) {
+    vPos = pos;
+    uPixelSize = TILE_SIZE;
+    wasPulsed = false;
+    pulsed = false;
+  }
+
+  void Draw(olc::PixelGameEngine* renderer, bool highlighted = false) override {
+    renderer->FillRect(vPos, olc::vi2d(uPixelSize, uPixelSize), color);
+    if (highlighted) {
+      renderer->DrawRect(vPos, olc::vi2d(uPixelSize - 1, uPixelSize - 1),
+                         highlightColor);
+    }
+  }
+
+  // Nothing should ever happen
+  void Simulate() override { return; }
+
+  ~EmptyTile() {}
+};
+
 class Game : public olc::PixelGameEngine {
  public:
   Game() { sAppName = "Electricity Simulator"; }
@@ -148,8 +231,7 @@ class Game : public olc::PixelGameEngine {
     int tileCount = tileDimensions.x * tileDimensions.y;
     for (int y = 0; y < ScreenHeight(); y += 16) {
       for (int x = 0; x < ScreenWidth(); x += 16) {
-        tiles.push_back(
-            std::make_shared<Tile>(Tile(x, y, iTileSize, TileType::Empty)));
+        tiles.push_back(std::make_shared<EmptyTile>(x, y));
       }
     }
     // Set neighbour pointers
@@ -161,12 +243,12 @@ class Game : public olc::PixelGameEngine {
         auto leftIndex = y * tileDimensions.x + x - 1;
         auto rightIndex = y * tileDimensions.x + x + 1;
 
-        if (y - 1 >= 0) tile->SetNeighbour(TileSide::Top, tiles[topIndex]);
+        if (y - 1 >= 0) tile->SetNeighbour(tiles[topIndex], TileSide::Top);
         if (y + 1 < tileDimensions.y)
-          tile->SetNeighbour(TileSide::Bottom, tiles[bottomIndex]);
-        if (x - 1 >= 0) tile->SetNeighbour(TileSide::Left, tiles[leftIndex]);
+          tile->SetNeighbour(tiles[bottomIndex], TileSide::Bottom);
+        if (x - 1 >= 0) tile->SetNeighbour(tiles[leftIndex], TileSide::Left);
         if (x + 1 < tileDimensions.x)
-          tile->SetNeighbour(TileSide::Right, tiles[rightIndex]);
+          tile->SetNeighbour(tiles[rightIndex], TileSide::Right);
       }
     }
     return true;
@@ -175,32 +257,29 @@ class Game : public olc::PixelGameEngine {
   uint64_t frameCounter = 0;
   bool OnUserUpdate(float fElapsedTime) override {
     frameCounter++;
-    if (frameCounter % 10 == 0) {
-      for (auto& tile : tiles) {
-        tile->Update();
-      }
-    }
-
-    for (auto& tile : this->tiles) {
-      tile->Draw(this);
-    }
 
     // Highlight tile below mouse
     auto selTileXIndex = GetMouseX() / iTileSize;
     auto selTileYIndex = GetMouseY() / iTileSize;
     auto index = selTileYIndex * tileDimensions.x + selTileXIndex;
-    tiles[index]->Highlight(this);
+
+    for (int i = 0; i < tiles.size(); i++) {
+      auto highlight = i == index;
+      tiles[i]->Draw(this, highlight);
+    }
 
     // Modify tile if it's left-clicked
+    auto& oldTile = tiles[index];
     if (GetMouse(0).bHeld) {
-      tiles[index]->SetTileType(TileType::Wire);
+      tiles[index] = oldTile->Convert<Wire>();
     }
     if (GetMouse(1).bPressed) {
-      tiles[index]->SetTileType(TileType::ChargedWire);
+      tiles[index]->Update(true);
     }
     if (GetMouse(2).bPressed) {
-      tiles[index]->SetTileType(TileType::Empty);
+      tiles[index] = oldTile->Convert<EmptyTile>();
     }
+
     if (frameCounter % 10 == 0) {
       for (auto& tile : tiles) {
         tile->Simulate();
