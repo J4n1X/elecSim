@@ -8,13 +8,14 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 set(PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -Werror -Wno-unknown-pragmas")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -Werror -Wno-unknown-pragmas")
+set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 file(GLOB CXXFILES ${PROJECT_SOURCE_DIR}/*.cpp)
 add_executable(elecSim ${CXXFILES})
-set_property(TARGET elecSim PROPERTY CXX_STANDARD 17)
+set_property(TARGET elecSim PROPERTY CXX_STANDARD 20)
 
 add_custom_target(
   run

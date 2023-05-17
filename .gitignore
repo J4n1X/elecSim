@@ -4,3 +4,10 @@
 /Makefile
 /bin
 /cmake_install.cmake
+/.vs
+/build
+/x64
+/*.vcxproj*
+/*.sln
+/elecSim.dir
+/out

@@ -3,118 +3,13 @@
 #include <cstddef>
 #include <cstdio>
 #include <memory>
+#include <ranges>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "Tile.h"
 #include "olcPixelGameEngine.h"
-
-enum class TileType { Empty, Wire, ChargedWire };
-
-// A tile. Can manage drawing and simulation itself.
-class OldTile {
- private:
-  struct Neighbour {
-    TileSide side;
-    std::shared_ptr<OldTile> tile;
-  };
-  std::vector<Neighbour> neighbours;
-
-  olc::vi2d pos;
-  olc::vi2d size;
-
-  TileType type;
-  TileType prevType;
-  TileType nextType;
-  TileSide ignoredSides;
-  bool changed;
-
-  static olc::Pixel getTileColor(TileType type) {
-    switch (type) {
-      case TileType::Wire:
-        return olc::WHITE;
-      case TileType::ChargedWire:
-        return olc::YELLOW;
-      case TileType::Empty:
-      default:
-        return olc::BLUE;
-    }
-  }
-
- public:
-  OldTile() {
-    pos = {0, 0};
-    size = {0, 0};
-    type = TileType::Empty;
-    prevType = TileType::Empty;
-    nextType = TileType::Empty;
-    ignoredSides = TileSide::Empty;
-  }
-
-  OldTile(int x, int y, int size, TileType type) {
-    pos = {x, y};
-    this->size = {size, size};
-    this->type = type;
-    nextType = type;
-    prevType = type;
-    ignoredSides = TileSide::Empty;
-  }
-
-  ~OldTile() {}
-  olc::vi2d Pos() { return pos; }
-  int32_t Size() { return size.x; }
-  TileType Type() { return type; }
-  TileType PrevType() { return prevType; }
-  TileType NextType() { return nextType; }
-
-  void SetTileType(TileType newType, TileSide recvSide = TileSide::Empty) {
-    if (!changed) {
-      prevType = type;
-      type = nextType;
-      nextType = newType;
-      changed = true;
-    }
-  }
-
-  void SetNeighbour(TileSide side, std::shared_ptr<OldTile> tile) {
-    neighbours.push_back((Neighbour){.side = side, .tile = tile});
-  }
-
-  void Draw(olc::PixelGameEngine* renderer) {
-    renderer->FillRect(pos, size, getTileColor(type));
-  }
-  void Highlight(olc::PixelGameEngine* renderer) {
-    renderer->DrawRect(pos, size - (olc::vi2d){1, 1}, olc::RED);
-  }
-
-  void Update() {
-    if (nextType != TileType::Empty) {
-      prevType = type;
-      type = nextType;
-    }
-    changed = false;
-  }
-
-  void Simulate() {
-    // Apply previous tick
-
-    // If we are a normal wire, check around the neighbours for updates
-    switch (type) {
-      case TileType::ChargedWire:
-        for (auto& neighbour : neighbours) {
-          auto tile = neighbour.tile;
-          if (tile->PrevType() != TileType::ChargedWire &&
-              tile->Type() == TileType::Wire) {
-            tile->SetTileType(TileType::ChargedWire);
-          }
-          SetTileType(TileType::Wire);
-        }
-        break;
-      default:
-        break;
-    }
-  }
-};
 
 #define TILE_SIZE 16
 class Wire : public Tile {
@@ -124,51 +19,37 @@ class Wire : public Tile {
   olc::Pixel highlightColor = olc::RED;
 
  public:
-  Wire() {
-    vPos = olc::vi2d(0, 0);
-    uPixelSize = TILE_SIZE;
-    wasPulsed = false;
-    pulsed = false;
-    std::cout << "Creating new wire at " << vPos / uPixelSize << std::endl;
-  }
-
   Wire(uint32_t x, uint32_t y) {
-    vPos = olc::vi2d(x, y);
-    uPixelSize = TILE_SIZE;
-    wasPulsed = false;
-    pulsed = false;
-    std::cout << "Creating new wire at " << vPos / uPixelSize << std::endl;
+    pos = olc::vi2d(x, y);
+    pixelSize = TILE_SIZE;
+    dynamic = true;
   }
 
-  Wire(olc::vi2d pos) {
-    vPos = pos;
-    uPixelSize = TILE_SIZE;
-    wasPulsed = false;
-    pulsed = false;
-    std::cout << "Creating new wire at " << vPos / uPixelSize << std::endl;
-  }
+  Wire() : Wire(0, 0) {}
+  Wire(olc::vi2d pos) : Wire(pos.x, pos.y) {}
 
   void Draw(olc::PixelGameEngine* renderer, bool highlighted = false) override {
     auto fillColor = pulsed ? pulsedColor : unpulsedColor;
-    // std::cout << "Rendering " << pulsed << " at " << vPos / uPixelSize
+    // std::cout << "Rendering " << pulsed << " at " << vPos / pixelSize
     //           << std::endl;
-    renderer->FillRect(vPos, olc::vi2d(uPixelSize, uPixelSize), fillColor);
+    renderer->FillRect(pos, olc::vi2d(pixelSize, pixelSize), fillColor);
     if (highlighted) {
-      renderer->DrawRect(vPos, olc::vi2d(uPixelSize - 1, uPixelSize - 1),
+      renderer->DrawRect(pos, olc::vi2d(pixelSize - 1, pixelSize - 1),
                          highlightColor);
     }
   }
 
-  void Simulate() override {
-    if (true) {
-      for (auto& rawNeighbour : neighbours) {
-        if (rawNeighbour.expired()) {
-          continue;
-        }
-        auto neighbour = rawNeighbour.lock();
-        neighbour->Update(true);
+  void Simulate(std::vector<TileUpdate>& updateQueue) override {
+    // if (!pulsed) throw "Only pulsed wires should be simulated";
+
+    for (auto& neighbour : GetNeighbours()) {
+      // Pulse inactive, dynamic tiles
+      if (!neighbour->IsPulsed() && neighbour->IsDynamic()) {
+        updateQueue.push_back(TileUpdate(neighbour, true));
       }
     }
+    // Wire can only stay active for one simulation tick, so disable on the next
+    updateQueue.push_back(TileUpdate(shared_from_this(), false));
   }
 
   ~Wire() {}
@@ -180,36 +61,25 @@ class EmptyTile : public Tile {
   olc::Pixel highlightColor = olc::RED;
 
  public:
-  EmptyTile() {
-    vPos = olc::vi2d(0, 0);
-    uPixelSize = TILE_SIZE;
-    wasPulsed = false;
-    pulsed = false;
-  }
   EmptyTile(uint32_t x, uint32_t y) {
-    vPos = olc::vi2d(x, y);
-    uPixelSize = TILE_SIZE;
-    wasPulsed = false;
+    pos = olc::vi2d(x, y);
+    pixelSize = TILE_SIZE;
     pulsed = false;
+    dynamic = false;
   }
-
-  EmptyTile(olc::vi2d pos) {
-    vPos = pos;
-    uPixelSize = TILE_SIZE;
-    wasPulsed = false;
-    pulsed = false;
-  }
+  EmptyTile() : EmptyTile(0, 0) {}
+  EmptyTile(olc::vi2d pos) : EmptyTile(pos.x, pos.y) {}
 
   void Draw(olc::PixelGameEngine* renderer, bool highlighted = false) override {
-    renderer->FillRect(vPos, olc::vi2d(uPixelSize, uPixelSize), color);
+    renderer->FillRect(pos, olc::vi2d(pixelSize, pixelSize), color);
     if (highlighted) {
-      renderer->DrawRect(vPos, olc::vi2d(uPixelSize - 1, uPixelSize - 1),
+      renderer->DrawRect(pos, olc::vi2d(pixelSize - 1, pixelSize - 1),
                          highlightColor);
     }
   }
 
   // Nothing should ever happen
-  void Simulate() override { return; }
+  void Simulate(std::vector<TileUpdate>& updateQueue) override { return; }
 
   ~EmptyTile() {}
 };
@@ -224,6 +94,7 @@ class Game : public olc::PixelGameEngine {
   int iTileSize = 16;
   olc::vi2d tileDimensions;
   std::vector<std::shared_ptr<Tile>> tiles;
+  std::vector<Tile::TileUpdate> updateQueue;
 
   bool OnUserCreate() override {
     tileDimensions = {ScreenWidth() / iTileSize, ScreenHeight() / iTileSize};
@@ -231,7 +102,8 @@ class Game : public olc::PixelGameEngine {
     int tileCount = tileDimensions.x * tileDimensions.y;
     for (int y = 0; y < ScreenHeight(); y += 16) {
       for (int x = 0; x < ScreenWidth(); x += 16) {
-        tiles.push_back(std::make_shared<EmptyTile>(x, y));
+        auto newTile = std::make_shared<EmptyTile>(x, y);
+        tiles.push_back(newTile->shared_from_this());
       }
     }
     // Set neighbour pointers
@@ -268,24 +140,41 @@ class Game : public olc::PixelGameEngine {
       tiles[i]->Draw(this, highlight);
     }
 
+    // DrawString(olc::vi2d(0, 0), "This is a test", olc::BLACK);
+
+    if (frameCounter % 20 == 0) {
+      std::set<std::shared_ptr<Tile>> candidates;
+      // Apply changes
+      for (auto& update : updateQueue) {
+        if (update.pulseState) {
+          candidates.emplace(update.target);
+        }
+      }
+
+      std::vector<Tile::TileUpdate> newUpdates;
+      // Run Updates
+      for (auto& candidate : candidates) {
+        if (candidate->IsDynamic()) {
+          candidate->Simulate(newUpdates);
+        }
+      }
+      for (auto& update : updateQueue) {
+        update.target->SetPulseState(update.pulseState);
+      }
+      updateQueue = newUpdates;
+    }
+
     // Modify tile if it's left-clicked
     auto& oldTile = tiles[index];
     if (GetMouse(0).bHeld) {
       tiles[index] = oldTile->Convert<Wire>();
     }
-    if (GetMouse(1).bPressed) {
-      tiles[index]->Update(true);
+    if (GetMouse(1).bHeld) {
+      updateQueue.push_back(Tile::TileUpdate(tiles[index], true));
     }
-    if (GetMouse(2).bPressed) {
+    if (GetMouse(2).bHeld) {
       tiles[index] = oldTile->Convert<EmptyTile>();
     }
-
-    if (frameCounter % 10 == 0) {
-      for (auto& tile : tiles) {
-        tile->Simulate();
-      }
-    }
-
     return true;
   }
 };
