@@ -12,6 +12,7 @@
 #include "olcPixelGameEngine.h"
 
 #define TILE_SIZE 16
+
 class Wire : public Tile {
  private:
   olc::Pixel unpulsedColor = olc::WHITE;
