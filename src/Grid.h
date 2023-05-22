@@ -14,6 +14,9 @@ enum class TileUpdateSide {
   Left = 1 << 3
 };
 
+TileUpdateSide FlipSide(TileUpdateSide side);
+const char* SideName(TileUpdateSide side);
+
 struct TileUpdateFlags {
  private:
   uint8_t flagValue;
@@ -22,11 +25,15 @@ struct TileUpdateFlags {
   TileUpdateFlags(uint8_t val) : flagValue(val) {}
   TileUpdateFlags(TileUpdateSide val) : TileUpdateFlags((uint8_t)val) {}
   TileUpdateFlags() : TileUpdateFlags(0) {}
-  inline void SetFlag(TileUpdateSide flag) {
-    flagValue |= static_cast<uint8_t>(flag);
+  inline void SetFlag(TileUpdateSide flag, bool val) {
+    if (val) {
+      flagValue |= static_cast<uint8_t>(flag);
+    } else {
+      flagValue ^= static_cast<uint8_t>(flag);
+    }
   }
   inline void FlipFlag(TileUpdateSide flag) {
-    flagValue ^= static_cast<uint8_t>(flag);
+    flagValue ^= (flagValue & static_cast<uint8_t>(flag));
   }
   inline bool GetFlag(TileUpdateSide flag) {
     return static_cast<bool>(flagValue & static_cast<uint8_t>(flag));
@@ -77,6 +84,7 @@ class EmptyGridTile : public GridTile {
       : GridTile(pos, size, false, olc::BLUE, olc::BLUE, olc::RED) {}
   ~EmptyGridTile(){};
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override {
+    (void)activatorSides;
     return TileUpdateFlags();
   };
 };
@@ -115,6 +123,7 @@ class Grid {
   Grid(olc::vi2d size, int tileSize);
   Grid(int size_x, int size_y, int tileSize)
       : Grid(olc::vi2d(size_x, size_y), tileSize) {}
+  olc::vi2d TranslateIndex(olc::vi2d index, TileUpdateSide side);
   void Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightIndex,
             uint32_t gameLayer, uint32_t uiLayer);
   void Simulate();
@@ -128,8 +137,8 @@ class Grid {
 
   template <typename T>
   void SetTile(std::unique_ptr<T> tile, olc::vi2d index, bool emitter = false) {
-    if (index.y < tiles.size()) {
-      if (index.x < tiles[index.y].size()) {
+    if ((size_t)index.y < tiles.size()) {
+      if ((size_t)index.x < tiles[index.y].size()) {
         tiles[index.y][index.x] = std::move(tile);
         auto it = std::find(alwaysUpdate.begin(), alwaysUpdate.end(), index);
         if (emitter) {
@@ -141,8 +150,12 @@ class Grid {
                          std::back_inserter(newIndexes),
                          [&](olc::vi2d i) { return i != *it; });
 
-            // TODO: Any updates that were caused by this should be updated or
-            // removed
+            for (auto side : TileUpdateFlags::All().GetFlags()) {
+              auto targetIndex = TranslateIndex(index, side);
+              if (updates.find(targetIndex) != updates.end()) {
+                updates[targetIndex].SetFlag(FlipSide(side), false);
+              }
+            }
 
             alwaysUpdate = newIndexes;
           }

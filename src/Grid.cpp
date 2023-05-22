@@ -1,6 +1,6 @@
 #include "Grid.h"
 
-static TileUpdateSide FlipSide(TileUpdateSide side) {
+TileUpdateSide FlipSide(TileUpdateSide side) {
   switch (side) {
     case TileUpdateSide::Top:
       return TileUpdateSide::Bottom;
@@ -15,7 +15,7 @@ static TileUpdateSide FlipSide(TileUpdateSide side) {
   }
 }
 
-static const char* SideName(TileUpdateSide side) {
+const char* SideName(TileUpdateSide side) {
   switch (side) {
     case TileUpdateSide::Top:
       return "Top";
@@ -38,6 +38,30 @@ std::vector<TileUpdateSide> TileUpdateFlags::GetFlags() {
     }
   }
   return ret;
+}
+
+olc::vi2d Grid::TranslateIndex(olc::vi2d index, TileUpdateSide side) {
+  olc::vi2d targetIndex;
+  switch (side) {
+    case TileUpdateSide::Top:
+      targetIndex = index - olc::vi2d(0, 1);
+      break;
+    case TileUpdateSide::Bottom:
+      targetIndex = index + olc::vi2d(0, 1);
+      break;
+    case TileUpdateSide::Left:
+      targetIndex = index - olc::vi2d(1, 0);
+      break;
+    case TileUpdateSide::Right:
+      targetIndex = index + olc::vi2d(1, 0);
+      break;
+  }
+  if (targetIndex.x < dimensions.x && targetIndex.y < dimensions.y &&
+      targetIndex.x >= 0 && targetIndex.y >= 0) {  // if not out of bounds
+    return targetIndex;
+  } else {
+    throw "Index out of bounds";
+  }
 }
 
 void GridTile::Draw(olc::PixelGameEngine* renderer) {
@@ -65,7 +89,8 @@ TileUpdateFlags WireGridTile::Simulate(TileUpdateFlags activatorSides) {
   }
 };
 
-TileUpdateFlags EmitterGridTile::Simulate(TileUpdateFlags activatorSides) {
+TileUpdateFlags EmitterGridTile::Simulate(
+    [[maybe_unused]] TileUpdateFlags activatorSides) {
   auto outFlags = activated ? TileUpdateFlags::All() : TileUpdateFlags();
   activated = !activated;
   return outFlags;
@@ -121,7 +146,7 @@ void Grid::Simulate() {
     updates.emplace(update, TileUpdateFlags());
   }
 
-  for (auto& update : updates) {
+  for (auto update : updates) {
     auto pos = update.first;
     auto& target = tiles[pos.y][pos.x];
     auto updateSides = update.second;
@@ -130,35 +155,23 @@ void Grid::Simulate() {
     newUpdates.emplace(pos, TileUpdateFlags());
     drawQueue.push_back(pos);
 
-    for (auto& side : outputSides.GetFlags()) {
+    for (auto side : outputSides.GetFlags()) {
       // std::cout << "At " << pos << ": Triggering update on " <<
       // SideName(side)
       //           << std::endl;
       auto flipped = FlipSide(side);
-      olc::vi2d targetIndex;
-      switch (side) {
-        case TileUpdateSide::Top:
-          targetIndex = pos - olc::vi2d(0, 1);
-          break;
-        case TileUpdateSide::Bottom:
-          targetIndex = pos + olc::vi2d(0, 1);
-          break;
-        case TileUpdateSide::Left:
-          targetIndex = pos - olc::vi2d(1, 0);
-          break;
-        case TileUpdateSide::Right:
-          targetIndex = pos + olc::vi2d(1, 0);
-          break;
-      }
-      if (pos.x < dimensions.x &&
-          pos.y < dimensions.y) {  // if not out of bounds
+      try {
+        olc::vi2d targetIndex = TranslateIndex(pos, side);
+
         if (newUpdates.find(targetIndex) !=
             newUpdates.end()) {  // Already exists
-          newUpdates[targetIndex].SetFlag(flipped);
+          newUpdates[targetIndex].SetFlag(flipped, true);
         } else {  // Create new entry
           auto flags = TileUpdateFlags(flipped);
-          newUpdates.emplace(targetIndex, flags);
+          newUpdates[targetIndex] = flags;
         }
+      } catch (const char* err) {
+        // std::cout << "Not setting update due to error: " << err << std::endl;
       }
     }
   }

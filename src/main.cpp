@@ -30,7 +30,6 @@ class Game : public olc::PixelGameEngine {
   bool OnUserCreate() override {
     tileDimensions = {ScreenWidth() / iTileSize, ScreenHeight() / iTileSize};
     std::cout << tileDimensions << std::endl;
-    int tileCount = tileDimensions.x * tileDimensions.y;
 
     gameLayer = CreateLayer();
     uiLayer = 0;
@@ -104,9 +103,11 @@ class Game : public olc::PixelGameEngine {
   }
 };
 
-int main(int arc, char** argv) {
+int main(int argc, char** argv) {
+  (void)argc;
+  (void)argv;
   Game game = Game();
-  if (game.Construct(1920, 1080, 2, 2, true, false, true)) {
+  if (game.Construct(640, 480, 2, 2, false, false, true)) {
     game.Start();
   }
 }

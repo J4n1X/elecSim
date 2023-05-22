@@ -1,0 +1,2 @@
+[ 33%] Linking CXX executable bin/elecSim
+[100%] Built target elecSim
