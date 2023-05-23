@@ -2,6 +2,7 @@
 
 #include <map>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 #include "olcPixelGameEngine.h"
@@ -52,28 +53,32 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   olc::vi2d pos;
   int size;
   bool activated;
+  bool defaultActivation = false;
   olc::Pixel inactiveColor;
   olc::Pixel activeColor;
-  olc::Pixel highlightColor;
 
  public:
-  GridTile(olc::vi2d pos = olc::vi2d(0, 0), int size = 0,
-           bool activated = false, olc::Pixel inactiveColor = olc::BLACK,
-           olc::Pixel activeColor = olc::BLACK,
-           olc::Pixel highlightColor = olc::BLACK)
+  GridTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f), int size = 0,
+           bool defaultActivation = false,
+           olc::Pixel inactiveColor = olc::BLACK,
+           olc::Pixel activeColor = olc::BLACK)
       : pos(pos),
         size(size),
-        activated(activated),
+        activated(defaultActivation),
+        defaultActivation(defaultActivation),
         inactiveColor(inactiveColor),
-        activeColor(activeColor),
-        highlightColor(highlightColor) {}
+        activeColor(activeColor) {}
   virtual void Draw(olc::PixelGameEngine* renderer);
-  virtual void Highlight(olc::PixelGameEngine* renderer);
   virtual TileUpdateFlags Simulate(TileUpdateFlags activatorSides) = 0;
   virtual ~GridTile(){};
 
-  inline void SetState(bool activated) { this->activated = activated; }
+  inline void SetActivation(bool activated) { this->activated = activated; }
+  inline void SetDefaultActivation(bool defaultActivation) {
+    this->defaultActivation = defaultActivation;
+  }
   inline bool Activated() { return activated; }
+  inline bool DefaultActivation() { return defaultActivation; }
+  inline void Reset() { activated = defaultActivation; }
   inline olc::vi2d GetPos() { return pos; }
   inline int GetSize() { return size; }
 };
@@ -81,7 +86,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 class EmptyGridTile : public GridTile {
  public:
   EmptyGridTile(olc::vi2d pos, int size)
-      : GridTile(pos, size, false, olc::BLUE, olc::BLUE, olc::RED) {}
+      : GridTile(pos, size, false, olc::BLUE, olc::BLUE) {}
   ~EmptyGridTile(){};
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override {
     (void)activatorSides;
@@ -91,87 +96,103 @@ class EmptyGridTile : public GridTile {
 
 class WireGridTile : public GridTile {
  public:
+  WireGridTile(){};
   WireGridTile(olc::vi2d pos, int size)
-      : GridTile(pos, size, false, olc::WHITE, olc::YELLOW, olc::RED) {}
-  ~WireGridTile(){};
+      : GridTile(pos, size, false, olc::WHITE, olc::YELLOW) {}
+  ~WireGridTile() { std::cout << "Dropping Wire Tile" << std::endl; };
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
 };
 
 class EmitterGridTile : public GridTile {
  public:
+  EmitterGridTile(){};
   EmitterGridTile(olc::vi2d pos, int size)
-      : GridTile(pos, size, false, olc::DARK_CYAN, olc::CYAN, olc::RED) {}
-  ~EmitterGridTile(){};
+      : GridTile(pos, size, false, olc::DARK_CYAN, olc::CYAN) {}
+  ~EmitterGridTile() { std::cout << "Dropping Emitter Tile" << std::endl; };
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
 };
 
 // The entire grid. Handles drawing the playfield, gathering the neighbours for
 // simulation and much more.
+
+// using GridPalette = BrushFactory<GridTile>;
 class Grid {
-  typedef std::vector<std::vector<std::unique_ptr<GridTile>>> TileField;
+  typedef std::map<olc::vi2d, std::shared_ptr<GridTile>> TileField;
 
  private:
+  olc::Pixel backgroundColor = olc::BLUE;
+  olc::Pixel highlightColor = olc::RED;
   olc::vi2d dimensions;
-  int tileSize;
+
+  // std::shared_ptr<GridPalette> palette;
+
+  int uiLayer;
+  int gameLayer;
+
   TileField tiles;
-  std::vector<olc::vi2d> alwaysUpdate;
-  std::vector<olc::vi2d> drawQueue;
+  std::vector<std::weak_ptr<GridTile>> alwaysUpdate;
   std::map<olc::vi2d, TileUpdateFlags> updates;
 
  public:
-  Grid(){};
-  Grid(olc::vi2d size, int tileSize);
-  Grid(int size_x, int size_y, int tileSize)
-      : Grid(olc::vi2d(size_x, size_y), tileSize) {}
+  static int worldScale;
+  static olc::vi2d worldOffset;
+  static olc::vi2d WorldToScreen(const olc::vi2d& pos) {
+    auto x = (pos.x - worldOffset.x) * worldScale;
+    auto y = (pos.y - worldOffset.y) * worldScale;
+    return olc::vi2d(x, y);
+  }
+
+  static olc::vi2d ScreenToWorld(const olc::vi2d& pos) {
+    auto x = pos.x / worldScale + worldOffset.x;
+    auto y = pos.y / worldScale + worldOffset.y;
+    return olc::vi2d(x, y);
+  }
+
+  Grid(olc::vi2d size, int uiLayer, int gameLayer);
+  // Grid(const Grid& grid);
+  Grid(int size_x, int size_y, int uiLayer, int gameLayer)
+      : Grid(olc::vi2d(size_x, size_y), uiLayer, gameLayer) {}
+  Grid() : Grid(0, 0, 0, 0){};
   olc::vi2d TranslateIndex(olc::vi2d index, TileUpdateSide side);
-  void Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightIndex,
-            uint32_t gameLayer, uint32_t uiLayer);
+
+  // We want to give away full control over the Palette
+  // std::shared_ptr<GridPalette> GetPalette() { return palette; }
+
+  void Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightIndex);
   void Simulate();
 
-  inline std::unique_ptr<GridTile>& GetTile(int x, int y) {
-    return tiles[y][x];
+  std::shared_ptr<GridTile> GetTile(olc::vi2d pos) {
+    auto tileIt = tiles.find(pos);
+    return tileIt != tiles.end() ? tileIt->second : nullptr;
   }
-  inline std::unique_ptr<GridTile>& GetTile(olc::vi2d pos) {
-    return tiles[pos.y][pos.x];
+  std::shared_ptr<GridTile> GetTile(int x, int y) {
+    return GetTile(olc::vi2d(x, y));
   }
-
-  template <typename T>
-  void SetTile(std::unique_ptr<T> tile, olc::vi2d index, bool emitter = false) {
-    if ((size_t)index.y < tiles.size()) {
-      if ((size_t)index.x < tiles[index.y].size()) {
-        tiles[index.y][index.x] = std::move(tile);
-        auto it = std::find(alwaysUpdate.begin(), alwaysUpdate.end(), index);
-        if (emitter) {
-          alwaysUpdate.emplace(it, index);
-        } else {
-          if (it != alwaysUpdate.end()) {
-            std::vector<olc::vi2d> newIndexes;
-            std::copy_if(alwaysUpdate.begin(), alwaysUpdate.end(),
-                         std::back_inserter(newIndexes),
-                         [&](olc::vi2d i) { return i != *it; });
-
-            for (auto side : TileUpdateFlags::All().GetFlags()) {
-              auto targetIndex = TranslateIndex(index, side);
-              if (updates.find(targetIndex) != updates.end()) {
-                updates[targetIndex].SetFlag(FlipSide(side), false);
-              }
-            }
-
-            alwaysUpdate = newIndexes;
-          }
-        }
-        drawQueue.push_back(index);
-        return;
-      }
-    }
-    throw "Tile Index out of bounds";
-  }
-  template <typename T>
-  void SetTile(std::unique_ptr<T> tile, int x, int y, bool emitter = false) {
-    SetTile(tile, olc::vi2d(x, y));
-  }
-
-  void TriggerUpdate(olc::vi2d pos) {
+  void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
+  void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
+  void TriggerUpdate(olc::vf2d pos) {
     updates.emplace(pos, TileUpdateFlags::All());
+  }
+
+  template <typename T>
+  void SetTile(olc::vi2d pos, std::shared_ptr<T> tile, bool emitter) {
+    tiles.insert_or_assign(pos, tile);
+    if (emitter) {
+      // add it to the list of tiles which will always be updated
+      alwaysUpdate.push_back(tile);
+    }
+
+    // Remove any pending updates
+    updates.clear();
+    // Reset the state of all tiles to the set default
+    for ([[maybe_unused]] auto& [pos, tile] : tiles) {
+      tile->Reset();
+    }
+
+    return;
+  }
+  template <typename T>
+  void SetTile(int x, int y, std::unique_ptr<T> tile, bool emitter = false) {
+    SetTile(tile, olc::vf2d(x, y));
   }
 };
