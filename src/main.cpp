@@ -76,7 +76,6 @@ class Game : public olc::PixelGameEngine {
 
     alignedWorldPos =
         Grid::ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
-    auto index = olc::vi2d((int)alignedWorldPos.x, (int)alignedWorldPos.y);
 
     // Game state manipulation
     if (GetKey(olc::SPACE).bPressed) {
@@ -107,20 +106,22 @@ class Game : public olc::PixelGameEngine {
       }
 
       // Modify tile if it's left-clicked
-      auto tile = grid.GetTile(olc::vi2d());
+      auto tile = grid.GetTile(alignedWorldPos);
       auto size = tile != nullptr ? tile->GetSize() : 1;
       if (GetMouse(0).bHeld) {  // Create wire
         auto wire = std::make_shared<WireGridTile>(alignedWorldPos, size);
-        grid.SetTile(index, wire, false);
+        grid.SetTile(alignedWorldPos, wire, false);
       }
-      if (GetMouse(1).bPressed) {  // Change default activation value
-        auto tile = grid.GetTile(index);
-        if (tile != nullptr) {
-          tile->SetDefaultActivation(!tile->DefaultActivation());
-        }
+      if (GetMouse(1).bHeld) {  // Change default activation value
+        // auto tile = grid.GetTile(alignedWorldPos);
+        // if (tile != nullptr) {
+        //   tile->SetDefaultActivation(!tile->DefaultActivation());
+        // }
+        auto emitter = std::make_shared<EmitterGridTile>(alignedWorldPos, size);
+        grid.SetTile(alignedWorldPos, emitter, true);
       }
       if (GetMouse(2).bHeld) {  // Remove tile
-        grid.EraseTile(index);
+        grid.EraseTile(alignedWorldPos);
       }
     }
   }
@@ -134,14 +135,14 @@ class Game : public olc::PixelGameEngine {
     olc::vi2d highlightWorldPos = olc::vi2d(0, 0);
     ProcessUserInput(highlightWorldPos);
 
-    // std::stringstream ss;
-    // ss << "Selected: " << palette->GetBrushName() << "; "
-    //    << (paused ? "Paused" : "; Running") << '\n'
-    //    << "Press '.' to increase and ',' to decrease speed";
-    // SetDrawTarget(uiLayer);
-    // DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK);
-
+    std::stringstream ss;
+    ss << "Selected: "
+       << "TEMP"
+       << "; " << (paused ? "Paused" : "; Running") << '\n'
+       << "Press '.' to increase and ',' to decrease speed";
     grid.Draw(this, &highlightWorldPos);
+    SetDrawTarget(uiLayer);
+    DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK);
 
     return running;
   }
