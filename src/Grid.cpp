@@ -15,7 +15,7 @@ TileUpdateSide FlipSide(TileUpdateSide side) {
   }
 }
 
-const char* SideName(TileUpdateSide side) {
+constexpr std::string_view SideName(TileUpdateSide side) {
   switch (side) {
     case TileUpdateSide::Top:
       return "Top";
@@ -40,15 +40,18 @@ std::vector<TileUpdateSide> TileUpdateFlags::GetFlags() {
   return ret;
 }
 
-Grid::Grid(olc::vi2d size, int uiLayer, int gameLayer) {
-  dimensions = size;
+Grid::Grid(olc::vi2d size, uint32_t renderScale, olc::vi2d renderOffset,
+           int uiLayer, int gameLayer) {
+  renderWindow = size;
   this->uiLayer = uiLayer;
   this->gameLayer = gameLayer;
+  this->renderScale = renderScale;
+  this->renderOffset = renderOffset;
 
   // add the brushes to the palette
-  //palette->AddBrush<WireGridTile>("Wire");
-  //palette->AddBrush<EmitterGridTile>("Pulse Emitter");
-  //palette->SetBrush(0);
+  // palette->AddBrush<WireGridTile>("Wire");
+  // palette->AddBrush<EmitterGridTile>("Pulse Emitter");
+  // palette->SetBrush(0);
 }
 
 olc::vi2d Grid::TranslateIndex(olc::vi2d index, TileUpdateSide side) {
@@ -67,56 +70,41 @@ olc::vi2d Grid::TranslateIndex(olc::vi2d index, TileUpdateSide side) {
       targetIndex = index + olc::vi2d(1, 0);
       break;
   }
-  if (targetIndex.x < dimensions.x && targetIndex.y < dimensions.y &&
-      targetIndex.x >= 0 && targetIndex.y >= 0) {  // if not out of bounds
-    return targetIndex;
-  } else {
-    throw "Index out of bounds";
-  }
+  return targetIndex;
 }
 
-void GridTile::Draw(olc::PixelGameEngine* renderer) {
-  auto corrPos = Grid::WorldToScreen(pos);
-  auto corrSize = size * Grid::worldScale;
-  renderer->FillRect(corrPos, olc::vi2d(corrSize, corrSize),
-                     activated ? activeColor : inactiveColor);
+// Helper for Grid::Draw
+static bool isRectangleOutside(const olc::vi2d& rectPos1,
+                               const olc::vi2d& rectSize1,
+                               const olc::vi2d& rectPos2,
+                               const olc::vi2d& rectSize2) {
+  // Calculate the coordinates of the corners of the rectangles
+  int rect1Left = rectPos1.x;
+  int rect1Right = rectPos1.x + rectSize1.x;
+  int rect1Top = rectPos1.y;
+  int rect1Bottom = rectPos1.y + rectSize1.y;
+
+  int rect2Left = rectPos2.x;
+  int rect2Right = rectPos2.x + rectSize2.x;
+  int rect2Top = rectPos2.y;
+  int rect2Bottom = rectPos2.y + rectSize2.y;
+
+  return (rect1Right <= rect2Left) || (rect1Left >= rect2Right) ||
+         (rect1Bottom <= rect2Top) || (rect1Top >= rect2Bottom);
 }
-
-// void GridTile::Highlight(olc::PixelGameEngine* renderer) {
-//   auto rectSize = olc::vi2d(size - 1, size - 1);
-//   renderer->DrawRect(pos, rectSize, highlightColor);
-// }
-
-TileUpdateFlags WireGridTile::Simulate(TileUpdateFlags activatorSides) {
-  if (!activatorSides.IsEmpty()) {
-    auto sides = activatorSides.GetFlags();
-    auto outFlags = TileUpdateFlags::All();
-    for (auto& side : sides) {
-      outFlags.FlipFlag(side);
-    }
-    activated = true;
-    return outFlags;
-  } else {
-    activated = false;
-    return TileUpdateFlags();
-  }
-}
-
-TileUpdateFlags EmitterGridTile::Simulate(
-    [[maybe_unused]] TileUpdateFlags activatorSides) {
-  auto outFlags = activated ? TileUpdateFlags::All() : TileUpdateFlags();
-  activated = !activated;
-  return outFlags;
-}
-
-int Grid::worldScale = 0;
-olc::vi2d Grid::worldOffset = olc::vi2d(0, 0);
-
 void Grid::Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightPos) {
   renderer->SetDrawTarget(gameLayer);
   renderer->Clear(backgroundColor);
-  for (auto& tile : tiles) {
-    tile.second->Draw(renderer);
+
+  for (auto& tilePair : tiles) {
+    auto& tile = tilePair.second;
+    olc::vi2d tileScreenPos = WorldToScreen(tile->GetPos());
+    int tileScreenSize = tile->GetSize() * renderScale;
+    // Only draw if it's inside the drawing area
+    if (!isRectangleOutside(tileScreenPos, {tileScreenSize, tileScreenSize},
+                            {0, 0}, renderWindow)) {
+      tile->Draw(renderer, tileScreenPos, tileScreenSize);
+    }
   }
   if (highlightPos != nullptr) {
     // Clear the highlight layer (BEWARE, IF THIS IS 0 THE ENTIRE SCREEN IS
@@ -124,7 +112,7 @@ void Grid::Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightPos) {
     renderer->SetDrawTarget(uiLayer);
     renderer->Clear(olc::BLANK);
     auto corrPos = WorldToScreen(*highlightPos);
-    olc::vi2d size = olc::vi2d((int)worldScale, (int)worldScale);
+    olc::vi2d size = olc::vi2d((int)renderScale, (int)renderScale);
     renderer->DrawRect(corrPos, size, highlightColor);
   }
 }
@@ -146,7 +134,7 @@ void Grid::Simulate() {
 
   for (auto update : updates) {
     auto pos = update.first;
-    auto target = tiles[pos];
+    auto& target = tiles[pos];
     auto updateSides = update.second;
 
     if (target == nullptr) throw "Nullptr in update target";
@@ -171,9 +159,38 @@ void Grid::Simulate() {
           }
         }
       } catch (const char* err) {
-        // std::cout << "Not setting update due to error: " << err << std::endl;
+        // std::cout << "Not setting update due to error: " << err <<
+        // std::endl;
       }
     }
   }
   updates = newUpdates;
+}
+
+void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
+                    int screenSize) {
+  renderer->FillRect(screenPos, olc::vi2d(screenSize, screenSize),
+                     activated ? activeColor : inactiveColor);
+}
+
+TileUpdateFlags WireGridTile::Simulate(TileUpdateFlags activatorSides) {
+  if (!activatorSides.IsEmpty()) {
+    auto sides = activatorSides.GetFlags();
+    auto outFlags = TileUpdateFlags::All();
+    for (auto& side : sides) {
+      outFlags.FlipFlag(side);
+    }
+    activated = true;
+    return outFlags;
+  } else {
+    activated = false;
+    return TileUpdateFlags();
+  }
+}
+
+TileUpdateFlags EmitterGridTile::Simulate(
+    [[maybe_unused]] TileUpdateFlags activatorSides) {
+  auto outFlags = activated ? TileUpdateFlags::All() : TileUpdateFlags();
+  activated = !activated;
+  return outFlags;
 }

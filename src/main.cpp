@@ -3,8 +3,6 @@
 #include <cstddef>
 #include <cstdio>
 #include <memory>
-#include <ranges>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -16,10 +14,12 @@
 class Game : public olc::PixelGameEngine {
  public:
   Game() { sAppName = "Electricity Simulator"; }
+  ~Game() {}
 
  private:
-  bool paused;
-  bool running;
+  const static int defaultTileSize;
+  const static int defaultRenderScale;
+  const static olc::vi2d defaultRenderOffset;
 
   int uiLayer;
   int gameLayer;
@@ -28,6 +28,18 @@ class Game : public olc::PixelGameEngine {
   float updateInterval;
 
   Grid grid;
+
+  // Game state variables
+  bool paused;   // Simulation is paused, renderer is not
+  bool running;  // If this is false, the game quits
+
+  // Variables needed for the placement logic
+  olc::vi2d lastPlacedPos;  // Position of last placed tile, to prevent
+                            // overwriting the same tile over and over again
+  std::unique_ptr<GridTile>
+      brushTile;  // Variable which holds the next tile which should be placed
+  int selectedBrushIndex;
+
   // std::shared_ptr<GridPalette> palette;
 
   bool OnUserCreate() override {
@@ -41,17 +53,32 @@ class Game : public olc::PixelGameEngine {
     EnableLayer(uiLayer, true);
     EnableLayer(gameLayer, true);
 
-    // Set global world properties
-    Grid::worldScale = 15;
-    Grid::worldOffset = olc::vi2d(0, 0);
-
-    grid = Grid(ScreenWidth(), ScreenHeight(), uiLayer, gameLayer);
+    // Set world properties
+    // TODO: Handle resize
+    grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
+                defaultRenderOffset, uiLayer, gameLayer);
     // palette = grid.GetPalette();
 
     running = true;
     paused = false;
 
+    lastPlacedPos = olc::vi2d(0, 0);
+    brushTile = nullptr;
+    selectedBrushIndex = 1;
+    CreateBrushTile();  // Initialize brush tile; by default it's a wire
+
     return running;
+  }
+
+  void CreateBrushTile() {
+    switch (selectedBrushIndex) {
+      case 1:  //
+        brushTile = std::make_unique<WireGridTile>();
+        break;
+      case 2:
+        brushTile = std::make_unique<EmitterGridTile>();
+        break;
+    }
   }
 
   int ParseNumberFromInput() {
@@ -75,16 +102,16 @@ class Game : public olc::PixelGameEngine {
     auto selTileYIndex = GetMouseY();
 
     alignedWorldPos =
-        Grid::ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
+        grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
 
     // Game state manipulation
     if (GetKey(olc::SPACE).bPressed) {
       paused = !paused;
     }
-    if (GetKey(olc::COMMA).bPressed) {
+    if (GetKey(olc::COMMA).bPressed) {  // Slow down simulation
       updateInterval += 0.05f;
     }
-    if (GetKey(olc::PERIOD).bPressed) {
+    if (GetKey(olc::PERIOD).bPressed) {  // Speed up simulation
       if (updateInterval > 0.0f) {
         updateInterval -= 0.05f;
       } else {
@@ -96,29 +123,66 @@ class Game : public olc::PixelGameEngine {
       return;
     }
 
+    // Camera navigation
+    auto renderScale = grid.GetRenderScale();
+    auto curOffset = grid.GetRenderOffset();
+    if (GetKey(olc::UP).bHeld) {
+      grid.SetRenderOffset(curOffset - olc::vi2d(0, 1));
+    }
+    if (GetKey(olc::LEFT).bHeld) {
+      grid.SetRenderOffset(curOffset - olc::vi2d(1, 0));
+    }
+    if (GetKey(olc::DOWN).bHeld) {
+      grid.SetRenderOffset(curOffset + olc::vi2d(0, 1));
+    }
+    if (GetKey(olc::RIGHT).bHeld) {
+      grid.SetRenderOffset(curOffset + olc::vi2d(1, 0));
+    }
+
+    if (GetKey(olc::K).bPressed) {  // Zoom In
+      grid.SetRenderScale(renderScale + 1);
+      // Relative to mouse
+    } else if (GetKey(olc::L).bPressed) {  // Zoom out, else if to prevent both
+                                           // in the same step
+      grid.SetRenderScale(renderScale - 1);
+    }
+
     // Building mode controls
     if (paused) {
-      // Building Tile Selector {
+      // Select brush tile if a number key was pressed
       auto numInput = ParseNumberFromInput();
-      if (numInput >= 0) {  // We did get a numeric input
-        // if (numInput <= palette->GetBrushCount()) {
-        // }
+      if (numInput >= 0) {
+        selectedBrushIndex = numInput;
+        CreateBrushTile();  // Switch to new tile type
       }
 
       // Modify tile if it's left-clicked
-      auto tile = grid.GetTile(alignedWorldPos);
-      auto size = tile != nullptr ? tile->GetSize() : 1;
-      if (GetMouse(0).bHeld) {  // Create wire
-        auto wire = std::make_shared<WireGridTile>(alignedWorldPos, size);
-        grid.SetTile(alignedWorldPos, wire, false);
+      if (brushTile != nullptr) {
+        if (GetMouse(0).bPressed ||
+            GetMouse(0).bHeld &&
+                lastPlacedPos != alignedWorldPos) {  // Create wire
+          // Now we modify the tile to suit our needs
+          brushTile->SetPos(alignedWorldPos);
+          brushTile->SetSize(Game::defaultTileSize);
+#if 0  // Todo: Implement rotation and
+          brushTile->SetInputSides()
+          brushTile->SetOutputSides()
+#endif
+          std::shared_ptr<GridTile> sharedBrushTile = std::move(brushTile);
+          grid.SetTile(alignedWorldPos, sharedBrushTile,
+                       sharedBrushTile->IsEmitter());
+          CreateBrushTile();  // Create new brush tile to use for painting
+          lastPlacedPos = alignedWorldPos;
+        }
       }
       if (GetMouse(1).bHeld) {  // Change default activation value
-        // auto tile = grid.GetTile(alignedWorldPos);
-        // if (tile != nullptr) {
-        //   tile->SetDefaultActivation(!tile->DefaultActivation());
-        // }
-        auto emitter = std::make_shared<EmitterGridTile>(alignedWorldPos, size);
-        grid.SetTile(alignedWorldPos, emitter, true);
+        auto gridTileOpt = grid.GetTile(alignedWorldPos);
+        if (gridTileOpt.has_value()) {
+          auto& gridTile = gridTileOpt.value();
+          gridTile->SetDefaultActivation(!gridTile->DefaultActivation());
+        }
+        // auto emitter = std::make_shared<EmitterGridTile>(alignedWorldPos,
+        // size); grid.SetTile(alignedWorldPos, emitter, true);
       }
       if (GetMouse(2).bHeld) {  // Remove tile
         grid.EraseTile(alignedWorldPos);
@@ -127,6 +191,14 @@ class Game : public olc::PixelGameEngine {
   }
 
   bool OnUserUpdate(float fElapsedTime) override {
+    // Check if the window has been resized
+    auto curScreenSize = GetWindowSize() / GetPixelSize();
+    if (grid.GetRenderWindow() != curScreenSize) {
+      std::cout << "Window has been resized to " << curScreenSize << std::endl;
+      grid.Resize(curScreenSize);
+      SetScreenSize(curScreenSize.x, curScreenSize.y);
+    }
+
     accumulatedTime += fElapsedTime;
     if (accumulatedTime > updateInterval && !paused) {
       grid.Simulate();
@@ -134,11 +206,10 @@ class Game : public olc::PixelGameEngine {
     }
     olc::vi2d highlightWorldPos = olc::vi2d(0, 0);
     ProcessUserInput(highlightWorldPos);
-
     std::stringstream ss;
-    ss << "Selected: "
-       << "TEMP"
-       << "; " << (paused ? "Paused" : "; Running") << '\n'
+    ss << std::showpos << highlightWorldPos << "Selected: "
+       << (brushTile != nullptr ? brushTile->TileTypeName() : "None") << "; "
+       << (paused ? "Paused" : "; Running") << '\n'
        << "Press '.' to increase and ',' to decrease speed";
     grid.Draw(this, &highlightWorldPos);
     SetDrawTarget(uiLayer);
@@ -147,12 +218,15 @@ class Game : public olc::PixelGameEngine {
     return running;
   }
 };
+const olc::vi2d Game::defaultRenderOffset = olc::vi2d(0, 0);
+const int Game::defaultTileSize = 1;
+const int Game::defaultRenderScale = 15;
 
 int main(int argc, char** argv) {
   (void)argc;
   (void)argv;
   Game game = Game();
-  if (game.Construct(640, 480, 2, 2, false, false, true)) {
+  if (game.Construct(640, 480, 2, 2, false, true, false)) {
     game.Start();
   }
 }

@@ -13,7 +13,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic -Wno-unknown-pragmas)
+  #add_compile_options(-Wall -Wextra -Wpedantic -Wno-unknown-pragmas)
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   add_compile_options(/W4)
 endif()
