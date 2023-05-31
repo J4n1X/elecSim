@@ -1,5 +1,3 @@
-#define OLC_PGE_APPLICATION
-
 #include <cstddef>
 #include <cstdio>
 #include <memory>
@@ -50,17 +48,15 @@ class Game : public olc::PixelGameEngine {
     uiLayer = 0;
     gameLayer = CreateLayer();
 
-    EnableLayer(uiLayer, true);
-    EnableLayer(gameLayer, true);
+    EnableLayer((uint8_t)uiLayer, true);
+    EnableLayer((uint8_t)gameLayer, true);
 
     // Set world properties
-    // TODO: Handle resize
     grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
                 defaultRenderOffset, uiLayer, gameLayer);
-    // palette = grid.GetPalette();
 
-    running = true;
     paused = false;
+    running = true;
 
     lastPlacedPos = olc::vi2d(0, 0);
     brushTile = nullptr;
@@ -82,8 +78,6 @@ class Game : public olc::PixelGameEngine {
   }
 
   int ParseNumberFromInput() {
-    int parsedNumber = 0;
-
     for (int i = static_cast<int>(olc::Key::K0);
          i <= static_cast<int>(olc::Key::K9); i++) {
       olc::Key key = static_cast<olc::Key>(i);
@@ -148,6 +142,7 @@ class Game : public olc::PixelGameEngine {
     }
 
     // Building mode controls
+    // TODO: Extract
     if (paused) {
       // Select brush tile if a number key was pressed
       auto numInput = ParseNumberFromInput();
@@ -173,19 +168,22 @@ class Game : public olc::PixelGameEngine {
                        sharedBrushTile->IsEmitter());
           CreateBrushTile();  // Create new brush tile to use for painting
           lastPlacedPos = alignedWorldPos;
+
+          grid.ResetSimulation();
         }
       }
-      if (GetMouse(1).bHeld) {  // Change default activation value
+      if (GetMouse(1).bPressed) {  // Change default activation value
         auto gridTileOpt = grid.GetTile(alignedWorldPos);
         if (gridTileOpt.has_value()) {
           auto& gridTile = gridTileOpt.value();
           gridTile->SetDefaultActivation(!gridTile->DefaultActivation());
+          gridTile->ResetActivation();
+          grid.ResetSimulation();
         }
-        // auto emitter = std::make_shared<EmitterGridTile>(alignedWorldPos,
-        // size); grid.SetTile(alignedWorldPos, emitter, true);
       }
       if (GetMouse(2).bHeld) {  // Remove tile
         grid.EraseTile(alignedWorldPos);
+        grid.ResetSimulation();
       }
     }
   }

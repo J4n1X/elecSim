@@ -47,11 +47,26 @@ Grid::Grid(olc::vi2d size, uint32_t renderScale, olc::vi2d renderOffset,
   this->gameLayer = gameLayer;
   this->renderScale = renderScale;
   this->renderOffset = renderOffset;
+}
 
-  // add the brushes to the palette
-  // palette->AddBrush<WireGridTile>("Wire");
-  // palette->AddBrush<EmitterGridTile>("Pulse Emitter");
-  // palette->SetBrush(0);
+olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
+  float x = (pos.x * (float)renderScale) - (float)renderOffset.x;
+  float y = (pos.y * (float)renderScale) - (float)renderOffset.y;
+  return olc::vi2d((int)x, (int)y);
+}
+
+olc::vi2d Grid::ScreenToWorld(const olc::vi2d& pos) {
+  int x = pos.x + renderOffset.x;
+  int y = pos.y + renderOffset.y;
+  if (x >= 0)
+    x /= (int)renderScale;
+  else
+    x = (int)(x - renderScale + 1) / (int)renderScale;
+  if (y >= 0)
+    y /= (int)renderScale;
+  else
+    y = (int)(y - renderScale + 1) / (int)renderScale;
+  return olc::vi2d(x, y);
 }
 
 olc::vi2d Grid::TranslateIndex(olc::vi2d index, TileUpdateSide side) {
@@ -92,6 +107,18 @@ static bool isRectangleOutside(const olc::vi2d& rectPos1,
   return (rect1Right <= rect2Left) || (rect1Left >= rect2Right) ||
          (rect1Bottom <= rect2Top) || (rect1Top >= rect2Bottom);
 }
+
+void Grid::ResetSimulation() {
+  if (updates.size() > 0) {
+    // Remove any pending updates
+    updates.clear();
+    // Reset the state of all tiles to the set default
+    for ([[maybe_unused]] auto& [pos, tile] : tiles) {
+      tile->ResetActivation();
+    }
+  }
+}
+
 void Grid::Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightPos) {
   renderer->SetDrawTarget(gameLayer);
   renderer->Clear(backgroundColor);
@@ -133,22 +160,21 @@ void Grid::Simulate() {
   }
 
   for (auto update : updates) {
-    auto pos = update.first;
-    auto& target = tiles[pos];
+    auto targetPosition = update.first;
+    auto& target = tiles[targetPosition];
     auto updateSides = update.second;
 
     if (target == nullptr) throw "Nullptr in update target";
     auto outputSides = target->Simulate(updateSides);
-    newUpdates.emplace(pos, TileUpdateFlags());
+    newUpdates.emplace(targetPosition, TileUpdateFlags());
 
     for (auto side : outputSides.GetFlags()) {
-      // std::cout << "At " << pos << ": Triggering update on " <<
-      // SideName(side)
-      //           << std::endl;
       auto flipped = FlipSide(side);
       try {
-        olc::vi2d targetIndex = TranslateIndex(pos, side);
+        olc::vi2d targetIndex = TranslateIndex(targetPosition, side);
 
+        // TODO: Rewrite, accounting for the fact that using operator[] creates
+        // the object if it does not exist
         if (newUpdates.find(targetIndex) !=
             newUpdates.end()) {  // Already exists
           newUpdates[targetIndex].SetFlag(flipped, true);
@@ -158,7 +184,7 @@ void Grid::Simulate() {
             newUpdates[targetIndex] = flags;
           }
         }
-      } catch (const char* err) {
+      } catch ([[maybe_unused]] const char* err) {
         // std::cout << "Not setting update due to error: " << err <<
         // std::endl;
       }

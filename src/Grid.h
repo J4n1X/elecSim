@@ -86,9 +86,11 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   // Setters
   void SetPos(olc::vi2d newPos) { pos = newPos; }
   void SetSize(int newSize) { size = newSize; }
-  void SetActivation(bool activated) { this->activated = activated; }
+  void SetActivation(bool newActivation) { activated = newActivation; }
   void SetInputSides(TileUpdateFlags newSides) { inputSides = newSides; }
   void SetOutputSides(TileUpdateFlags newSides) { inputSides = newSides; }
+  // TODO: Should this be virtual? Sometimes, we don't want the user to be able
+  // to change the default activation...
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
   void ResetActivation() { activated = defaultActivation; }
 
@@ -122,7 +124,7 @@ class WireGridTile : public GridTile {
       : GridTile(pos, size, false, olc::WHITE, olc::YELLOW,
                  TileUpdateFlags::All(), TileUpdateFlags::All()) {}
   WireGridTile() : WireGridTile(olc::vi2d(0, 0), 0) {}
-  ~WireGridTile() { std::cout << "Dropping Wire Tile" << std::endl; };
+  ~WireGridTile(){};
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
 
   constexpr std::string_view TileTypeName() override { return "Wire"; }
@@ -135,7 +137,7 @@ class EmitterGridTile : public GridTile {
       : GridTile(pos, size, false, olc::DARK_CYAN, olc::CYAN, TileUpdateFlags(),
                  TileUpdateFlags::All()) {}
   EmitterGridTile() : EmitterGridTile(olc::vi2d(0, 0), 0) {}
-  ~EmitterGridTile() { std::cout << "Dropping Emitter Tile" << std::endl; };
+  ~EmitterGridTile(){};
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
 
   constexpr std::string_view TileTypeName() override { return "Emitter"; }
@@ -182,29 +184,14 @@ class Grid {
   olc::vi2d TranslateIndex(olc::vi2d index, TileUpdateSide side);
 
   // Utility functions
-  olc::vi2d WorldToScreen(const olc::vf2d& pos) {
-    float x = (pos.x * (float)renderScale) - (float)renderOffset.x;
-    float y = (pos.y * (float)renderScale) - (float)renderOffset.y;
-    return olc::vi2d((int)x, (int)y);
-  }
+  olc::vi2d WorldToScreen(const olc::vf2d& pos);
 
-  olc::vi2d ScreenToWorld(const olc::vi2d& pos) {
-    int x = pos.x + renderOffset.x;
-    int y = pos.y + renderOffset.y;
-    if (x >= 0)
-      x /= (int)renderScale;
-    else
-      x = (int)(x - renderScale + 1) / (int)renderScale;
-    if (y >= 0)
-      y /= (int)renderScale;
-    else
-      y = (int)(y - renderScale + 1) / (int)renderScale;
-    return olc::vi2d(x, y);
-  }
+  olc::vi2d ScreenToWorld(const olc::vi2d& pos);
 
   // Game Logic functions
   void Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightIndex);
   void Simulate();
+  void ResetSimulation();
 
   // Setters
   void Resize(olc::vi2d newSize) { renderWindow = newSize; }
@@ -222,14 +209,6 @@ class Grid {
       // add it to the list of tiles which will always be updated
       alwaysUpdate.push_back(tile);
     }
-
-    // Remove any pending updates
-    updates.clear();
-    // Reset the state of all tiles to the set default
-    for ([[maybe_unused]] auto& [pos, tile] : tiles) {
-      tile->ResetActivation();
-    }
-
     return;
   }
   template <typename T>
