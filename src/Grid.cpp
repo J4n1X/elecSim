@@ -61,6 +61,11 @@ olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
   return olc::vf2d(x, y);
 }
 
+void Grid::ZoomToMouse(const olc::vf2d& mouseWorldPosBefore,
+                       const olc::vf2d& mouseWorldPosAfter) {
+  renderOffset += mouseWorldPosBefore - mouseWorldPosAfter;
+}
+
 olc::vi2d Grid::TranslateIndex(olc::vi2d index, TileUpdateSide side) {
   olc::vi2d targetIndex;
   switch (side) {
@@ -112,13 +117,13 @@ void Grid::ResetSimulation() {
 }
 
 void Grid::Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightPos) {
-  renderer->SetDrawTarget(gameLayer);
+  renderer->SetDrawTarget((uint8_t)(gameLayer & 0x0F));
   renderer->Clear(backgroundColor);
 
   for (auto& tilePair : tiles) {
     auto& tile = tilePair.second;
     olc::vi2d tileScreenPos = WorldToScreen(tile->GetPos());
-    int tileScreenSize = tile->GetSize() * renderScale;
+    auto tileScreenSize = (int)(tile->GetSize() * renderScale);
     // Only draw if it's inside the drawing area
     if (!isRectangleOutside(tileScreenPos, {tileScreenSize, tileScreenSize},
                             {0, 0}, renderWindow)) {
@@ -128,7 +133,7 @@ void Grid::Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightPos) {
   if (highlightPos != nullptr) {
     // Clear the highlight layer (BEWARE, IF THIS IS 0 THE ENTIRE SCREEN IS
     // CLEARED ON EVERY DRAW CALL)
-    renderer->SetDrawTarget(uiLayer);
+    renderer->SetDrawTarget((uint8_t)(uiLayer & 0x0F));
     renderer->Clear(olc::BLANK);
     auto corrPos = WorldToScreen(*highlightPos);
     olc::vi2d size = olc::vi2d((int)renderScale, (int)renderScale);
@@ -139,12 +144,12 @@ void Grid::Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightPos) {
 void Grid::Simulate() {
   decltype(updates) newUpdates;
 
-  for (auto it = alwaysUpdate.begin(); it != alwaysUpdate.end();) {
+  for (auto it = emitters.begin(); it != emitters.end();) {
     auto& tile = *it;
     if (tile.expired()) {
       std::cout << "An alwaysUpdate-Tile has expired and will be dropped."
                 << std::endl;
-      it = alwaysUpdate.erase(it);
+      it = emitters.erase(it);
     } else {
       updates.emplace(tile.lock()->GetPos(), TileUpdateFlags());
       it++;

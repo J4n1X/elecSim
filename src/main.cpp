@@ -78,15 +78,14 @@ class Game : public olc::PixelGameEngine {
   }
 
   int ParseNumberFromInput() {
-    for (int i = static_cast<int>(olc::Key::K0);
-         i <= static_cast<int>(olc::Key::K9); i++) {
-      olc::Key key = static_cast<olc::Key>(i);
+    for (int i = (int)olc::Key::K0; i <= (int)olc::Key::K9; i++) {
+      olc::Key key = (olc::Key)i;
 
       if (GetKey(key).bPressed) {
-        return i - static_cast<int>(olc::Key::K0);
+        return i - (int)olc::Key::K0;
       }
     }
-    // we didn't get any
+    // we didn't get any number input
     return -1;
   }
 
@@ -138,7 +137,6 @@ class Game : public olc::PixelGameEngine {
       // Relative to mouse will only work once world space works proper
       auto afterZoomPos =
           grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
-      std::cout << (alignedWorldPos - afterZoomPos) << std::endl;
       curOffset += (alignedWorldPos - afterZoomPos);
       grid.SetRenderOffset(curOffset);
     } else if (GetKey(olc::L).bPressed) {  // Zoom out, else if to prevent both
