@@ -40,7 +40,7 @@ std::vector<TileUpdateSide> TileUpdateFlags::GetFlags() {
   return ret;
 }
 
-Grid::Grid(olc::vi2d size, uint32_t renderScale, olc::vi2d renderOffset,
+Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
            int uiLayer, int gameLayer) {
   renderWindow = size;
   this->uiLayer = uiLayer;
@@ -50,23 +50,15 @@ Grid::Grid(olc::vi2d size, uint32_t renderScale, olc::vi2d renderOffset,
 }
 
 olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
-  float x = (pos.x * (float)renderScale) - (float)renderOffset.x;
-  float y = (pos.y * (float)renderScale) - (float)renderOffset.y;
-  return olc::vi2d((int)x, (int)y);
+  int x = (int)((pos.x - renderOffset.x) * renderScale);
+  int y = (int)((pos.y - renderOffset.y) * renderScale);
+  return olc::vi2d(x, y);
 }
 
-olc::vi2d Grid::ScreenToWorld(const olc::vi2d& pos) {
-  int x = pos.x + renderOffset.x;
-  int y = pos.y + renderOffset.y;
-  if (x >= 0)
-    x /= (int)renderScale;
-  else
-    x = (int)(x - renderScale + 1) / (int)renderScale;
-  if (y >= 0)
-    y /= (int)renderScale;
-  else
-    y = (int)(y - renderScale + 1) / (int)renderScale;
-  return olc::vi2d(x, y);
+olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
+  auto x = (float)pos.x / renderScale + renderOffset.x;
+  auto y = (float)pos.y / renderScale + renderOffset.y;
+  return olc::vf2d(x, y);
 }
 
 olc::vi2d Grid::TranslateIndex(olc::vi2d index, TileUpdateSide side) {

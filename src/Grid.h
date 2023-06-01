@@ -166,16 +166,17 @@ class Grid {
   std::vector<std::weak_ptr<GridTile>> alwaysUpdate;
   std::map<olc::vi2d, TileUpdateFlags> updates;
 
+  // TODO: This should be in world space, not screen space...
   // render scale in pixels
-  uint32_t renderScale;
+  float renderScale;
   // render offset in pixels
-  olc::vi2d renderOffset;
+  olc::vf2d renderOffset = {};
 
  public:
-  Grid(olc::vi2d size, uint32_t renderScale, olc::vi2d renderOffset,
-       int uiLayer, int gameLayer);
+  Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset, int uiLayer,
+       int gameLayer);
   // Grid(const Grid& grid);
-  Grid(int size_x, int size_y, uint32_t renderScale, olc::vi2d renderOffset,
+  Grid(int size_x, int size_y, float renderScale, olc::vi2d renderOffset,
        int uiLayer, int gameLayer)
       : Grid(olc::vi2d(size_x, size_y), renderScale, renderOffset, uiLayer,
              gameLayer) {}
@@ -186,7 +187,7 @@ class Grid {
   // Utility functions
   olc::vi2d WorldToScreen(const olc::vf2d& pos);
 
-  olc::vi2d ScreenToWorld(const olc::vi2d& pos);
+  olc::vf2d ScreenToWorld(const olc::vi2d& pos);
 
   // Game Logic functions
   void Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightIndex);
@@ -198,8 +199,8 @@ class Grid {
   void Resize(int newWidth, int newHeight) {
     Resize(olc::vi2d(newWidth, newHeight));
   }
-  void SetRenderOffset(olc::vi2d newOffset) { renderOffset = newOffset; }
-  void SetRenderScale(uint32_t newScale) { renderScale = newScale; }
+  void SetRenderOffset(olc::vf2d newOffset) { renderOffset = newOffset; }
+  void SetRenderScale(float newScale) { renderScale = newScale; }
   void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
   void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
   template <typename T>
@@ -218,8 +219,8 @@ class Grid {
 
   // Getters
   olc::vi2d const& GetRenderWindow() { return renderWindow; }
-  olc::vi2d const& GetRenderOffset() { return renderOffset; }
-  uint32_t GetRenderScale() { return renderScale; }
+  olc::vf2d const& GetRenderOffset() { return renderOffset; }
+  float GetRenderScale() { return renderScale; }
   std::optional<std::shared_ptr<GridTile> const> GetTile(olc::vi2d pos) {
     auto tileIt = tiles.find(pos);
     return tileIt != tiles.end() ? std::optional{tileIt->second} : std::nullopt;

@@ -121,24 +121,34 @@ class Game : public olc::PixelGameEngine {
     auto renderScale = grid.GetRenderScale();
     auto curOffset = grid.GetRenderOffset();
     if (GetKey(olc::UP).bHeld) {
-      grid.SetRenderOffset(curOffset - olc::vi2d(0, 1));
+      grid.SetRenderOffset(curOffset - olc::vf2d(0.0f, 0.25f));
     }
     if (GetKey(olc::LEFT).bHeld) {
-      grid.SetRenderOffset(curOffset - olc::vi2d(1, 0));
+      grid.SetRenderOffset(curOffset - olc::vf2d(0.25f, 0.0f));
     }
     if (GetKey(olc::DOWN).bHeld) {
-      grid.SetRenderOffset(curOffset + olc::vi2d(0, 1));
+      grid.SetRenderOffset(curOffset + olc::vf2d(0.0f, 0.25f));
     }
     if (GetKey(olc::RIGHT).bHeld) {
-      grid.SetRenderOffset(curOffset + olc::vi2d(1, 0));
+      grid.SetRenderOffset(curOffset + olc::vf2d(0.25f, 0.0f));
     }
 
     if (GetKey(olc::K).bPressed) {  // Zoom In
       grid.SetRenderScale(renderScale + 1);
-      // Relative to mouse
+      // Relative to mouse will only work once world space works proper
+      auto afterZoomPos =
+          grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
+      std::cout << (alignedWorldPos - afterZoomPos) << std::endl;
+      curOffset += (alignedWorldPos - afterZoomPos);
+      grid.SetRenderOffset(curOffset);
     } else if (GetKey(olc::L).bPressed) {  // Zoom out, else if to prevent both
                                            // in the same step
       grid.SetRenderScale(renderScale - 1);
+      // Relative to mouse will only work once world space works proper
+      auto afterZoomPos =
+          grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
+      curOffset += (alignedWorldPos - afterZoomPos);
+      grid.SetRenderOffset(curOffset);
     }
 
     // Building mode controls
