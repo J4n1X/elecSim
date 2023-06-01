@@ -1,44 +1,6 @@
 #include "Grid.h"
 
-TileUpdateSide FlipSide(TileUpdateSide side) {
-  switch (side) {
-    case TileUpdateSide::Top:
-      return TileUpdateSide::Bottom;
-    case TileUpdateSide::Bottom:
-      return TileUpdateSide::Top;
-    case TileUpdateSide::Left:
-      return TileUpdateSide::Right;
-    case TileUpdateSide::Right:
-      return TileUpdateSide::Left;
-    default:
-      throw "Side specified not found";
-  }
-}
-
-constexpr std::string_view SideName(TileUpdateSide side) {
-  switch (side) {
-    case TileUpdateSide::Top:
-      return "Top";
-    case TileUpdateSide::Bottom:
-      return "Bottom";
-    case TileUpdateSide::Left:
-      return "Left";
-    case TileUpdateSide::Right:
-      return "Right";
-    default:
-      throw "Side specified not found";
-  }
-}
-
-std::vector<TileUpdateSide> TileUpdateFlags::GetFlags() {
-  std::vector<TileUpdateSide> ret;
-  for (int i = 0; i < TILEUPDATESIDE_COUNT; i++) {
-    if (flagValue & 1 << i) {
-      ret.push_back(static_cast<TileUpdateSide>(flagValue & 1 << i));
-    }
-  }
-  return ret;
-}
+#include <cmath>
 
 Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
            int uiLayer, int gameLayer) {
@@ -66,7 +28,21 @@ void Grid::ZoomToMouse(const olc::vf2d& mouseWorldPosBefore,
   renderOffset += mouseWorldPosBefore - mouseWorldPosAfter;
 }
 
-olc::vi2d Grid::TranslateIndex(olc::vi2d index, TileUpdateSide side) {
+olc::vf2d Grid::AlignToGrid(const olc::vf2d& pos) {
+  auto align = [](std::floating_point auto num, std::floating_point auto base) {
+    auto quotient = num / base;
+    auto rounded = floor(quotient);
+    return rounded * base;
+  };
+  return {align(pos.x, 1.0f), align(pos.y, 1.0f)};
+}
+
+olc::vf2d Grid::CenterOfSquare(const olc::vf2d& squarePos) {
+  return {squarePos.x + renderScale / 2, squarePos.y + renderScale / 2};
+}
+
+olc::vi2d Grid::TranslateIndex(const olc::vf2d& index,
+                               const TileUpdateSide& side) {
   olc::vi2d targetIndex;
   switch (side) {
     case TileUpdateSide::Top:
@@ -116,7 +92,7 @@ void Grid::ResetSimulation() {
   }
 }
 
-void Grid::Draw(olc::PixelGameEngine* renderer, olc::vi2d* highlightPos) {
+void Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
   renderer->SetDrawTarget((uint8_t)(gameLayer & 0x0F));
   renderer->Clear(backgroundColor);
 
@@ -147,8 +123,6 @@ void Grid::Simulate() {
   for (auto it = emitters.begin(); it != emitters.end();) {
     auto& tile = *it;
     if (tile.expired()) {
-      std::cout << "An alwaysUpdate-Tile has expired and will be dropped."
-                << std::endl;
       it = emitters.erase(it);
     } else {
       updates.emplace(tile.lock()->GetPos(), TileUpdateFlags());
@@ -166,7 +140,7 @@ void Grid::Simulate() {
     newUpdates.emplace(targetPosition, TileUpdateFlags());
 
     for (auto side : outputSides.GetFlags()) {
-      auto flipped = FlipSide(side);
+      auto flipped = TileUpdateFlags::FlipSide(side);
       try {
         olc::vi2d targetIndex = TranslateIndex(targetPosition, side);
 
@@ -188,32 +162,4 @@ void Grid::Simulate() {
     }
   }
   updates = newUpdates;
-}
-
-void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
-                    int screenSize) {
-  renderer->FillRect(screenPos, olc::vi2d(screenSize, screenSize),
-                     activated ? activeColor : inactiveColor);
-}
-
-TileUpdateFlags WireGridTile::Simulate(TileUpdateFlags activatorSides) {
-  if (!activatorSides.IsEmpty()) {
-    auto sides = activatorSides.GetFlags();
-    auto outFlags = TileUpdateFlags::All();
-    for (auto& side : sides) {
-      outFlags.FlipFlag(side);
-    }
-    activated = true;
-    return outFlags;
-  } else {
-    activated = false;
-    return TileUpdateFlags();
-  }
-}
-
-TileUpdateFlags EmitterGridTile::Simulate(
-    [[maybe_unused]] TileUpdateFlags activatorSides) {
-  auto outFlags = activated ? TileUpdateFlags::All() : TileUpdateFlags();
-  activated = !activated;
-  return outFlags;
 }

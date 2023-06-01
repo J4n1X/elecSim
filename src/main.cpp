@@ -15,9 +15,9 @@ class Game : public olc::PixelGameEngine {
   ~Game() {}
 
  private:
-  const static int defaultTileSize;
-  const static int defaultRenderScale;
-  const static olc::vi2d defaultRenderOffset;
+  const static float defaultTileSize;
+  const static float defaultRenderScale;
+  const static olc::vf2d defaultRenderOffset;
 
   int uiLayer;
   int gameLayer;
@@ -32,7 +32,7 @@ class Game : public olc::PixelGameEngine {
   bool running;  // If this is false, the game quits
 
   // Variables needed for the placement logic
-  olc::vi2d lastPlacedPos;  // Position of last placed tile, to prevent
+  olc::vf2d lastPlacedPos;  // Position of last placed tile, to prevent
                             // overwriting the same tile over and over again
   std::unique_ptr<GridTile>
       brushTile;  // Variable which holds the next tile which should be placed
@@ -58,7 +58,7 @@ class Game : public olc::PixelGameEngine {
     paused = false;
     running = true;
 
-    lastPlacedPos = olc::vi2d(0, 0);
+    lastPlacedPos = olc::vf2d(0.0f, 0.0f);
     brushTile = nullptr;
     selectedBrushIndex = 1;
     CreateBrushTile();  // Initialize brush tile; by default it's a wire
@@ -89,13 +89,14 @@ class Game : public olc::PixelGameEngine {
     return -1;
   }
 
-  void ProcessUserInput(olc::vi2d& alignedWorldPos) {
+  void ProcessUserInput(olc::vf2d& alignedWorldPos) {
     // Highlight tile below mouse
     auto selTileXIndex = GetMouseX();
     auto selTileYIndex = GetMouseY();
 
-    alignedWorldPos =
+    auto hoverWorldPos =
         grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
+    alignedWorldPos = grid.AlignToGrid(hoverWorldPos);
 
     // Game state manipulation
     if (GetKey(olc::SPACE).bPressed) {
@@ -137,7 +138,7 @@ class Game : public olc::PixelGameEngine {
       // Relative to mouse will only work once world space works proper
       auto afterZoomPos =
           grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
-      curOffset += (alignedWorldPos - afterZoomPos);
+      curOffset += (hoverWorldPos - afterZoomPos);
       grid.SetRenderOffset(curOffset);
     } else if (GetKey(olc::L).bPressed) {  // Zoom out, else if to prevent both
                                            // in the same step
@@ -145,7 +146,7 @@ class Game : public olc::PixelGameEngine {
       // Relative to mouse will only work once world space works proper
       auto afterZoomPos =
           grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
-      curOffset += (alignedWorldPos - afterZoomPos);
+      curOffset += (hoverWorldPos - afterZoomPos);
       grid.SetRenderOffset(curOffset);
     }
 
@@ -167,7 +168,7 @@ class Game : public olc::PixelGameEngine {
           // Now we modify the tile to suit our needs
           brushTile->SetPos(alignedWorldPos);
           brushTile->SetSize(Game::defaultTileSize);
-#if 0  // Todo: Implement rotation and
+#if 0  // Todo: Implement rotation
           brushTile->SetInputSides()
           brushTile->SetOutputSides()
 #endif
@@ -210,23 +211,24 @@ class Game : public olc::PixelGameEngine {
       grid.Simulate();
       accumulatedTime = 0;
     }
-    olc::vi2d highlightWorldPos = olc::vi2d(0, 0);
+    olc::vf2d highlightWorldPos = olc::vf2d(0.0f, 0.0f);
     ProcessUserInput(highlightWorldPos);
     std::stringstream ss;
-    ss << std::showpos << highlightWorldPos << "Selected: "
+    ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ')'
+       << "Selected: "
        << (brushTile != nullptr ? brushTile->TileTypeName() : "None") << "; "
        << (paused ? "Paused" : "; Running") << '\n'
        << "Press '.' to increase and ',' to decrease speed";
     grid.Draw(this, &highlightWorldPos);
-    SetDrawTarget(uiLayer);
+    SetDrawTarget((uint8_t)(uiLayer & 0x0F));
     DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK);
 
     return running;
   }
 };
-const olc::vi2d Game::defaultRenderOffset = olc::vi2d(0, 0);
-const int Game::defaultTileSize = 1;
-const int Game::defaultRenderScale = 15;
+const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
+const float Game::defaultTileSize = 1.0f;
+const float Game::defaultRenderScale = 15.0f;
 
 int main(int argc, char** argv) {
   (void)argc;
