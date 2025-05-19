@@ -17,7 +17,6 @@ class Grid {
 
   olc::Pixel backgroundColor = olc::BLUE;
   olc::Pixel highlightColor = olc::RED;
-  olc::Pixel gridColor = olc::GREY;
   olc::vi2d renderWindow;
 
   int uiLayer;

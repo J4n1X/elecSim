@@ -72,10 +72,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   bool defaultActivation;
   olc::Pixel inactiveColor;
   olc::Pixel activeColor;
-
-  // Directions from which the tile can accept input
   TileUpdateFlags inputSides;
-  // Directions in which the tile can output
   TileUpdateFlags outputSides;
 
  public:
@@ -107,13 +104,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   // Setters
   void SetPos(olc::vi2d newPos) { pos = newPos; }
   void SetFacing(TileFacingSide newFacing) { facing = newFacing; }
-  void SetSize(float newSize) { size = newSize; }
   void SetActivation(bool newActivation) { activated = newActivation; }
-  void SetInputSides(TileUpdateFlags newSides) { inputSides = newSides; }
-  void SetOutputSides(TileUpdateFlags newSides) { inputSides = newSides; }
-
-  // TODO: Should this be virtual? Sometimes, we don't want the user to be able
-  // to change the default activation...
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
   void ResetActivation() { activated = defaultActivation; }
 
@@ -122,7 +113,6 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   bool GetDefaultActivation() { return defaultActivation; }
   olc::vi2d GetPos() { return pos; }
   float GetSize() { return size; }
-  // TODO: Do we still need those? Probably not, get rid of them.
   virtual TileUpdateFlags GetInputSides() { return inputSides; }
   virtual TileUpdateFlags GetOutputSides() { return outputSides; }
 

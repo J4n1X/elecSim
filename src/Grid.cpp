@@ -82,11 +82,9 @@ static bool isRectangleOutside(const olc::vi2d& rectPos1,
 }
 
 void Grid::ResetSimulation() {
-  if (updates.size() > 0) {
-    // Remove any pending updates
+  if (!updates.empty()) {
     updates.clear();
-    // Reset the state of all tiles to the set default
-    for ([[maybe_unused]] auto& [pos, tile] : tiles) {
+    for (auto& [pos, tile] : tiles) {
       tile->ResetActivation();
     }
   }
@@ -100,15 +98,12 @@ void Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
     auto& tile = tilePair.second;
     olc::vi2d tileScreenPos = WorldToScreen(tile->GetPos());
     auto tileScreenSize = (int)(tile->GetSize() * renderScale);
-    // Only draw if it's inside the drawing area
     if (!isRectangleOutside(tileScreenPos, {tileScreenSize, tileScreenSize},
                             {0, 0}, renderWindow)) {
       tile->Draw(renderer, tileScreenPos, tileScreenSize);
     }
   }
   if (highlightPos != nullptr) {
-    // Clear the highlight layer (BEWARE, IF THIS IS 0 THE ENTIRE SCREEN IS
-    // CLEARED ON EVERY DRAW CALL)
     renderer->SetDrawTarget((uint8_t)(uiLayer & 0x0F));
     renderer->Clear(olc::BLANK);
     auto corrPos = WorldToScreen(*highlightPos);
@@ -125,12 +120,11 @@ void Grid::Simulate() {
   decltype(updates) newUpdates;
 
   for (auto it = emitters.begin(); it != emitters.end();) {
-    auto& tile = *it;
-    if (tile.expired()) {
+    if (it->expired()) {
       it = emitters.erase(it);
     } else {
-      QueueUpdate(tile.lock()->GetPos(), TileUpdateFlags());
-      it++;
+      QueueUpdate(it->lock()->GetPos(), TileUpdateFlags());
+      ++it;
     }
   }
 
@@ -141,26 +135,22 @@ void Grid::Simulate() {
 
     if (target == nullptr) throw "Nullptr in update target";
     auto outputSides = target->Simulate(updateSides);
-    if (outputSides.IsEmpty())
-      continue;  // Discard the update if it does not trigger any other sides.
+    if (outputSides.IsEmpty()) continue;
     newUpdates.emplace(targetPosition, TileUpdateFlags());
 
     for (auto side : outputSides.GetFlags()) {
       auto flipped = TileUpdateFlags::FlipSide(side);
       try {
         olc::vi2d targetIndex = TranslateIndex(targetPosition, side);
-        if (newUpdates.find(targetIndex) !=
-            newUpdates.end()) {  // Already exists
+        if (newUpdates.find(targetIndex) != newUpdates.end()) {
           newUpdates.at(targetIndex).SetFlag(flipped, true);
-        } else {  // Create new entry if a tile exists at that index
+        } else {
           if (tiles.find(targetIndex) != tiles.end()) {
             auto flags = TileUpdateFlags(flipped);
             newUpdates.emplace(targetIndex, flags);
           }
         }
       } catch ([[maybe_unused]] const char* err) {
-        // std::cout << "Not setting update due to error: " << err <<
-        // std::endl;
       }
     }
   }
@@ -173,8 +163,6 @@ void Grid::Save(const std::string& filename) {
     std::cerr << "Error opening file for writing: " << filename << std::endl;
     return;
   }
-  // Loop through all the tiles and write them to the file using the Serialize
-  // function they have
   for (auto& tilePair : tiles) {
     auto& tile = tilePair.second;
     auto serializedData = tile->Serialize();
@@ -190,17 +178,13 @@ void Grid::Load(const std::string& filename) {
     std::cerr << "Error opening file for reading: " << filename << std::endl;
     return;
   }
-  // Clear the current tiles
   tiles.clear();
   emitters.clear();
-  // Read the file until the end
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
-    if (file.gcount() == 0) break;  // End of file reached
+    if (file.gcount() == 0) break;
     auto tile = GridTile::Deserialize(data);
-
-    // Print tile information
     tiles.insert_or_assign(tile->GetPos(), tile);
     if (tile->IsEmitter()) {
       emitters.push_back(tile);
