@@ -250,6 +250,9 @@ class Game : public olc::PixelGameEngine {
   }
 };
 
+// --- Static member initialization ---
+const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
+
 // --- Main entry point ---
 int main(int argc, char** argv) {
   (void)argc;
