@@ -34,7 +34,7 @@ olc::vf2d Grid::AlignToGrid(const olc::vf2d& pos) {
     auto rounded = floor(quotient);
     return rounded * base;
   };
-  return {align(pos.x, 1.0f), align(pos.y, 1.0f)};
+  return {align(pos.x, 1.0), align(pos.y, 1.0)};
 }
 
 olc::vf2d Grid::CenterOfSquare(const olc::vf2d& squarePos) {

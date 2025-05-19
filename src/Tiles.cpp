@@ -189,10 +189,12 @@ TileUpdateFlags SemiConductorGridTile::Simulate(
       if (rotatedSide == TileFacingSide::Left ||
           rotatedSide == TileFacingSide::Right) {
         activated = true;
-      }
-      if (rotatedSide == TileFacingSide::Bottom && activated) {
+      } else if (rotatedSide == TileFacingSide::Bottom && activated) {
         activated = false;
         return TileUpdateFlags(this->facing);
+      } else {
+        activated = false;
+        return TileUpdateFlags();
       }
     }
   }
