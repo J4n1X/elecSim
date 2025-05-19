@@ -146,7 +146,7 @@ class WireGridTile : public GridTile {
                  TileUpdateFlags::All(), TileUpdateFlags::All()) {}
   WireGridTile()
       : WireGridTile(olc::vi2d(0, 0), TileFacingSide::Top,
-                     0) { /* std::cout << "Wire created." << std::endl; */ }
+                     1.0f) { /* std::cout << "Wire created." << std::endl; */ }
   ~WireGridTile() { /* std::cout << "Wire destroyed." << std::endl; */ };
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
 
@@ -164,7 +164,7 @@ class JunctionGridTile : public GridTile {
   JunctionGridTile()
       : JunctionGridTile(
             olc::vi2d(0, 0), TileFacingSide::Top,
-            0) { /* std::cout << "Junction created." << std::endl; */ }
+            1.0f) { /* std::cout << "Junction created." << std::endl; */ }
   ~JunctionGridTile() { /* std::cout << "Junction destroyed." << std::endl; */
   };
   virtual void Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
@@ -187,7 +187,7 @@ class EmitterGridTile : public GridTile {
                  TileUpdateFlags(), TileUpdateFlags::All()) {}
   EmitterGridTile()
       : EmitterGridTile(olc::vi2d(0, 0), TileFacingSide::Top,
-                        0) { /* std::cout << "Emitter created." << std::endl; */
+                        1.0f) { /* std::cout << "Emitter created." << std::endl; */
   }
   ~EmitterGridTile() { /* std::cout << "Emitter destroyed." << std::endl; */ };
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
@@ -209,7 +209,7 @@ class SemiConductorGridTile : public GridTile {
   SemiConductorGridTile()
       : SemiConductorGridTile(
             olc::vi2d(0, 0), TileFacingSide::Top,
-            0) { /* std::cout << "SemiConductor created." << std::endl; */ }
+            1.0f) { /* std::cout << "SemiConductor created." << std::endl; */ }
   ~SemiConductorGridTile() {
     /* std::cout << "SemiConductor destroyed." << std::endl; */
   };
@@ -229,7 +229,7 @@ class ButtonGridTile : public GridTile {
                  TileUpdateFlags(), TileUpdateFlags()) {}
   ButtonGridTile()
       : ButtonGridTile(olc::vi2d(0, 0), TileFacingSide::Top,
-                       0) { /* std::cout << "Button created." << std::endl; */ }
+                       1.0f) { /* std::cout << "Button created." << std::endl; */ }
   ~ButtonGridTile() { /* std::cout << "Button destroyed." << std::endl; */ };
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
   TileUpdateFlags Interact() override;
