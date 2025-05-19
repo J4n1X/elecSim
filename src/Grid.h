@@ -41,7 +41,7 @@ class Grid {
        int uiLayer, int gameLayer)
       : Grid(olc::vi2d(size_x, size_y), renderScale, renderOffset, uiLayer,
              gameLayer) {}
-  Grid() : Grid(0, 0, 0, olc::vi2d(0, 0), 0, 0){};
+  Grid() : Grid(0, 0, 0, olc::vi2d(0, 0), 0, 0) {};
   ~Grid() {}
 
   // Utility functions
@@ -50,7 +50,7 @@ class Grid {
   void ZoomToMouse(const olc::vf2d& mouseWorldPosBefore,
                    const olc::vf2d& mouseWorldPosAfter);
   static olc::vi2d TranslateIndex(const olc::vf2d& index,
-                                  const TileUpdateSide& side);
+                                  const TileFacingSide& side);
   olc::vf2d AlignToGrid(const olc::vf2d& pos);
   olc::vf2d CenterOfSquare(const olc::vf2d& squarePos);
 
@@ -58,6 +58,7 @@ class Grid {
 
   // TODO: Use std::optional instead of pointer
   void Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightIndex);
+  void QueueUpdate(olc::vi2d pos, TileUpdateFlags flags = {});
   void Simulate();
   void ResetSimulation();
 
@@ -100,4 +101,10 @@ class Grid {
   std::optional<std::shared_ptr<GridTile> const> GetTile(int x, int y) {
     return GetTile(olc::vi2d(x, y));
   }
+  std::size_t GetUpdateCount() { return updates.size(); }
+  std::size_t GetTileCount() { return tiles.size(); }
+
+  // Save/load functions
+  void Save(const std::string& filename = "grid.bin");
+  void Load(const std::string& filename);
 };

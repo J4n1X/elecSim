@@ -7,7 +7,7 @@
 #include "Grid.h"
 #include "olcPixelGameEngine.h"
 
-#define TILE_SIZE 16
+#define TILE_SCALE 1.0F
 
 class Game : public olc::PixelGameEngine {
  public:
@@ -15,7 +15,6 @@ class Game : public olc::PixelGameEngine {
   ~Game() {}
 
  private:
-  const static float defaultTileSize;
   const static float defaultRenderScale;
   const static olc::vf2d defaultRenderOffset;
 
@@ -28,8 +27,8 @@ class Game : public olc::PixelGameEngine {
   Grid grid;
 
   // Game state variables
-  bool paused;   // Simulation is paused, renderer is not
-  bool running;  // If this is false, the game quits
+  bool paused;         // Simulation is paused, renderer is not
+  bool engineRunning;  // If this is false, the game quits
 
   // Variables needed for the placement logic
   olc::vf2d lastPlacedPos;  // Position of last placed tile, to prevent
@@ -37,6 +36,7 @@ class Game : public olc::PixelGameEngine {
   std::unique_ptr<GridTile>
       brushTile;  // Variable which holds the next tile which should be placed
   int selectedBrushIndex;
+  TileFacingSide selectedBrushFacing;  // Facing direction of the brush tile
 
   // std::shared_ptr<GridPalette> palette;
 
@@ -55,15 +55,16 @@ class Game : public olc::PixelGameEngine {
     grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
                 defaultRenderOffset, uiLayer, gameLayer);
 
-    paused = false;
-    running = true;
+    paused = true;
+    engineRunning = true;
 
     lastPlacedPos = olc::vf2d(0.0f, 0.0f);
     brushTile = nullptr;
     selectedBrushIndex = 1;
+    selectedBrushFacing = TileFacingSide::Top;
     CreateBrushTile();  // Initialize brush tile; by default it's a wire
 
-    return running;
+    return engineRunning;
   }
 
   void CreateBrushTile() {
@@ -72,7 +73,16 @@ class Game : public olc::PixelGameEngine {
         brushTile = std::make_unique<WireGridTile>();
         break;
       case 2:
+        brushTile = std::make_unique<JunctionGridTile>();
+        break;
+      case 3:
         brushTile = std::make_unique<EmitterGridTile>();
+        break;
+      case 4:
+        brushTile = std::make_unique<SemiConductorGridTile>();
+        break;
+      case 5:
+        brushTile = std::make_unique<ButtonGridTile>();
         break;
     }
   }
@@ -102,10 +112,10 @@ class Game : public olc::PixelGameEngine {
     if (GetKey(olc::SPACE).bPressed) {
       paused = !paused;
     }
-    if (GetKey(olc::COMMA).bPressed) {  // Slow down simulation
+    if (GetKey(olc::PERIOD).bPressed) {  // Slow down simulation
       updateInterval += 0.05f;
     }
-    if (GetKey(olc::PERIOD).bPressed) {  // Speed up simulation
+    if (GetKey(olc::COMMA).bPressed) {  // Speed up simulation
       if (updateInterval > 0.0f) {
         updateInterval -= 0.05f;
       } else {
@@ -113,7 +123,7 @@ class Game : public olc::PixelGameEngine {
       }
     }
     if (GetKey(olc::ESCAPE).bPressed) {
-      running = false;
+      engineRunning = false;
       return;
     }
 
@@ -133,14 +143,14 @@ class Game : public olc::PixelGameEngine {
       grid.SetRenderOffset(curOffset + olc::vf2d(0.25f, 0.0f));
     }
 
-    if (GetKey(olc::K).bPressed) {  // Zoom In
+    if (GetKey(olc::J).bPressed) {  // Zoom In
       grid.SetRenderScale(renderScale + 1);
       // Relative to mouse will only work once world space works proper
       auto afterZoomPos =
           grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
       curOffset += (hoverWorldPos - afterZoomPos);
       grid.SetRenderOffset(curOffset);
-    } else if (GetKey(olc::L).bPressed) {  // Zoom out, else if to prevent both
+    } else if (GetKey(olc::K).bPressed) {  // Zoom out, else if to prevent both
                                            // in the same step
       grid.SetRenderScale(renderScale - 1);
       // Relative to mouse will only work once world space works proper
@@ -148,6 +158,26 @@ class Game : public olc::PixelGameEngine {
           grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
       curOffset += (hoverWorldPos - afterZoomPos);
       grid.SetRenderOffset(curOffset);
+    }
+
+    // Interact with things
+    if (GetMouse(1).bPressed) {  // Change default activation value
+      auto gridTileOpt = grid.GetTile(alignedWorldPos);
+      if (gridTileOpt.has_value()) {
+        auto& gridTile = gridTileOpt.value();
+        auto updateFacing = gridTile->Interact();
+        if (!updateFacing.IsEmpty()) {
+          grid.QueueUpdate(alignedWorldPos, updateFacing);
+        }
+      }
+    }
+
+    // Save and load
+    if (GetKey(olc::S).bPressed) {
+      grid.Save("grid.bin");
+    }
+    if (GetKey(olc::L).bPressed) {
+      grid.Load("grid.bin");
     }
 
     // Building mode controls
@@ -160,18 +190,23 @@ class Game : public olc::PixelGameEngine {
         CreateBrushTile();  // Switch to new tile type
       }
 
+      // Change the facing direction of the brush tile, go clockwise
+      if (GetKey(olc::R).bPressed) {
+        selectedBrushFacing = TileUpdateFlags::RotateToFacing(
+            selectedBrushFacing, TileFacingSide::Right);
+      }
+
       // Modify tile if it's left-clicked
       if (brushTile != nullptr) {
         if (GetMouse(0).bPressed ||
-            GetMouse(0).bHeld &&
-                lastPlacedPos != alignedWorldPos) {  // Create wire
+            (GetMouse(0).bHeld &&
+             lastPlacedPos != alignedWorldPos)) {  // Create wire
           // Now we modify the tile to suit our needs
           brushTile->SetPos(alignedWorldPos);
-          brushTile->SetSize(Game::defaultTileSize);
-#if 0  // Todo: Implement rotation
-          brushTile->SetInputSides()
-          brushTile->SetOutputSides()
-#endif
+          brushTile->SetFacing(selectedBrushFacing);
+
+          // Set the facing
+
           std::shared_ptr<GridTile> sharedBrushTile = std::move(brushTile);
           grid.SetTile(alignedWorldPos, sharedBrushTile,
                        sharedBrushTile->IsEmitter());
@@ -181,13 +216,13 @@ class Game : public olc::PixelGameEngine {
           grid.ResetSimulation();
         }
       }
+      // TODO: Maybe we should remove this for now.
       if (GetMouse(1).bPressed) {  // Change default activation value
         auto gridTileOpt = grid.GetTile(alignedWorldPos);
         if (gridTileOpt.has_value()) {
           auto& gridTile = gridTileOpt.value();
-          gridTile->SetDefaultActivation(!gridTile->DefaultActivation());
+          gridTile->SetDefaultActivation(!gridTile->GetDefaultActivation());
           gridTile->ResetActivation();
-          grid.ResetSimulation();
         }
       }
       if (GetMouse(2).bHeld) {  // Remove tile
@@ -217,17 +252,19 @@ class Game : public olc::PixelGameEngine {
     ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ')'
        << "Selected: "
        << (brushTile != nullptr ? brushTile->TileTypeName() : "None") << "; "
-       << (paused ? "Paused" : "; Running") << '\n'
-       << "Press '.' to increase and ',' to decrease speed";
+       << "Facing: " << TileUpdateFlags::GetFacingName(selectedBrushFacing)
+       << "; " << (paused ? "Paused" : "; Running") << '\n'
+       << "Tiles: " << grid.GetTileCount() << "; "
+       << "Updates: " << grid.GetUpdateCount() << '\n'
+       << "Press ',' to increase and '.' to decrease speed";
     grid.Draw(this, &highlightWorldPos);
     SetDrawTarget((uint8_t)(uiLayer & 0x0F));
     DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK);
 
-    return running;
+    return engineRunning;
   }
 };
 const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
-const float Game::defaultTileSize = 1.0f;
 const float Game::defaultRenderScale = 15.0f;
 
 int main(int argc, char** argv) {
