@@ -106,7 +106,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   void SetFacing(TileFacingSide newFacing) { facing = newFacing; }
   void SetActivation(bool newActivation) { activated = newActivation; }
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
-  void ResetActivation() { activated = defaultActivation; }
+  virtual void ResetActivation() { activated = defaultActivation; }
 
   // Getters for dynamic variables
   bool GetActivation() { return activated; }
@@ -127,22 +127,11 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual constexpr int GetTileId() = 0;
 };
 
-/* class EmptyGridTile : public GridTile {
- public:
-  EmptyGridTile(olc::vi2d pos, TileFacingSide facing, float size)
-      : GridTile(pos, facing, size, false, olc::BLUE, olc::BLUE) {}
-  ~EmptyGridTile() {};
-  TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override {
-    (void)activatorSides;
-    return TileUpdateFlags();
-  };
-}; */
-
 // Transports a signal to the next tile in the direction of the facing
 class WireGridTile : public GridTile {
  public:
   WireGridTile(olc::vi2d pos, TileFacingSide facing, float size)
-      : GridTile(pos, facing, size, false, olc::WHITE, olc::YELLOW,
+      : GridTile(pos, facing, size, false, olc::WHITE, olc::DARK_YELLOW,
                  TileUpdateFlags::All(), TileUpdateFlags::All()) {}
   WireGridTile()
       : WireGridTile(olc::vi2d(0, 0), TileFacingSide::Top,
@@ -179,33 +168,46 @@ class JunctionGridTile : public GridTile {
 // Emits a signal every second tick
 class EmitterGridTile : public GridTile {
  private:
-  bool enabled = true;
+  bool enabled;
 
  public:
   EmitterGridTile(olc::vi2d pos, TileFacingSide facing, float size)
       : GridTile(pos, facing, size, false, olc::DARK_CYAN, olc::CYAN,
-                 TileUpdateFlags(), TileUpdateFlags::All()) {}
-  EmitterGridTile()
-      : EmitterGridTile(olc::vi2d(0, 0), TileFacingSide::Top,
-                        1.0f) { /* std::cout << "Emitter created." << std::endl; */
+                 TileUpdateFlags(), TileUpdateFlags::All()) {
+    enabled = true;
   }
+  EmitterGridTile()
+      : EmitterGridTile(
+            olc::vi2d(0, 0), TileFacingSide::Top,
+            1.0f) { /* std::cout << "Emitter created." << std::endl; */ }
   ~EmitterGridTile() { /* std::cout << "Emitter destroyed." << std::endl; */ };
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
   TileUpdateFlags Interact() override;
-
+  void ResetActivation() override {
+    activated = defaultActivation;
+    enabled = true;
+  }
   constexpr std::string_view TileTypeName() override { return "Emitter"; }
   constexpr bool IsEmitter() override { return true; }
   constexpr int GetTileId() override { return 2; }
 };
 
+
+
+// TODO: Custom Draw function to signal when the tile is enabled (ready to emit)
 // Requires an input from the side to activate, at that point, if an input comes
 // from the bottom, it will emit.
 class SemiConductorGridTile : public GridTile {
+ private:
+  bool enabled;
+
  public:
   SemiConductorGridTile(olc::vi2d pos, TileFacingSide facing, float size)
       : GridTile(pos, facing, size, false, olc::DARK_GREEN, olc::GREEN,
                  TileUpdateFlags(TileFacingSide::Bottom),
-                 TileUpdateFlags(TileFacingSide::Top)) {}
+                 TileUpdateFlags(TileFacingSide::Top)) {
+    enabled = false;
+  }
   SemiConductorGridTile()
       : SemiConductorGridTile(
             olc::vi2d(0, 0), TileFacingSide::Top,
@@ -216,7 +218,11 @@ class SemiConductorGridTile : public GridTile {
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
   TileUpdateFlags Interact() override;
 
-  constexpr std::string_view TileTypeName() override { return "SemiConductor"; }
+  void ResetActivation() override {
+    activated = defaultActivation;
+    enabled = false;
+  }
+  constexpr std::string_view TileTypeName() override { return "Semiconductor"; }
   constexpr bool IsEmitter() override { return false; }
   constexpr int GetTileId() override { return 3; }
 };
@@ -228,8 +234,9 @@ class ButtonGridTile : public GridTile {
       : GridTile(pos, facing, size, false, olc::DARK_RED, olc::RED,
                  TileUpdateFlags(), TileUpdateFlags()) {}
   ButtonGridTile()
-      : ButtonGridTile(olc::vi2d(0, 0), TileFacingSide::Top,
-                       1.0f) { /* std::cout << "Button created." << std::endl; */ }
+      : ButtonGridTile(
+            olc::vi2d(0, 0), TileFacingSide::Top,
+            1.0f) { /* std::cout << "Button created." << std::endl; */ }
   ~ButtonGridTile() { /* std::cout << "Button destroyed." << std::endl; */ };
   TileUpdateFlags Simulate(TileUpdateFlags activatorSides) override;
   TileUpdateFlags Interact() override;

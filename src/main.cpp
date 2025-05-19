@@ -155,16 +155,6 @@ class Game : public olc::PixelGameEngine {
   // --- Tile placement, removal, and interaction ---
   void HandleTileInteractions(const olc::vf2d& alignedWorldPos,
                               const olc::vf2d& hoverWorldPos) {
-    // Right click: interact
-    if (GetMouse(1).bPressed) {
-      auto gridTileOpt = grid.GetTile(alignedWorldPos);
-      if (gridTileOpt.has_value()) {
-        auto& gridTile = gridTileOpt.value();
-        auto updateFacing = gridTile->Interact();
-        if (!updateFacing.IsEmpty())
-          grid.QueueUpdate(alignedWorldPos, updateFacing);
-      }
-    }
     // Building mode controls
     if (paused) {
       // Select brush
@@ -205,6 +195,17 @@ class Game : public olc::PixelGameEngine {
       if (GetMouse(2).bHeld) {
         grid.EraseTile(alignedWorldPos);
         grid.ResetSimulation();
+      }
+    } else {
+      // Right click: interact
+      if (GetMouse(1).bPressed) {
+        auto gridTileOpt = grid.GetTile(alignedWorldPos);
+        if (gridTileOpt.has_value()) {
+          auto& gridTile = gridTileOpt.value();
+          auto updateFacing = gridTile->Interact();
+          if (!updateFacing.IsEmpty())
+            grid.QueueUpdate(alignedWorldPos, updateFacing);
+        }
       }
     }
   }

@@ -137,7 +137,7 @@ std::shared_ptr<GridTile> GridTile::Deserialize(
 
 TileUpdateFlags WireGridTile::Simulate(TileUpdateFlags activatorSides) {
   if (!activatorSides.IsEmpty() && !activatorSides.GetFlag(this->facing)) {
-    activated = true;
+    activated = !activated;
     return TileUpdateFlags(this->facing);
   }
   activated = false;
@@ -157,65 +157,77 @@ void JunctionGridTile::Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
 TileUpdateFlags JunctionGridTile::Simulate(TileUpdateFlags activatorSides) {
   if (!activatorSides.IsEmpty()) {
     auto outFlags = TileUpdateFlags::All();
-    for (const auto& side : activatorSides.GetFlags()) {
-      outFlags.FlipFlag(side);
+    auto sideFlags = activatorSides.GetFlags();
+    for(auto &sideFlag : sideFlags) {
+      outFlags.SetFlag(sideFlag, false);
     }
-    activated = true;
+    activated = !activated;
     return outFlags;
   }
-  activated = false;
   return TileUpdateFlags();
 }
 
 TileUpdateFlags EmitterGridTile::Simulate(
     [[maybe_unused]] TileUpdateFlags activatorSides) {
-  if (!enabled) return TileUpdateFlags();
-  auto outFlags = activated ? TileUpdateFlags(this->facing) : TileUpdateFlags();
-  activated = !activated;
-  return outFlags;
+  if (enabled) {
+    activated = !activated;
+    return TileUpdateFlags(this->facing);
+  } else {
+    // Signals are controlled by on/off impulses, so we need to check which
+    // pulse we're on
+    auto returnFlags =
+        activated ? TileUpdateFlags(this->facing) : TileUpdateFlags();
+    activated = false;
+    return returnFlags;
+  }
 }
 
 TileUpdateFlags EmitterGridTile::Interact() {
   enabled = !enabled;
-  activated = enabled;
   return TileUpdateFlags();
 }
 
 TileUpdateFlags SemiConductorGridTile::Simulate(
     TileUpdateFlags activatorSides) {
+  // Save previous states.
+  bool prevActivated = activated;
+  bool prevEnabled = enabled;
+
   if (!activatorSides.IsEmpty()) {
     for (const auto& side : activatorSides.GetFlags()) {
       auto rotatedSide = TileUpdateFlags::RotateToFacing(side, facing);
       if (rotatedSide == TileFacingSide::Left ||
           rotatedSide == TileFacingSide::Right) {
-        activated = true;
-      } else if (rotatedSide == TileFacingSide::Bottom && activated) {
-        activated = false;
-        return TileUpdateFlags(this->facing);
-      } else {
-        activated = false;
-        return TileUpdateFlags();
+        enabled = !enabled;
+        break;
       }
+      if (rotatedSide == TileFacingSide::Bottom) {
+        activated = !activated;
+        break;
+      }
+    }
+    if (enabled && activated) {
+      return TileUpdateFlags(this->facing);
+    }
+    if((prevActivated && prevEnabled) && (prevActivated != activated || prevEnabled != enabled)) {
+      return TileUpdateFlags(this->facing);
     }
   }
   return TileUpdateFlags();
 }
 
 TileUpdateFlags SemiConductorGridTile::Interact() {
-  activated = !activated;
-  return TileUpdateFlags(
-      TileUpdateFlags::RotateToFacing(TileFacingSide::Right, facing));
+  enabled = !activated;
+  return TileUpdateFlags();
 }
 
 TileUpdateFlags ButtonGridTile::Simulate(
     [[maybe_unused]] TileUpdateFlags activatorSides) {
   if (activatorSides.IsEmpty()) return TileUpdateFlags();
-  auto retVal = activated ? TileUpdateFlags(this->facing) : TileUpdateFlags();
-  activated = false;
-  return retVal;
+  return TileUpdateFlags(this->facing);
 }
 
 TileUpdateFlags ButtonGridTile::Interact() {
-  activated = true;
+  activated = !activated;
   return TileUpdateFlags::All();
 }

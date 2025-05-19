@@ -34,7 +34,8 @@ olc::vf2d Grid::AlignToGrid(const olc::vf2d& pos) {
     auto rounded = floor(quotient);
     return rounded * base;
   };
-  return {align(pos.x, 1.0), align(pos.y, 1.0)};
+  return {align(static_cast<float>(pos.x), 1.0f),
+          align(static_cast<float>(pos.y), 1.0f)};
 }
 
 olc::vf2d Grid::CenterOfSquare(const olc::vf2d& squarePos) {
@@ -84,9 +85,9 @@ static bool isRectangleOutside(const olc::vi2d& rectPos1,
 void Grid::ResetSimulation() {
   if (!updates.empty()) {
     updates.clear();
-    for (auto& [pos, tile] : tiles) {
-      tile->ResetActivation();
-    }
+  }
+  for (auto& [pos, tile] : tiles) {
+    tile->ResetActivation();
   }
 }
 
@@ -130,18 +131,26 @@ void Grid::Simulate() {
 
   for (auto update : updates) {
     auto targetPosition = update.first;
-    auto& target = tiles[targetPosition];
+    auto& target = tiles.at(targetPosition);
     auto updateSides = update.second;
 
     if (target == nullptr) throw "Nullptr in update target";
     auto outputSides = target->Simulate(updateSides);
     if (outputSides.IsEmpty()) continue;
-    newUpdates.emplace(targetPosition, TileUpdateFlags());
+    // newUpdates.emplace(targetPosition, TileUpdateFlags());
 
     for (auto side : outputSides.GetFlags()) {
       auto flipped = TileUpdateFlags::FlipSide(side);
       try {
         olc::vi2d targetIndex = TranslateIndex(targetPosition, side);
+
+        // Very quick and dirty circular activation check. Simply does not work, so
+        // FIXME: Find a proper way to do this...
+        if (tiles.find(targetIndex) != tiles.end() &&
+            tiles.at(targetIndex)->GetActivation() && target->GetActivation() &&
+            target->GetTileId() == tiles.at(targetIndex)->GetTileId()) {
+          continue;
+        }
         if (newUpdates.find(targetIndex) != newUpdates.end()) {
           newUpdates.at(targetIndex).SetFlag(flipped, true);
         } else {
