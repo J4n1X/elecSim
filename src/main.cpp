@@ -16,7 +16,7 @@ class Game : public olc::PixelGameEngine {
 
  private:
   // --- Constants ---
-  static constexpr float defaultRenderScale = 15.0f;
+  static constexpr float defaultRenderScale = 32.0f;
   static const olc::vf2d defaultRenderOffset;
 
   // --- Layer indices ---
@@ -165,7 +165,7 @@ class Game : public olc::PixelGameEngine {
       }
       // Change facing
       if (GetKey(olc::R).bPressed) {
-        selectedBrushFacing = TileUpdateFlags::RotateToFacing(
+        selectedBrushFacing = TileUpdateFlags::RotateSideToFacing(
             selectedBrushFacing, TileFacingSide::Right);
       }
       // Place tile (left click)
@@ -245,7 +245,7 @@ class Game : public olc::PixelGameEngine {
     // Draw grid and UI
     grid.Draw(this, &highlightWorldPos);
     SetDrawTarget((uint8_t)(uiLayer & 0x0F));
-    DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK);
+    DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
 
     return engineRunning;
   }
@@ -259,7 +259,7 @@ int main(int argc, char** argv) {
   (void)argc;
   (void)argv;
   Game game;
-  if (game.Construct(640, 480, 2, 2, false, true, false)) {
+  if (game.Construct(640 * 2, 480 * 2, 1, 1, false, true, false)) {
     game.Start();
   }
 }

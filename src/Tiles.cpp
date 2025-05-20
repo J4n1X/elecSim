@@ -12,8 +12,6 @@ std::array<olc::vf2d, 3> GetTrianglePoints(olc::vf2d screenPos, int screenSize,
   int halfHeight = screenSize / kHalfDiv;
   olc::vf2d center = {screenPos.x + screenSize / 2,
                       screenPos.y + screenSize / 2};
-
-  // Offsets for each facing: {p1_offset, p2_offset, p3_offset}
   static const std::map<TileFacingSide, std::array<olc::vf2d, 3>> offsets = {
       {TileFacingSide::Top,
        {olc::vf2d(0, -halfHeight), olc::vf2d(halfWidth, 0),
@@ -27,7 +25,6 @@ std::array<olc::vf2d, 3> GetTrianglePoints(olc::vf2d screenPos, int screenSize,
       {TileFacingSide::Left,
        {olc::vf2d(-halfWidth, 0), olc::vf2d(0, -halfHeight),
         olc::vf2d(0, halfHeight)}}};
-
   auto it = offsets.find(facing);
   if (it == offsets.end()) {
     throw std::runtime_error("Facing specified not found");
@@ -36,18 +33,34 @@ std::array<olc::vf2d, 3> GetTrianglePoints(olc::vf2d screenPos, int screenSize,
   return {center + offs[0], center + offs[1], center + offs[2]};
 }
 
-TileFacingSide TileUpdateFlags::RotateToFacing(const TileFacingSide& side,
-                                               const TileFacingSide& facing) {
+// --- TileUpdateFlags ---
+TileFacingSide TileUpdateFlags::RotateSideToFacing(
+    const TileFacingSide& side, const TileFacingSide& facing) {
   static const std::map<TileFacingSide, uint8_t> sideIndexTable = {
       {TileFacingSide::Top, 0},
       {TileFacingSide::Right, 1},
       {TileFacingSide::Bottom, 2},
       {TileFacingSide::Left, 3},
   };
-  uint8_t sideIndex = sideIndexTable.at(side);
-  uint8_t facingIndex = sideIndexTable.at(facing);
+  auto sideIt = sideIndexTable.find(side);
+  auto facingIt = sideIndexTable.find(facing);
+  if (sideIt == sideIndexTable.end() || facingIt == sideIndexTable.end()) {
+    throw std::runtime_error("Invalid side or facing in RotateSideToFacing");
+  }
+  uint8_t sideIndex = sideIt->second;
+  uint8_t facingIndex = facingIt->second;
   uint8_t rotatedIndex = (sideIndex + facingIndex) % TILEUPDATESIDE_COUNT;
   return static_cast<TileFacingSide>(1 << rotatedIndex);
+}
+
+TileUpdateFlags TileUpdateFlags::RotateToFacing(TileUpdateFlags flags,
+                                                const TileFacingSide& facing) {
+  TileUpdateFlags ret;
+  for (const auto& flag : flags.GetFlags()) {
+    auto rotatedFlag = RotateSideToFacing(flag, facing);
+    ret.SetFlag(rotatedFlag, true);
+  }
+  return ret;
 }
 
 TileFacingSide TileUpdateFlags::FlipSide(const TileFacingSide& side) {
@@ -90,6 +103,7 @@ std::vector<TileFacingSide> TileUpdateFlags::GetFlags() {
   return ret;
 }
 
+// --- GridTile ---
 void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
                     int screenSize) {
   renderer->FillRect(screenPos, olc::vi2d(screenSize, screenSize),
@@ -119,46 +133,49 @@ std::shared_ptr<GridTile> GridTile::Deserialize(
   int posY = *reinterpret_cast<int*>(data.data() + sizeof(id) + sizeof(facing) +
                                      sizeof(posX));
   olc::vi2d pos = {posX, posY};
+  std::shared_ptr<GridTile> ret_ptr;
   switch (id) {
     case 0:
-      return std::make_shared<WireGridTile>(pos, facing, 1.0f);
+      ret_ptr = std::make_shared<WireGridTile>();
+      break;
     case 1:
-      return std::make_shared<JunctionGridTile>(pos, facing, 1.0f);
+      ret_ptr = std::make_shared<JunctionGridTile>();
+      break;
     case 2:
-      return std::make_shared<EmitterGridTile>(pos, facing, 1.0f);
+      ret_ptr = std::make_shared<EmitterGridTile>();
+      break;
     case 3:
-      return std::make_shared<SemiConductorGridTile>(pos, facing, 1.0f);
+      ret_ptr = std::make_shared<SemiConductorGridTile>();
+      break;
     case 4:
-      return std::make_shared<ButtonGridTile>(pos, facing, 1.0f);
+      ret_ptr = std::make_shared<ButtonGridTile>();
+      break;
     default:
       throw std::runtime_error("Unknown tile ID");
   }
+  ret_ptr->SetPos(pos);
+  ret_ptr->SetFacing(facing);
+  return ret_ptr;
 }
 
 TileUpdateFlags WireGridTile::Simulate(TileUpdateFlags activatorSides) {
-  if (!activatorSides.IsEmpty() && !activatorSides.GetFlag(this->facing)) {
-    activated = !activated;
-    return TileUpdateFlags(this->facing);
+  if (!activatorSides.IsEmpty()) {
+    for (const auto& side : activatorSides.GetFlags()) {
+      if (inputSides.GetFlag(side)) {
+        activated = !activated;
+        return TileUpdateFlags(this->facing);
+      }
+    }
   }
   activated = false;
   return TileUpdateFlags();
-}
-
-void JunctionGridTile::Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
-                            int screenSize) {
-  renderer->FillRect(screenPos, olc::vi2d(screenSize, screenSize),
-                     activated ? activeColor : inactiveColor);
-  int halfSize = screenSize / 4;
-  olc::vi2d centerPos = screenPos + olc::vi2d(screenSize / 2 - halfSize / 2,
-                                              screenSize / 2 - halfSize / 2);
-  renderer->FillRect(centerPos, olc::vi2d(halfSize, halfSize), olc::BLACK);
 }
 
 TileUpdateFlags JunctionGridTile::Simulate(TileUpdateFlags activatorSides) {
   if (!activatorSides.IsEmpty()) {
     auto outFlags = TileUpdateFlags::All();
     auto sideFlags = activatorSides.GetFlags();
-    for(auto &sideFlag : sideFlags) {
+    for (auto& sideFlag : sideFlags) {
       outFlags.SetFlag(sideFlag, false);
     }
     activated = !activated;
@@ -189,35 +206,30 @@ TileUpdateFlags EmitterGridTile::Interact() {
 
 TileUpdateFlags SemiConductorGridTile::Simulate(
     TileUpdateFlags activatorSides) {
-  // Save previous states.
-  bool prevActivated = activated;
-  bool prevEnabled = enabled;
-
   if (!activatorSides.IsEmpty()) {
     for (const auto& side : activatorSides.GetFlags()) {
-      auto rotatedSide = TileUpdateFlags::RotateToFacing(side, facing);
+      auto rotatedSide = TileUpdateFlags::RotateSideToFacing(side, facing);
       if (rotatedSide == TileFacingSide::Left ||
           rotatedSide == TileFacingSide::Right) {
-        enabled = !enabled;
-        break;
+        internalState ^= 0b01;
       }
       if (rotatedSide == TileFacingSide::Bottom) {
-        activated = !activated;
-        break;
+        internalState ^= 0b10;
       }
     }
-    if (enabled && activated) {
-      return TileUpdateFlags(this->facing);
-    }
-    if((prevActivated && prevEnabled) && (prevActivated != activated || prevEnabled != enabled)) {
-      return TileUpdateFlags(this->facing);
+    if (internalState == 3) {
+      activated = true;
+      return TileUpdateFlags(facing);
+    } else if (internalState < 3 && activated) {
+      activated = false;
+      return TileUpdateFlags(facing);
     }
   }
   return TileUpdateFlags();
 }
 
 TileUpdateFlags SemiConductorGridTile::Interact() {
-  enabled = !activated;
+  internalState ^= 1;
   return TileUpdateFlags();
 }
 

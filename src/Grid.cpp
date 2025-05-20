@@ -118,8 +118,10 @@ void Grid::QueueUpdate(olc::vi2d pos, TileUpdateFlags flags) {
 }
 
 void Grid::Simulate() {
+  // Use a new container for updates to avoid modifying while iterating
   decltype(updates) newUpdates;
 
+  // Clean up expired emitters and queue updates for active ones
   for (auto it = emitters.begin(); it != emitters.end();) {
     if (it->expired()) {
       it = emitters.erase(it);
@@ -129,51 +131,59 @@ void Grid::Simulate() {
     }
   }
 
-  for (auto update : updates) {
-    auto targetPosition = update.first;
+  // Process all current updates
+  for (const auto& update : updates) {
+    const auto& targetPosition = update.first;
     auto& target = tiles.at(targetPosition);
-    auto updateSides = update.second;
+    const auto& updateSides = update.second;
 
-    if (target == nullptr) throw "Nullptr in update target";
+    if (!target) throw "Nullptr in update target";
     auto outputSides = target->Simulate(updateSides);
     if (outputSides.IsEmpty()) continue;
-    // newUpdates.emplace(targetPosition, TileUpdateFlags());
 
     for (auto side : outputSides.GetFlags()) {
-      auto flipped = TileUpdateFlags::FlipSide(side);
       try {
-        olc::vi2d targetIndex = TranslateIndex(targetPosition, side);
-
-        // Very quick and dirty circular activation check. Simply does not work, so
-        // FIXME: Find a proper way to do this...
-        if (tiles.find(targetIndex) != tiles.end() &&
-            tiles.at(targetIndex)->GetActivation() && target->GetActivation() &&
-            target->GetTileId() == tiles.at(targetIndex)->GetTileId()) {
+        auto targetIndex = TranslateIndex(targetPosition, side);
+        auto tileIt = tiles.find(targetIndex);
+        if (tileIt == tiles.end()) {
+          // No tile at the target position
           continue;
         }
-        if (newUpdates.find(targetIndex) != newUpdates.end()) {
-          newUpdates.at(targetIndex).SetFlag(flipped, true);
-        } else {
-          if (tiles.find(targetIndex) != tiles.end()) {
-            auto flags = TileUpdateFlags(flipped);
-            newUpdates.emplace(targetIndex, flags);
+        auto& newTargetTile = tileIt->second;
+        auto flipped = TileUpdateFlags::FlipSide(side);
+        if (newTargetTile->canReceiveFrom(flipped)) {
+          // Prevent recursive signal flow for same type and state
+          if (target->GetActivation() == newTargetTile->GetActivation() &&
+              target->GetTileId() == newTargetTile->GetTileId()) {
+            std::cout << "Dropping update at " << targetIndex << " from "
+                      << target->GetPos() << std::endl;
+            continue;
+          }
+
+          // Merge flags if update already exists
+          auto updateIt = newUpdates.find(targetIndex);
+          if (updateIt != newUpdates.end()) {
+            updateIt->second.SetFlag(flipped, true);
+          } else {
+            newUpdates.emplace(targetIndex, flipped);
           }
         }
       } catch ([[maybe_unused]] const char* err) {
+        // Silently ignore errors
       }
     }
   }
-  updates = newUpdates;
+  updates = std::move(newUpdates);
 }
 
 void Grid::Save(const std::string& filename) {
   std::ofstream file(filename, std::ios::binary);
-  if (!file) {
+  if (!file.is_open()) {
     std::cerr << "Error opening file for writing: " << filename << std::endl;
     return;
   }
-  for (auto& tilePair : tiles) {
-    auto& tile = tilePair.second;
+  for (const auto& tilePair : tiles) {
+    const auto& tile = tilePair.second;
     auto serializedData = tile->Serialize();
     file.write(reinterpret_cast<const char*>(serializedData.data()),
                serializedData.size());
