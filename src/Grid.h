@@ -3,13 +3,11 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <vector>
 
-#include "Tiles.h"
+#include "GridTileTypes.h"
 #include "olcPixelGameEngine.h"
-
-// The entire grid. Handles drawing the playfield, gathering the neighbours for
-// simulation and much more.
 
 class Grid {
  private:
@@ -21,89 +19,74 @@ class Grid {
 
   int uiLayer;
   int gameLayer;
+  int currentTick = 0;  // Current game tick (used by emitters)
 
   TileField tiles;
   std::vector<std::weak_ptr<GridTile>> emitters;
-  std::map<olc::vf2d, TileUpdateFlags> updates;
+  std::priority_queue<UpdateEvent> updateQueue;
 
-  // TODO: This should be in world space, not screen space...
-  // render scale in pixels
   float renderScale;
-  // render offset in pixels
   olc::vf2d renderOffset = {};
+
+  void ProcessSignalEvent(const SignalEvent& event);
+  olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir) const;
 
  public:
   Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset, int uiLayer,
        int gameLayer);
-  // Grid(const Grid& grid);
   Grid(int size_x, int size_y, float renderScale, olc::vi2d renderOffset,
        int uiLayer, int gameLayer)
       : Grid(olc::vi2d(size_x, size_y), renderScale, renderOffset, uiLayer,
              gameLayer) {}
   Grid() : Grid(0, 0, 0, olc::vi2d(0, 0), 0, 0) {};
-  ~Grid() {}
+  ~Grid() = default;
+
+  // Core simulation functions
+  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event,
+                   int priority = 0);
+  int Simulate();
+  void ResetSimulation();
+
+  // Rendering
+  int Draw(olc::PixelGameEngine* renderer,
+           olc::vf2d* highlightPos);  // returns amount of tiles drawn
+
+  // Grid manipulation
+  void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
+  void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
+
+  void SetTile(olc::vf2d pos, std::shared_ptr<GridTile> tile, bool emitter) {
+    tiles.insert_or_assign(pos, tile);
+    if (emitter) {
+      emitters.push_back(tile);
+    }
+  }
 
   // Utility functions
   olc::vi2d WorldToScreen(const olc::vf2d& pos);
   olc::vf2d ScreenToWorld(const olc::vi2d& pos);
-  void ZoomToMouse(const olc::vf2d& mouseWorldPosBefore,
-                   const olc::vf2d& mouseWorldPosAfter);
-  static olc::vi2d TranslateIndex(const olc::vf2d& index,
-                                  const TileFacingSide& side);
   olc::vf2d AlignToGrid(const olc::vf2d& pos);
-  olc::vf2d CenterOfSquare(const olc::vf2d& squarePos);
-
-  // Game Logic functions
-
-  // TODO: Use std::optional instead of pointer
-  void Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightIndex);
-  void QueueUpdate(olc::vi2d pos, TileUpdateFlags flags = {});
-  void Simulate();
-  void ResetSimulation();
-
-  // Setters
-  void Resize(olc::vi2d newSize) { renderWindow = newSize; }
-  void Resize(int newWidth, int newHeight) {
-    Resize(olc::vi2d(newWidth, newHeight));
-  }
-  void SetRenderOffset(olc::vf2d newOffset) { renderOffset = newOffset; }
-  void SetRenderScale(float newScale) {
-    renderScale = newScale > 0.0f ? newScale : renderScale;
-  }
-
-  void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
-  void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
-
-  template <typename T>
-  void SetTile(olc::vf2d pos, std::shared_ptr<T> tile, bool emitter) {
-    tiles.insert_or_assign(pos, tile);
-    if (emitter) {
-      // add it to the list of tiles which will always be updated
-      emitters.push_back(tile);
-    }
-    return;
-  }
-  template <typename T>
-  void SetTile(float x, float y, std::shared_ptr<T> tile,
-               bool emitter = false) {
-    SetTile(tile, olc::vf2d(x, y));
-  }
+  olc::vf2d CenterOfSquare(const olc::vf2d& pos);
 
   // Getters
   olc::vi2d const& GetRenderWindow() { return renderWindow; }
   olc::vf2d const& GetRenderOffset() { return renderOffset; }
   float GetRenderScale() { return renderScale; }
-  std::optional<std::shared_ptr<GridTile> const> GetTile(olc::vi2d pos) {
-    auto tileIt = tiles.find(pos);
-    return tileIt != tiles.end() ? std::optional{tileIt->second} : std::nullopt;
-  }
+  std::optional<std::shared_ptr<GridTile> const> GetTile(olc::vi2d pos);
   std::optional<std::shared_ptr<GridTile> const> GetTile(int x, int y) {
     return GetTile(olc::vi2d(x, y));
   }
-  std::size_t GetUpdateCount() { return updates.size(); }
   std::size_t GetTileCount() { return tiles.size(); }
 
-  // Save/load functions
+  // Configuration
+  void Resize(olc::vi2d newSize) { renderWindow = newSize; }
+  void Resize(int newWidth, int newHeight) {
+    Resize(olc::vi2d(newWidth, newHeight));
+  }
+  void SetRenderOffset(olc::vf2d newOffset) { renderOffset = newOffset; }
+  void SetRenderScale(float newScale) { renderScale = newScale; }
+
+  // Save/load
   void Save(const std::string& filename = "grid.bin");
   void Load(const std::string& filename);
 };

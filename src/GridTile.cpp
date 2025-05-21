@@ -1,0 +1,185 @@
+#include "GridTile.h"
+
+#include <cmath>
+
+#include "GridTileTypes.h"
+
+// --- GridTile Implementation ---
+
+// Helper function to get the points of the triangle for a tile
+std::array<olc::vf2d, 3> GridTile::GetTrianglePoints(olc::vf2d screenPos,
+                                                     int screenSize,
+                                                     Direction facing) {
+  std::array<olc::vf2d, 3> points;
+
+  // Calculate the points based on facing direction
+  switch (facing) {
+    case Direction::Top:
+      points[0] =
+          olc::vf2d(screenPos.x + screenSize / 2, screenPos.y);  // Top middle
+      points[1] = olc::vf2d(screenPos.x + screenSize,
+                            screenPos.y + screenSize);  // Bottom right
+      points[2] =
+          olc::vf2d(screenPos.x, screenPos.y + screenSize);  // Bottom left
+      break;
+    case Direction::Right:
+      points[0] = olc::vf2d(screenPos.x + screenSize,
+                            screenPos.y + screenSize / 2);  // Right middle
+      points[1] =
+          olc::vf2d(screenPos.x, screenPos.y + screenSize);  // Bottom left
+      points[2] = olc::vf2d(screenPos.x, screenPos.y);       // Top left
+      break;
+    case Direction::Bottom:
+      points[0] = olc::vf2d(screenPos.x + screenSize / 2,
+                            screenPos.y + screenSize);  // Bottom middle
+      points[1] = olc::vf2d(screenPos.x, screenPos.y);  // Top left
+      points[2] =
+          olc::vf2d(screenPos.x + screenSize, screenPos.y);  // Top right
+      break;
+    case Direction::Left:
+      points[0] =
+          olc::vf2d(screenPos.x, screenPos.y + screenSize / 2);  // Left middle
+      points[1] =
+          olc::vf2d(screenPos.x + screenSize, screenPos.y);  // Top right
+      points[2] = olc::vf2d(screenPos.x + screenSize,
+                            screenPos.y + screenSize);  // Bottom right
+      break;
+    default:
+      // Fallback to upward facing triangle
+      points[0] = olc::vf2d(screenPos.x + screenSize / 2, screenPos.y);
+      points[1] = olc::vf2d(screenPos.x + screenSize, screenPos.y + screenSize);
+      points[2] = olc::vf2d(screenPos.x, screenPos.y + screenSize);
+  }
+  return points;
+}
+
+// --- GridTile Implementation ---
+
+GridTile::GridTile(olc::vi2d pos, Direction facing, float size,
+                   bool defaultActivation, olc::Pixel inactiveColor,
+                   olc::Pixel activeColor)
+    : pos(pos),
+      facing(facing),
+      size(size),
+      activated(defaultActivation),
+      defaultActivation(defaultActivation),
+      inactiveColor(inactiveColor),
+      activeColor(activeColor) {
+  // Initialize I/O arrays
+  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+    canReceive[i] = false;
+    canOutput[i] = false;
+  }
+}
+
+void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
+                    int screenSize) {
+  renderer->FillRect(screenPos, olc::vi2d(screenSize, screenSize),
+                     activated ? activeColor : inactiveColor);
+  auto [p1, p2, p3] = GetTrianglePoints(screenPos, screenSize, facing);
+  renderer->FillTriangle(p1, p2, p3, activated ? inactiveColor : activeColor);
+}
+
+void GridTile::SetFacing(Direction newFacing) {
+  if (facing == newFacing) return;  // No change in facing
+
+  // Calculate the rotation amount as difference between new and old facing
+  int rotationAmount =
+      (4 + static_cast<int>(newFacing) - static_cast<int>(facing)) % 4;
+  facing = newFacing;
+
+  // Store old directions
+  bool oldReceive[static_cast<int>(Direction::Count)];
+  bool oldOutput[static_cast<int>(Direction::Count)];
+  std::copy(std::begin(canReceive), std::end(canReceive),
+            std::begin(oldReceive));
+  std::copy(std::begin(canOutput), std::end(canOutput), std::begin(oldOutput));
+
+  // Rotate permissions by the difference amount
+  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+    int newIndex =
+        static_cast<int>(RotateDirection(static_cast<Direction>(i), facing));
+    canReceive[newIndex] = oldReceive[i];
+    canOutput[newIndex] = oldOutput[i];
+  }
+}
+
+std::string GridTile::GetTileInformation() const {
+  std::stringstream stream;
+  // All in one line
+  stream << "Tile Type: " << TileTypeName() << ", "
+         << "Position: (" << pos.x << ", " << pos.y << "), "
+         << "Facing: " << static_cast<int>(facing) << ", "
+         << "Size: " << size << ", "
+         << "Activated: " << activated;
+  return stream.str();
+}
+
+Direction GridTile::RotateDirection(Direction dir, Direction facing) {
+  // Since Direction enum goes clockwise, we need to subtract facing to rotate
+  // clockwise
+  int baseDir = static_cast<int>(dir);
+  int rotationAmount = static_cast<int>(facing);
+
+  // Okay, time to think. Nevermind, this is just a simple modulo operation
+  int rotatedDir =
+      (baseDir + rotationAmount) % (static_cast<int>(Direction::Count));
+  return static_cast<Direction>(rotatedDir);
+}
+
+std::string_view GridTile::DirectionToString(Direction dir) {
+  switch (dir) {
+    case Direction::Top:
+      return "Top";
+    case Direction::Bottom:
+      return "Bottom";
+    case Direction::Left:
+      return "Left";
+    case Direction::Right:
+      return "Right";
+    default:
+      return "Unknown";
+  }
+}
+
+std::array<char, GRIDTILE_BYTESIZE> GridTile::Serialize() {
+  std::array<char, GRIDTILE_BYTESIZE> data{};
+  *reinterpret_cast<int*>(data.data()) = GetTileId();
+  *reinterpret_cast<Direction*>(data.data() + sizeof(int)) = facing;
+  *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing)) = pos.x;
+  *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing) +
+                          sizeof(pos.x)) = pos.y;
+  return data;
+}
+
+std::shared_ptr<GridTile> GridTile::Deserialize(
+    std::array<char, GRIDTILE_BYTESIZE> data) {
+  int id = *reinterpret_cast<int*>(data.data());
+  Direction facing = *reinterpret_cast<Direction*>(data.data() + sizeof(id));
+  int posX = *reinterpret_cast<int*>(data.data() + sizeof(id) + sizeof(facing));
+  int posY = *reinterpret_cast<int*>(data.data() + sizeof(id) + sizeof(facing) +
+                                     sizeof(posX));
+  olc::vi2d pos = {posX, posY};
+
+  std::shared_ptr<GridTile> tile;
+  switch (id) {
+    case 0:
+      tile = std::make_shared<WireGridTile>(pos, facing);
+      break;
+    case 1:
+      tile = std::make_shared<JunctionGridTile>(pos, facing);
+      break;
+    case 2:
+      tile = std::make_shared<EmitterGridTile>(pos, facing);
+      break;
+    case 3:
+      tile = std::make_shared<SemiConductorGridTile>(pos, facing);
+      break;
+    case 4:
+      tile = std::make_shared<ButtonGridTile>(pos, facing);
+      break;
+    default:
+      throw std::runtime_error("Unknown tile ID");
+  }
+  return tile;
+}

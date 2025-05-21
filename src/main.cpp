@@ -1,23 +1,46 @@
 #include <cstddef>
 #include <cstdio>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "Grid.h"
+#include "GridTileTypes.h"
 #include "olcPixelGameEngine.h"
 
 #define TILE_SCALE 1.0F
 
 class Game : public olc::PixelGameEngine {
  public:
-  Game() { sAppName = "Electricity Simulator"; }
+  Game() {
+    sAppName = "Electricity Simulator";
+    // Print class sizes on startup
+    PrintClassSizes();
+  }
   ~Game() {}
+
+  // Print memory sizes of all tile classes (for debugging)
+  void PrintClassSizes() {
+    std::cout << "\n=== Class Memory Sizes ===\n";
+    std::cout << "Base GridTile: " << sizeof(GridTile) << " bytes\n";
+    std::cout << "WireGridTile: " << sizeof(WireGridTile) << " bytes\n";
+    std::cout << "JunctionGridTile: " << sizeof(JunctionGridTile) << " bytes\n";
+    std::cout << "EmitterGridTile: " << sizeof(EmitterGridTile) << " bytes\n";
+    std::cout << "SemiConductorGridTile: " << sizeof(SemiConductorGridTile)
+              << " bytes\n";
+    std::cout << "ButtonGridTile: " << sizeof(ButtonGridTile) << " bytes\n";
+    std::cout << "SignalEvent: " << sizeof(SignalEvent) << " bytes\n";
+    std::cout << "UpdateEvent: " << sizeof(UpdateEvent) << " bytes\n";
+    std::cout << "============================\n\n";
+  }
 
  private:
   // --- Constants ---
   static constexpr float defaultRenderScale = 32.0f;
   static const olc::vf2d defaultRenderOffset;
+  static constexpr float minRenderScale = 2.0f;
+  static constexpr float maxRenderScale = 256.0f;
 
   // --- Layer indices ---
   int uiLayer = 0;
@@ -25,7 +48,7 @@ class Game : public olc::PixelGameEngine {
 
   // --- Simulation timing ---
   float accumulatedTime = 0.0f;
-  float updateInterval = 0.2f;
+  float updateInterval = 0.1f;
 
   // --- Main grid ---
   Grid grid;
@@ -33,19 +56,24 @@ class Game : public olc::PixelGameEngine {
   // --- Game state ---
   bool paused = true;         // Simulation is paused, renderer is not
   bool engineRunning = true;  // If this is false, the game quits
+  int updatesPerTick = 0;
+
+  // --- Prompt values ---
+  std::string promptText = "";                            // Text for prompt
+  std::function<void(std::string)> promptCall = nullptr;  // Callback for prompt
 
   // --- Placement logic ---
   olc::vf2d lastPlacedPos = {0.0f, 0.0f};  // Prevents overwriting same tile
   std::unique_ptr<GridTile> brushTile;     // Next tile to be placed
   int selectedBrushIndex = 1;
-  TileFacingSide selectedBrushFacing = TileFacingSide::Top;
+  Direction selectedBrushFacing = Direction::Top;
 
   // --- Initialization ---
   bool OnUserCreate() override {
-    accumulatedTime = 0.0f;
-    updateInterval = 0.2f;
-    uiLayer = 0;
-    gameLayer = CreateLayer();
+    gameLayer = CreateLayer();  // initialized as a black screen
+
+    Clear(olc::BLANK);  // uiLayer needs to be transparent
+
     EnableLayer((uint8_t)uiLayer, true);
     EnableLayer((uint8_t)gameLayer, true);
     grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
@@ -55,7 +83,7 @@ class Game : public olc::PixelGameEngine {
     lastPlacedPos = olc::vf2d(0.0f, 0.0f);
     brushTile = nullptr;
     selectedBrushIndex = 1;
-    selectedBrushFacing = TileFacingSide::Top;
+    selectedBrushFacing = Direction::Top;
     CreateBrushTile();  // Initialize brush tile; by default it's a wire
     return engineRunning;
   }
@@ -97,6 +125,9 @@ class Game : public olc::PixelGameEngine {
 
   // --- User input processing (delegates to helpers) ---
   void ProcessUserInput(olc::vf2d& alignedWorldPos) {
+    // If we're in text entry mode, we can't process this.
+    if (IsTextEntryEnabled()) return;
+
     // 1. Mouse position and highlight
     auto selTileXIndex = GetMouseX();
     auto selTileYIndex = GetMouseY();
@@ -104,22 +135,22 @@ class Game : public olc::PixelGameEngine {
         grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
     alignedWorldPos = grid.AlignToGrid(hoverWorldPos);
 
-    HandlePauseAndSpeed();
     if (!engineRunning) return;
+    HandlePauseAndSpeed();
 
     HandleCameraAndZoom(selTileXIndex, selTileYIndex, hoverWorldPos);
 
-    HandleSaveLoad();
-
     HandleTileInteractions(alignedWorldPos, hoverWorldPos);
+
+    HandleSaveLoad();
   }
 
   // --- Pause, speed, and quit controls ---
   void HandlePauseAndSpeed() {
     if (GetKey(olc::SPACE).bPressed) paused = !paused;
-    if (GetKey(olc::PERIOD).bPressed) updateInterval += 0.05f;
+    if (GetKey(olc::PERIOD).bPressed) updateInterval += 0.025f;
     if (GetKey(olc::COMMA).bPressed)
-      updateInterval = std::max(0.0f, updateInterval - 0.05f);
+      updateInterval = std::max(0.0f, updateInterval - 0.025f);
     if (GetKey(olc::ESCAPE).bPressed) engineRunning = false;
   }
 
@@ -129,27 +160,41 @@ class Game : public olc::PixelGameEngine {
     auto renderScale = grid.GetRenderScale();
     auto curOffset = grid.GetRenderOffset();
     if (GetKey(olc::UP).bHeld)
-      grid.SetRenderOffset(curOffset - olc::vf2d(0.0f, 0.25f));
+      grid.SetRenderOffset(curOffset + olc::vf2d(0.0f, 0.25f * renderScale));
     if (GetKey(olc::LEFT).bHeld)
-      grid.SetRenderOffset(curOffset - olc::vf2d(0.25f, 0.0f));
+      grid.SetRenderOffset(curOffset + olc::vf2d(0.25f * renderScale, 0.0f));
     if (GetKey(olc::DOWN).bHeld)
-      grid.SetRenderOffset(curOffset + olc::vf2d(0.0f, 0.25f));
+      grid.SetRenderOffset(curOffset - olc::vf2d(0.0f, 0.25f * renderScale));
     if (GetKey(olc::RIGHT).bHeld)
-      grid.SetRenderOffset(curOffset + olc::vf2d(0.25f, 0.0f));
-    if (GetKey(olc::J).bPressed || GetKey(olc::K).bPressed) {
-      float newScale = renderScale + (GetKey(olc::J).bPressed ? 1 : -1);
+      grid.SetRenderOffset(curOffset - olc::vf2d(0.25f * renderScale, 0.0f));
+    if (GetKey(olc::J).bHeld || GetKey(olc::K).bHeld) {
+      float newScale = std::clamp(
+          renderScale + ((GetKey(olc::J).bHeld ? 1 : -1) * renderScale * 0.1f),
+          minRenderScale, maxRenderScale);
       grid.SetRenderScale(newScale);
       auto afterZoomPos =
           grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
-      curOffset += (hoverWorldPos - afterZoomPos);
-      grid.SetRenderOffset(curOffset);
+      // So, now we have the before and after in world space.
+      // We want to keep the same world position in screen space.
+      auto newOffset = curOffset + (afterZoomPos - hoverWorldPos) * newScale;
+      grid.SetRenderOffset(newOffset);
     }
   }
 
   // --- Save/load controls ---
   void HandleSaveLoad() {
-    if (GetKey(olc::S).bPressed) grid.Save("grid.bin");
-    if (GetKey(olc::L).bPressed) grid.Load("grid.bin");
+    const std::string savePrompt = "Saving file to:";
+    const std::string loadPrompt = "Loading file from:";
+    if (GetKey(olc::S).bPressed) {
+      TextEntryEnable(true);
+      promptText = savePrompt;
+      promptCall = [this](std::string text) { grid.Save(text); };
+    }
+    if (GetKey(olc::L).bPressed) {
+      TextEntryEnable(true);
+      promptText = loadPrompt;
+      promptCall = [this](std::string text) { grid.Load(text); };
+    }
   }
 
   // --- Tile placement, removal, and interaction ---
@@ -165,8 +210,9 @@ class Game : public olc::PixelGameEngine {
       }
       // Change facing
       if (GetKey(olc::R).bPressed) {
-        selectedBrushFacing = TileUpdateFlags::RotateSideToFacing(
-            selectedBrushFacing, TileFacingSide::Right);
+        selectedBrushFacing =
+            static_cast<Direction>((static_cast<int>(selectedBrushFacing) + 1) %
+                                   static_cast<int>(Direction::Count));
       }
       // Place tile (left click)
       if (brushTile != nullptr) {
@@ -202,9 +248,10 @@ class Game : public olc::PixelGameEngine {
         auto gridTileOpt = grid.GetTile(alignedWorldPos);
         if (gridTileOpt.has_value()) {
           auto& gridTile = gridTileOpt.value();
-          auto updateFacing = gridTile->Interact();
-          if (!updateFacing.IsEmpty())
-            grid.QueueUpdate(alignedWorldPos, updateFacing);
+          auto signals = gridTile->Interact();
+          for (const auto& signal : signals) {
+            grid.QueueUpdate(gridTile, signal);
+          }
         }
       }
     }
@@ -223,31 +270,69 @@ class Game : public olc::PixelGameEngine {
     // Simulation step
     accumulatedTime += fElapsedTime;
     if (accumulatedTime > updateInterval && !paused) {
-      grid.Simulate();
+      updatesPerTick = grid.Simulate();
       accumulatedTime = 0;
     }
 
-    // User input and UI
+    // User input
     olc::vf2d highlightWorldPos = {0.0f, 0.0f};
     ProcessUserInput(highlightWorldPos);
 
-    // Status string
-    std::stringstream ss;
-    ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ")"
-       << " Selected: "
-       << (brushTile != nullptr ? brushTile->TileTypeName() : "None") << "; "
-       << "Facing: " << TileUpdateFlags::GetFacingName(selectedBrushFacing)
-       << "; " << (paused ? "Paused" : "; Running") << '\n'
-       << "Tiles: " << grid.GetTileCount() << "; "
-       << "Updates: " << grid.GetUpdateCount() << '\n'
-       << "Press ',' to increase and '.' to decrease speed";
+    if (paused) updatesPerTick = 0;
 
     // Draw grid and UI
-    grid.Draw(this, &highlightWorldPos);
-    SetDrawTarget((uint8_t)(uiLayer & 0x0F));
-    DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
+    if (!IsTextEntryEnabled()) {
+      int drawnTiles = grid.Draw(this, &highlightWorldPos);
+
+      // Status string
+      std::stringstream ss;
+      ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ")"
+         << " Selected: "
+         << (brushTile != nullptr ? brushTile->TileTypeName() : "None") << "; "
+         << "Facing: "
+         << (selectedBrushFacing == Direction::Top      ? "Top"
+             : selectedBrushFacing == Direction::Right  ? "Right"
+             : selectedBrushFacing == Direction::Bottom ? "Bottom"
+                                                        : "Left")
+         << "; " << (paused ? "Paused" : "; Running") << '\n'
+         << "Tiles: " << grid.GetTileCount() << " (" << drawnTiles << " visible"
+         << ")" << "; "
+         << "Updates: " << updatesPerTick << " per tick" << '\n'
+         << "Press ',' to increase and '.' to decrease speed";
+
+      SetDrawTarget((uint8_t)(uiLayer & 0x0F));
+      Clear(olc::BLANK);
+      DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
+    } else {
+      // Freeze the program and show prompt
+      paused = true;
+      auto outputText = promptText + " " + TextEntryGetString();
+      SetDrawTarget((uint8_t)(uiLayer & 0x0F));
+      Clear(olc::BLANK);
+      DrawString(olc::vi2d(0, 0), outputText, olc::BLACK, 2);
+    }
 
     return engineRunning;
+  }
+
+  void OnTextEntryComplete(const std::string& text) override {
+    std::cout << "Text entry complete: " << text << std::endl;
+    if (promptCall) {
+      promptCall(text);
+    }
+  }
+
+  // Print sizes of all tile classes
+  void PrintTileSizes() {
+    std::cout << "\n=== Tile Class Memory Sizes ===\n";
+    std::cout << "Base GridTile: " << sizeof(GridTile) << " bytes\n";
+    std::cout << "WireGridTile: " << sizeof(WireGridTile) << " bytes\n";
+    std::cout << "JunctionGridTile: " << sizeof(JunctionGridTile) << " bytes\n";
+    std::cout << "EmitterGridTile: " << sizeof(EmitterGridTile) << " bytes\n";
+    std::cout << "SemiConductorGridTile: " << sizeof(SemiConductorGridTile)
+              << " bytes\n";
+    std::cout << "ButtonGridTile: " << sizeof(ButtonGridTile) << " bytes\n";
+    std::cout << "============================\n\n";
   }
 };
 

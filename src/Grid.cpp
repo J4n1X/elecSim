@@ -1,193 +1,196 @@
 #include "Grid.h"
 
 #include <cmath>
+#include <fstream>
+#include <iostream>
 
 Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
-           int uiLayer, int gameLayer) {
-  renderWindow = size;
-  this->uiLayer = uiLayer;
-  this->gameLayer = gameLayer;
-  this->renderScale = renderScale;
-  this->renderOffset = renderOffset;
+           int uiLayer, int gameLayer)
+    : renderWindow(size),
+      renderScale(renderScale),
+      renderOffset(renderOffset),
+      uiLayer(uiLayer),
+      gameLayer(gameLayer) {}
+
+void Grid::QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event,
+                       int priority) {
+  updateQueue.push(UpdateEvent(tile, event, priority));
 }
 
-olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
-  int x = (int)((pos.x - renderOffset.x) * renderScale);
-  int y = (int)((pos.y - renderOffset.y) * renderScale);
-  return olc::vi2d(x, y);
-}
-
-olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
-  auto x = (float)pos.x / renderScale + renderOffset.x;
-  auto y = (float)pos.y / renderScale + renderOffset.y;
-  return olc::vf2d(x, y);
-}
-
-void Grid::ZoomToMouse(const olc::vf2d& mouseWorldPosBefore,
-                       const olc::vf2d& mouseWorldPosAfter) {
-  renderOffset += mouseWorldPosBefore - mouseWorldPosAfter;
-}
-
-olc::vf2d Grid::AlignToGrid(const olc::vf2d& pos) {
-  auto align = [](std::floating_point auto num, std::floating_point auto base) {
-    auto quotient = num / base;
-    auto rounded = floor(quotient);
-    return rounded * base;
-  };
-  return {align(static_cast<float>(pos.x), 1.0f),
-          align(static_cast<float>(pos.y), 1.0f)};
-}
-
-olc::vf2d Grid::CenterOfSquare(const olc::vf2d& squarePos) {
-  return {squarePos.x + renderScale / 2, squarePos.y + renderScale / 2};
-}
-
-olc::vi2d Grid::TranslateIndex(const olc::vf2d& index,
-                               const TileFacingSide& side) {
-  olc::vi2d targetIndex;
-  switch (side) {
-    case TileFacingSide::Top:
-      targetIndex = index - olc::vi2d(0, 1);
-      break;
-    case TileFacingSide::Bottom:
-      targetIndex = index + olc::vi2d(0, 1);
-      break;
-    case TileFacingSide::Left:
-      targetIndex = index - olc::vi2d(1, 0);
-      break;
-    case TileFacingSide::Right:
-      targetIndex = index + olc::vi2d(1, 0);
-      break;
+olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) const {
+  switch (dir) {
+    case Direction::Top:
+      return pos + olc::vi2d(0, -1);
+    case Direction::Right:
+      return pos + olc::vi2d(1, 0);
+    case Direction::Bottom:
+      return pos + olc::vi2d(0, 1);
+    case Direction::Left:
+      return pos + olc::vi2d(-1, 0);
+    default:
+      return pos;
   }
-  return targetIndex;
 }
 
-// Helper for Grid::Draw
-static bool isRectangleOutside(const olc::vi2d& rectPos1,
-                               const olc::vi2d& rectSize1,
-                               const olc::vi2d& rectPos2,
-                               const olc::vi2d& rectSize2) {
-  // Calculate the coordinates of the corners of the rectangles
-  int rect1Left = rectPos1.x;
-  int rect1Right = rectPos1.x + rectSize1.x;
-  int rect1Top = rectPos1.y;
-  int rect1Bottom = rectPos1.y + rectSize1.y;
+void Grid::ProcessSignalEvent(const SignalEvent& event) {
+  auto tileIt = tiles.find(event.sourcePos);
+  if (tileIt == tiles.end()) return;
 
-  int rect2Left = rectPos2.x;
-  int rect2Right = rectPos2.x + rectSize2.x;
-  int rect2Top = rectPos2.y;
-  int rect2Bottom = rectPos2.y + rectSize2.y;
+  auto& tile = tileIt->second;
+  auto newSignals = tile->ProcessSignal(event);
 
-  return (rect1Right <= rect2Left) || (rect1Left >= rect2Right) ||
-         (rect1Bottom <= rect2Top) || (rect1Top >= rect2Bottom);
+  std::cout << "Signal triggered by: " << tile->GetTileInformation()
+            << std::endl;
+
+  // Queue up new signals
+  for (const auto& signal : newSignals) {
+    auto targetPos = TranslatePosition(signal.sourcePos,
+                                       FlipDirection(signal.fromDirection));
+    auto targetTileIt = tiles.find(targetPos);
+    if (targetTileIt == tiles.end()) continue;
+
+    auto& targetTile = targetTileIt->second;
+    if (targetTile->CanReceiveFrom(signal.fromDirection)) {
+      // if the targetTile has the same state as we do, we don't need to queue
+      // the signal again
+      if (targetTile->GetActivation() == signal.isActive) continue;
+
+      QueueUpdate(targetTile, SignalEvent(targetPos, signal.fromDirection,
+                                          signal.isActive));
+    }
+  }
+}
+
+int Grid::Simulate() {
+  int updatesProcessed = 0;
+  currentTick++;  // Increment the tick counter
+
+  // Queue updates from emitters first
+  for (auto it = emitters.begin(); it != emitters.end();) {
+    if (it->expired()) {
+      it = emitters.erase(it);
+      continue;
+    }
+
+    auto tile = std::dynamic_pointer_cast<EmitterGridTile>(it->lock());
+    if (tile && tile->ShouldEmit(currentTick)) {
+      tile->SetActivation(!tile->GetActivation());  // Toggle emitter state
+      QueueUpdate(
+          tile,
+          SignalEvent(tile->GetPos(), tile->GetFacing(), tile->GetActivation()),
+          1);
+    }
+    ++it;
+  }
+
+  // Process all queued updates
+  while (!updateQueue.empty()) {
+    auto update = updateQueue.top();
+    updateQueue.pop();
+    if (!update.tile) continue;
+    ProcessSignalEvent(update.event);
+    updatesProcessed++;
+  }
+  return updatesProcessed;
 }
 
 void Grid::ResetSimulation() {
-  if (!updates.empty()) {
-    updates.clear();
+  // Clear the update queue
+  while (!updateQueue.empty()) {
+    updateQueue.pop();
   }
+
+  // Reset tick counter
+  currentTick = 0;
+
+  // Reset all tiles
   for (auto& [pos, tile] : tiles) {
     tile->ResetActivation();
   }
 }
 
-void Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
-  renderer->SetDrawTarget((uint8_t)(gameLayer & 0x0F));
+int Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
+  if (!renderer) throw std::runtime_error("Grid has no renderer available");
+
+  // Clear game layer
+  renderer->SetDrawTarget((uint8_t)gameLayer);
   renderer->Clear(backgroundColor);
 
-  for (auto& tilePair : tiles) {
-    auto& tile = tilePair.second;
-    olc::vi2d tileScreenPos = WorldToScreen(tile->GetPos());
-    auto tileScreenSize = (int)(tile->GetSize() * renderScale);
-    if (!isRectangleOutside(tileScreenPos, {tileScreenSize, tileScreenSize},
-                            {0, 0}, renderWindow)) {
-      tile->Draw(renderer, tileScreenPos, tileScreenSize);
+  // Draw tiles
+  // This spriteSize causes overdraw all the time, but without it, we get pixel
+  // gaps
+  auto spriteSize = static_cast<int>(std::ceil(renderScale));
+  olc::Sprite buffer = olc::Sprite(spriteSize, spriteSize);
+  int drawnTiles = 0;
+  for (const auto& [pos, tile] : tiles) {
+    if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
+
+    olc::vi2d screenPos = WorldToScreen(pos);
+    // Is this tile even visible?
+    if (screenPos.x + spriteSize <= 0 || screenPos.x >= renderWindow.x ||
+        screenPos.y + spriteSize <= 0 || screenPos.y >= renderWindow.y) {
+      continue;  // If not, why even draw it?
     }
+
+    // In theory, drawing to a sprite first would be great, but it's quite
+    // costly.
+    // TODO: Create a caching system for the sprites, then use decal transforms
+    // to
+    //       speed up rendering dramatically.
+    // renderer->SetDrawTarget(&buffer);
+    tile->Draw(renderer, screenPos, spriteSize);
+    // renderer->SetDrawTarget((uint8_t)gameLayer);
+    // renderer->DrawSprite(screenPos, &buffer, 1);
+    drawnTiles++;
   }
-  if (highlightPos != nullptr) {
-    renderer->SetDrawTarget((uint8_t)(uiLayer & 0x0F));
-    renderer->Clear(olc::BLANK);
-    auto corrPos = WorldToScreen(*highlightPos);
-    olc::vi2d size = olc::vi2d((int)renderScale, (int)renderScale);
-    renderer->DrawRect(corrPos, size, highlightColor);
+
+  // Draw highlight if provided
+  if (highlightPos) {
+    olc::vi2d screenPos = WorldToScreen(*highlightPos);
+    renderer->DrawRect(screenPos, olc::vi2d(renderScale, renderScale),
+                       highlightColor);
   }
+  return drawnTiles;
 }
 
-void Grid::QueueUpdate(olc::vi2d pos, TileUpdateFlags flags) {
-  updates.emplace(pos, flags);
+olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
+  return olc::vi2d(
+      static_cast<int>(std::floor((pos.x * renderScale) + renderOffset.x)),
+      static_cast<int>(std::floor((pos.y * renderScale) + renderOffset.y)));
 }
 
-void Grid::Simulate() {
-  // Use a new container for updates to avoid modifying while iterating
-  decltype(updates) newUpdates;
+olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
+  return olc::vf2d((pos.x - renderOffset.x) / renderScale,
+                   (pos.y - renderOffset.y) / renderScale);
+}
 
-  // Clean up expired emitters and queue updates for active ones
-  for (auto it = emitters.begin(); it != emitters.end();) {
-    if (it->expired()) {
-      it = emitters.erase(it);
-    } else {
-      QueueUpdate(it->lock()->GetPos(), TileUpdateFlags());
-      ++it;
-    }
-  }
+olc::vf2d Grid::AlignToGrid(const olc::vf2d& pos) {
+  return olc::vf2d(std::floor(pos.x), std::floor(pos.y));
+}
 
-  // Process all current updates
-  for (const auto& update : updates) {
-    const auto& targetPosition = update.first;
-    auto& target = tiles.at(targetPosition);
-    const auto& updateSides = update.second;
+olc::vf2d Grid::CenterOfSquare(const olc::vf2d& pos) {
+  return olc::vf2d(std::floor(pos.x) + 0.5f, std::floor(pos.y) + 0.5f);
+}
 
-    if (!target) throw "Nullptr in update target";
-    auto outputSides = target->Simulate(updateSides);
-    if (outputSides.IsEmpty()) continue;
-
-    for (auto side : outputSides.GetFlags()) {
-      try {
-        auto targetIndex = TranslateIndex(targetPosition, side);
-        auto tileIt = tiles.find(targetIndex);
-        if (tileIt == tiles.end()) {
-          // No tile at the target position
-          continue;
-        }
-        auto& newTargetTile = tileIt->second;
-        auto flipped = TileUpdateFlags::FlipSide(side);
-        if (newTargetTile->canReceiveFrom(flipped)) {
-          // Prevent recursive signal flow for same type and state
-          if (target->GetActivation() == newTargetTile->GetActivation() &&
-              target->GetTileId() == newTargetTile->GetTileId()) {
-            std::cout << "Dropping update at " << targetIndex << " from "
-                      << target->GetPos() << std::endl;
-            continue;
-          }
-
-          // Merge flags if update already exists
-          auto updateIt = newUpdates.find(targetIndex);
-          if (updateIt != newUpdates.end()) {
-            updateIt->second.SetFlag(flipped, true);
-          } else {
-            newUpdates.emplace(targetIndex, flipped);
-          }
-        }
-      } catch ([[maybe_unused]] const char* err) {
-        // Silently ignore errors
-      }
-    }
-  }
-  updates = std::move(newUpdates);
+std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(olc::vi2d pos) {
+  auto tileIt = tiles.find(pos);
+  return tileIt != tiles.end() ? std::optional{tileIt->second} : std::nullopt;
 }
 
 void Grid::Save(const std::string& filename) {
   std::ofstream file(filename, std::ios::binary);
-  if (!file.is_open()) {
+  if (!file) {
     std::cerr << "Error opening file for writing: " << filename << std::endl;
     return;
   }
-  for (const auto& tilePair : tiles) {
-    const auto& tile = tilePair.second;
-    auto serializedData = tile->Serialize();
-    file.write(reinterpret_cast<const char*>(serializedData.data()),
-               serializedData.size());
+
+  for (const auto& [pos, tile] : tiles) {
+    auto data = tile->Serialize();
+    file.write(data.data(), data.size());
   }
+
+  std::cout << "Saved grid to " << filename << std::endl;
+  std::cout << "Total tiles: " << tiles.size() << std::endl;
   file.close();
 }
 
@@ -197,17 +200,25 @@ void Grid::Load(const std::string& filename) {
     std::cerr << "Error opening file for reading: " << filename << std::endl;
     return;
   }
+
   tiles.clear();
   emitters.clear();
+
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
     if (file.gcount() == 0) break;
+
     auto tile = GridTile::Deserialize(data);
     tiles.insert_or_assign(tile->GetPos(), tile);
     if (tile->IsEmitter()) {
       emitters.push_back(tile);
     }
   }
+
   file.close();
+
+  std::cout << "Loaded grid from " << filename << std::endl;
+  std::cout << "Total tiles: " << tiles.size() << std::endl;
+  ResetSimulation();
 }
