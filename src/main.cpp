@@ -16,7 +16,6 @@ class Game : public olc::PixelGameEngine {
   Game() {
     sAppName = "Electricity Simulator";
     // Print class sizes on startup
-    PrintClassSizes();
   }
   ~Game() {}
 
@@ -70,12 +69,21 @@ class Game : public olc::PixelGameEngine {
 
   // --- Initialization ---
   bool OnUserCreate() override {
+    // Enable the console
+    ConsoleCaptureStdOut(1);
+    // Print class sizes
+    PrintClassSizes();
+
     gameLayer = CreateLayer();  // initialized as a black screen
 
+    SetDrawTarget(gameLayer);
+    Clear(olc::BLUE);
+    SetDrawTarget(uiLayer);
     Clear(olc::BLANK);  // uiLayer needs to be transparent
-
+    
     EnableLayer((uint8_t)uiLayer, true);
     EnableLayer((uint8_t)gameLayer, true);
+
     grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
                 defaultRenderOffset, uiLayer, gameLayer);
     paused = true;
@@ -143,15 +151,20 @@ class Game : public olc::PixelGameEngine {
     HandleTileInteractions(alignedWorldPos, hoverWorldPos);
 
     HandleSaveLoad();
+
+    // When we want to open the console, the key is C
+    if (GetKey(olc::Key::C).bPressed) {
+      ConsoleShow(olc::Key::C, false);
+    }
   }
 
   // --- Pause, speed, and quit controls ---
   void HandlePauseAndSpeed() {
-    if (GetKey(olc::SPACE).bPressed) paused = !paused;
-    if (GetKey(olc::PERIOD).bPressed) updateInterval += 0.025f;
-    if (GetKey(olc::COMMA).bPressed)
+    if (GetKey(olc::Key::SPACE).bPressed) paused = !paused;
+    if (GetKey(olc::Key::PERIOD).bPressed) updateInterval += 0.025f;
+    if (GetKey(olc::Key::COMMA).bPressed)
       updateInterval = std::max(0.0f, updateInterval - 0.025f);
-    if (GetKey(olc::ESCAPE).bPressed) engineRunning = false;
+    if (GetKey(olc::Key::ESCAPE).bPressed) engineRunning = false;
   }
 
   // --- Camera movement and zoom ---
@@ -159,17 +172,17 @@ class Game : public olc::PixelGameEngine {
                            const olc::vf2d& hoverWorldPos) {
     auto renderScale = grid.GetRenderScale();
     auto curOffset = grid.GetRenderOffset();
-    if (GetKey(olc::UP).bHeld)
+    if (GetKey(olc::Key::UP).bHeld)
       grid.SetRenderOffset(curOffset + olc::vf2d(0.0f, 0.25f * renderScale));
-    if (GetKey(olc::LEFT).bHeld)
+    if (GetKey(olc::Key::LEFT).bHeld)
       grid.SetRenderOffset(curOffset + olc::vf2d(0.25f * renderScale, 0.0f));
-    if (GetKey(olc::DOWN).bHeld)
+    if (GetKey(olc::Key::DOWN).bHeld)
       grid.SetRenderOffset(curOffset - olc::vf2d(0.0f, 0.25f * renderScale));
-    if (GetKey(olc::RIGHT).bHeld)
+    if (GetKey(olc::Key::RIGHT).bHeld)
       grid.SetRenderOffset(curOffset - olc::vf2d(0.25f * renderScale, 0.0f));
-    if (GetKey(olc::J).bHeld || GetKey(olc::K).bHeld) {
+    if (GetKey(olc::Key::J).bHeld || GetKey(olc::Key::K).bHeld) {
       float newScale = std::clamp(
-          renderScale + ((GetKey(olc::J).bHeld ? 1 : -1) * renderScale * 0.1f),
+          renderScale + ((GetKey(olc::Key::J).bHeld ? 1 : -1) * renderScale * 0.1f),
           minRenderScale, maxRenderScale);
       grid.SetRenderScale(newScale);
       auto afterZoomPos =
@@ -185,12 +198,12 @@ class Game : public olc::PixelGameEngine {
   void HandleSaveLoad() {
     const std::string savePrompt = "Saving file to:";
     const std::string loadPrompt = "Loading file from:";
-    if (GetKey(olc::S).bPressed) {
+    if (GetKey(olc::Key::S).bPressed) {
       TextEntryEnable(true);
       promptText = savePrompt;
       promptCall = [this](std::string text) { grid.Save(text); };
     }
-    if (GetKey(olc::L).bPressed) {
+    if (GetKey(olc::Key::L).bPressed) {
       TextEntryEnable(true);
       promptText = loadPrompt;
       promptCall = [this](std::string text) { grid.Load(text); };
@@ -209,7 +222,7 @@ class Game : public olc::PixelGameEngine {
         CreateBrushTile();
       }
       // Change facing
-      if (GetKey(olc::R).bPressed) {
+      if (GetKey(olc::Key::R).bPressed) {
         selectedBrushFacing =
             static_cast<Direction>((static_cast<int>(selectedBrushFacing) + 1) %
                                    static_cast<int>(Direction::Count));
@@ -281,8 +294,8 @@ class Game : public olc::PixelGameEngine {
     if (paused) updatesPerTick = 0;
 
     // Draw grid and UI
+    int drawnTiles = grid.Draw(this, &highlightWorldPos);
     if (!IsTextEntryEnabled()) {
-      int drawnTiles = grid.Draw(this, &highlightWorldPos);
 
       // Status string
       std::stringstream ss;
@@ -320,19 +333,6 @@ class Game : public olc::PixelGameEngine {
     if (promptCall) {
       promptCall(text);
     }
-  }
-
-  // Print sizes of all tile classes
-  void PrintTileSizes() {
-    std::cout << "\n=== Tile Class Memory Sizes ===\n";
-    std::cout << "Base GridTile: " << sizeof(GridTile) << " bytes\n";
-    std::cout << "WireGridTile: " << sizeof(WireGridTile) << " bytes\n";
-    std::cout << "JunctionGridTile: " << sizeof(JunctionGridTile) << " bytes\n";
-    std::cout << "EmitterGridTile: " << sizeof(EmitterGridTile) << " bytes\n";
-    std::cout << "SemiConductorGridTile: " << sizeof(SemiConductorGridTile)
-              << " bytes\n";
-    std::cout << "ButtonGridTile: " << sizeof(ButtonGridTile) << " bytes\n";
-    std::cout << "============================\n\n";
   }
 };
 

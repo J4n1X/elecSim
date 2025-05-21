@@ -74,7 +74,6 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
 
   activated = true;
   std::vector<SignalEvent> events;
-  std::cout << DirectionToString(signal.fromDirection) << std::endl;
   for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
     if (canOutput[i] && static_cast<Direction>(i) != FlipDirection(facing)) {
       events.push_back(SignalEvent(pos, static_cast<Direction>(i), true));
@@ -146,8 +145,6 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
   // 0b0100 = Bottom
   Direction relativeDir =
       RotateDirection(FlipDirection(signal.fromDirection), facing);
-  std::cout << "Input into Semiconductor from: "
-            << DirectionToString(relativeDir) << std::endl;
 
   // Update internal state based on inputs
   if (relativeDir == Direction::Left) {
@@ -164,7 +161,6 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
     internalState = internalState & (0b011) |
                     (0b100 & static_cast<int>(signal.isActive) << 2);
   }
-  std::cout << "Internal state: " << internalState << std::endl;
 
   // Check if both side and bottom are active
   if ((internalState & 0b11) && (internalState & 0b100)) {

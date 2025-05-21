@@ -63,6 +63,7 @@ class Grid {
   }
 
   // Utility functions
+  olc::vf2d WorldToScreenFloating(const olc::vf2d& pos);
   olc::vi2d WorldToScreen(const olc::vf2d& pos);
   olc::vf2d ScreenToWorld(const olc::vi2d& pos);
   olc::vf2d AlignToGrid(const olc::vf2d& pos);

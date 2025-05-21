@@ -39,9 +39,6 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
   auto& tile = tileIt->second;
   auto newSignals = tile->ProcessSignal(event);
 
-  std::cout << "Signal triggered by: " << tile->GetTileInformation()
-            << std::endl;
-
   // Queue up new signals
   for (const auto& signal : newSignals) {
     auto targetPos = TranslatePosition(signal.sourcePos,
@@ -112,32 +109,24 @@ void Grid::ResetSimulation() {
 int Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
   if (!renderer) throw std::runtime_error("Grid has no renderer available");
 
-  // Clear game layer
-  renderer->SetDrawTarget((uint8_t)gameLayer);
-  renderer->Clear(backgroundColor);
+  // Tiles exclusively render as decals.
 
   // Draw tiles
   // This spriteSize causes overdraw all the time, but without it, we get pixel
   // gaps
-  auto spriteSize = static_cast<int>(std::ceil(renderScale));
-  olc::Sprite buffer = olc::Sprite(spriteSize, spriteSize);
+  // Update: Now that we use decals, this is a non-issue.
+  auto spriteSize = std::ceil(renderScale);
   int drawnTiles = 0;
   for (const auto& [pos, tile] : tiles) {
     if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
 
-    olc::vi2d screenPos = WorldToScreen(pos);
+    olc::vf2d screenPos = WorldToScreenFloating(pos);
     // Is this tile even visible?
     if (screenPos.x + spriteSize <= 0 || screenPos.x >= renderWindow.x ||
         screenPos.y + spriteSize <= 0 || screenPos.y >= renderWindow.y) {
       continue;  // If not, why even draw it?
     }
 
-    // In theory, drawing to a sprite first would be great, but it's quite
-    // costly.
-    // TODO: Create a caching system for the sprites, then use decal transforms
-    // to
-    //       speed up rendering dramatically.
-    // renderer->SetDrawTarget(&buffer);
     tile->Draw(renderer, screenPos, spriteSize);
     // renderer->SetDrawTarget((uint8_t)gameLayer);
     // renderer->DrawSprite(screenPos, &buffer, 1);
@@ -146,18 +135,26 @@ int Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
 
   // Draw highlight if provided
   if (highlightPos) {
-    olc::vi2d screenPos = WorldToScreen(*highlightPos);
-    renderer->DrawRect(screenPos, olc::vi2d(renderScale, renderScale),
-                       highlightColor);
+    olc::vf2d screenPos = WorldToScreenFloating(*highlightPos);
+    renderer->DrawRectDecal(screenPos, olc::vf2d(renderScale, renderScale),
+                            highlightColor);
   }
   return drawnTiles;
 }
 
-olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
-  return olc::vi2d(
-      static_cast<int>(std::floor((pos.x * renderScale) + renderOffset.x)),
-      static_cast<int>(std::floor((pos.y * renderScale) + renderOffset.y)));
+olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
+  return olc::vf2d(
+      (pos.x * renderScale) + renderOffset.x,
+      (pos.y * renderScale) + renderOffset.y);
 }
+
+olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
+    auto screenPosFloating = WorldToScreenFloating(pos);
+  return olc::vi2d(
+      static_cast<int>(std::floor(screenPosFloating.x)),
+      static_cast<int>(std::floor(screenPosFloating.y)));
+}
+
 
 olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
   return olc::vf2d((pos.x - renderOffset.x) / renderScale,

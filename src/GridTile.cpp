@@ -72,12 +72,12 @@ GridTile::GridTile(olc::vi2d pos, Direction facing, float size,
   }
 }
 
-void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
-                    int screenSize) {
-  renderer->FillRect(screenPos, olc::vi2d(screenSize, screenSize),
+void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
+                    float screenSize) {
+  renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
                      activated ? activeColor : inactiveColor);
   auto [p1, p2, p3] = GetTrianglePoints(screenPos, screenSize, facing);
-  renderer->FillTriangle(p1, p2, p3, activated ? inactiveColor : activeColor);
+  renderer->FillTriangleDecal(p1, p2, p3, activated ? inactiveColor : activeColor);
 }
 
 void GridTile::SetFacing(Direction newFacing) {

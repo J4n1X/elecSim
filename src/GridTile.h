@@ -78,8 +78,8 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 
   virtual ~GridTile() = default;
 
-  void Draw(olc::PixelGameEngine* renderer, olc::vi2d screenPos,
-            int screenSize);
+  void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
+            float screenSize);
   virtual std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) = 0;
   virtual std::vector<SignalEvent> Interact() { return {}; }
 
