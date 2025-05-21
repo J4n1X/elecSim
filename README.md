@@ -2,7 +2,7 @@
 
 Elecsim is a simulation written from scratch in C++, using Javidx9's [PixelGameEngine](https://github.com/OneLoneCoder/olcPixelGameEngine) for rendering. 
 
-It simulates pulses travelling through a system of tiles, which can process these pulses in different manners. 
+It simulates impulses running through a system, allowing for logic. In other words, it's an electronics simulation.
 
 ## Building the project
 
@@ -25,8 +25,8 @@ The controls are as follows:
   - Up, Down, Left, Right: Move the camera
   - J: Zoom in
   - K: Zoom out
-  - S: Save to "grid.bin"
-  - L: Load from "grid.bin"
+  - S: Save file to disk
+  - L: Load file from disk
   - Comma: Speed up the update rate
   - Period: Slow down the update rate
   - R: Change the facing of the tile you are about to place
@@ -34,6 +34,7 @@ The controls are as follows:
   - Left Click (while the simulation is paused): Place a tile
   - Middle click (while the simulation is paused): Erase a tile
   - Right click (while the simulation is running): Interact with certain tiles (Button, Semiconductor and Emitter)
+  - C: Open the console (currently not much in use)
   - Escape: Close the game
 
 When you pause the simulation, the state is kept until you place a new tile or you remove one. Upon either of these events, the simulation is entirely reset.
