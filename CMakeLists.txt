@@ -11,7 +11,6 @@ set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/include/PGE)
 add_subdirectory(${PROJECT_SOURCE_DIR}/include/nativefiledialog-extended)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 

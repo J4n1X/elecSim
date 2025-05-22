@@ -12,6 +12,8 @@ For the dependencies required to compile PixelGameEngine, please consult the [Wi
 
 The dependencies required for NFDE [can be found here](https://github.com/btzy/nativefiledialog-extended?tab=readme-ov-file#linux)
 
+Download or clone both of these projects into the "include" folder (which must be created).
+
 The project itself can be compiled using cmake. On a command line, navigate into the project directory and use: 
 
 ```cmake . ```

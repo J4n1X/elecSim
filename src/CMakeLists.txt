@@ -9,19 +9,15 @@ elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   add_compile_options(elecSim PRIVATE /W3)
 endif()
 
-if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  target_compile_options(elecSim PRIVATE /MT)
-  if(CMAKE_BUILD_TYPE STREQUAL "Release")
-    target_compile_options(elecSim PRIVATE /LTCG)
-  endif()
-endif()
-
-
 target_include_directories(elecSim SYSTEM PUBLIC
   ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
   ${CMAKE_CURRENT_SOURCE_DIR}
-  ${PROJECT_SOURCE_DIR}/include/PGE
+  ${PROJECT_SOURCE_DIR}/include/olcPixelGameEngine
 )
 
-target_link_libraries(elecSim PRIVATE PixelGameEngine nfd)
+target_precompile_headers(elecSim PRIVATE
+  ${PROJECT_SOURCE_DIR}/include/olcPixelGameEngine/olcPixelGameEngine.h
+)
+
+target_link_libraries(elecSim PRIVATE nfd)
 

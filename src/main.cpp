@@ -4,11 +4,15 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include "Grid.h"
 #include "GridTileTypes.h"
 #include "nfd.hpp"
+
+#define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
+
 
 #define TILE_SCALE 1.0F
 
@@ -208,6 +212,7 @@ class Game : public olc::PixelGameEngine {
     };
     NFD::Init();
     NFD::UniquePath resultPath;
+    std::string curPath = std::filesystem::current_path().string();
 
     auto checkResultAndYield = [&](nfdresult_t result) {
       std::string filename = "";
@@ -221,14 +226,14 @@ class Game : public olc::PixelGameEngine {
       return filename;
     };
     if (GetKey(olc::Key::F2).bPressed) {
-      auto result = NFD::SaveDialog(resultPath, filterItem, 1);
+      auto result = NFD::SaveDialog(resultPath, filterItem, 1, curPath.c_str());
       std::string filename = checkResultAndYield(result);
       if (filename != "") {
         grid.Save(filename);
       }
     }
     if (GetKey(olc::Key::F3).bPressed) {
-      auto result = NFD::OpenDialog(resultPath, filterItem, 1);
+      auto result = NFD::OpenDialog(resultPath, filterItem, 1, curPath.c_str());
       std::string filename = checkResultAndYield(result);
       if (filename != "") {
         grid.Load(filename);
@@ -363,7 +368,7 @@ class Game : public olc::PixelGameEngine {
   bool OnConsoleCommand(const std::string& command) override {
     if (command == "exit") {
       engineRunning = false;
-    } else if (command == "togglelog") {
+    } else if (command == "toggleconsole") {
       consoleLogging = !consoleLogging;
       ConsoleOut() << "Console logging "
                    << (consoleLogging ? "enabled" : "disabled") << std::endl;
@@ -384,7 +389,7 @@ class Game : public olc::PixelGameEngine {
       ConsoleOut() << "Available commands: exit, pause, reset, clear, new, help"
                    << std::endl;
     } else {
-      std::cout << "Unknown command: " << command << std::endl;
+      ConsoleOut()  << "Unknown command: " << command << std::endl;
     }
     return true;
   }
