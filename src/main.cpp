@@ -7,6 +7,7 @@
 
 #include "Grid.h"
 #include "GridTileTypes.h"
+#include "nfd.hpp"
 #include "olcPixelGameEngine.h"
 
 #define TILE_SCALE 1.0F
@@ -21,17 +22,19 @@ class Game : public olc::PixelGameEngine {
 
   // Print memory sizes of all tile classes (for debugging)
   void PrintClassSizes() {
-    std::cout << "\n=== Class Memory Sizes ===\n";
-    std::cout << "Base GridTile: " << sizeof(GridTile) << " bytes\n";
-    std::cout << "WireGridTile: " << sizeof(WireGridTile) << " bytes\n";
-    std::cout << "JunctionGridTile: " << sizeof(JunctionGridTile) << " bytes\n";
-    std::cout << "EmitterGridTile: " << sizeof(EmitterGridTile) << " bytes\n";
-    std::cout << "SemiConductorGridTile: " << sizeof(SemiConductorGridTile)
-              << " bytes\n";
-    std::cout << "ButtonGridTile: " << sizeof(ButtonGridTile) << " bytes\n";
-    std::cout << "SignalEvent: " << sizeof(SignalEvent) << " bytes\n";
-    std::cout << "UpdateEvent: " << sizeof(UpdateEvent) << " bytes\n";
-    std::cout << "============================\n\n";
+    ConsoleOut() << "\n=== Class Memory Sizes ===\n";
+    ConsoleOut() << "Base GridTile: " << sizeof(GridTile) << " bytes\n";
+    ConsoleOut() << "WireGridTile: " << sizeof(WireGridTile) << " bytes\n";
+    ConsoleOut() << "JunctionGridTile: " << sizeof(JunctionGridTile)
+                 << " bytes\n";
+    ConsoleOut() << "EmitterGridTile: " << sizeof(EmitterGridTile)
+                 << " bytes\n";
+    ConsoleOut() << "SemiConductorGridTile: " << sizeof(SemiConductorGridTile)
+                 << " bytes\n";
+    ConsoleOut() << "ButtonGridTile: " << sizeof(ButtonGridTile) << " bytes\n";
+    ConsoleOut() << "SignalEvent: " << sizeof(SignalEvent) << " bytes\n";
+    ConsoleOut() << "UpdateEvent: " << sizeof(UpdateEvent) << " bytes\n";
+    ConsoleOut() << "============================\n\n";
   }
 
  private:
@@ -55,6 +58,8 @@ class Game : public olc::PixelGameEngine {
   // --- Game state ---
   bool paused = true;         // Simulation is paused, renderer is not
   bool engineRunning = true;  // If this is false, the game quits
+  bool consoleLogging =
+      false;  // If this is true, stdout is redirected to the console
   int updatesPerTick = 0;
 
   // --- Prompt values ---
@@ -69,8 +74,6 @@ class Game : public olc::PixelGameEngine {
 
   // --- Initialization ---
   bool OnUserCreate() override {
-    // Enable the console
-    ConsoleCaptureStdOut(1);
     // Print class sizes
     PrintClassSizes();
 
@@ -80,7 +83,7 @@ class Game : public olc::PixelGameEngine {
     Clear(olc::BLUE);
     SetDrawTarget(uiLayer);
     Clear(olc::BLANK);  // uiLayer needs to be transparent
-    
+
     EnableLayer((uint8_t)uiLayer, true);
     EnableLayer((uint8_t)gameLayer, true);
 
@@ -113,6 +116,9 @@ class Game : public olc::PixelGameEngine {
         break;
       case 5:
         brushTile = std::make_unique<ButtonGridTile>();
+        break;
+      case 6:
+        brushTile = std::make_unique<InverterGridTile>();
         break;
       default:
         brushTile = nullptr;
@@ -152,9 +158,9 @@ class Game : public olc::PixelGameEngine {
 
     HandleSaveLoad();
 
-    // When we want to open the console, the key is C
-    if (GetKey(olc::Key::C).bPressed) {
-      ConsoleShow(olc::Key::C, false);
+    // When we want to open the console, the key is F1
+    if (GetKey(olc::Key::F1).bPressed) {
+      ConsoleShow(olc::Key::F1, false);
     }
   }
 
@@ -182,7 +188,8 @@ class Game : public olc::PixelGameEngine {
       grid.SetRenderOffset(curOffset - olc::vf2d(0.25f * renderScale, 0.0f));
     if (GetKey(olc::Key::J).bHeld || GetKey(olc::Key::K).bHeld) {
       float newScale = std::clamp(
-          renderScale + ((GetKey(olc::Key::J).bHeld ? 1 : -1) * renderScale * 0.1f),
+          renderScale +
+              ((GetKey(olc::Key::J).bHeld ? 1 : -1) * renderScale * 0.1f),
           minRenderScale, maxRenderScale);
       grid.SetRenderScale(newScale);
       auto afterZoomPos =
@@ -196,18 +203,38 @@ class Game : public olc::PixelGameEngine {
 
   // --- Save/load controls ---
   void HandleSaveLoad() {
-    const std::string savePrompt = "Saving file to:";
-    const std::string loadPrompt = "Loading file from:";
-    if (GetKey(olc::Key::S).bPressed) {
-      TextEntryEnable(true);
-      promptText = savePrompt;
-      promptCall = [this](std::string text) { grid.Save(text); };
+    constexpr nfdfilteritem_t filterItem[] = {
+        {"Grid files", "grid"},
+    };
+    NFD::Init();
+    NFD::UniquePath resultPath;
+
+    auto checkResultAndYield = [&](nfdresult_t result) {
+      std::string filename = "";
+      if (result == NFD_OKAY) {
+        filename = resultPath.get();
+      } else if (result == NFD_CANCEL) {
+        std::cout << "User cancelled the load dialog." << std::endl;
+      } else {
+        std::cerr << "Error: " << NFD::GetError() << std::endl;
+      }
+      return filename;
+    };
+    if (GetKey(olc::Key::F2).bPressed) {
+      auto result = NFD::SaveDialog(resultPath, filterItem, 1);
+      std::string filename = checkResultAndYield(result);
+      if (filename != "") {
+        grid.Save(filename);
+      }
     }
-    if (GetKey(olc::Key::L).bPressed) {
-      TextEntryEnable(true);
-      promptText = loadPrompt;
-      promptCall = [this](std::string text) { grid.Load(text); };
+    if (GetKey(olc::Key::F3).bPressed) {
+      auto result = NFD::OpenDialog(resultPath, filterItem, 1);
+      std::string filename = checkResultAndYield(result);
+      if (filename != "") {
+        grid.Load(filename);
+      }
     }
+    NFD::Quit();
   }
 
   // --- Tile placement, removal, and interaction ---
@@ -233,9 +260,8 @@ class Game : public olc::PixelGameEngine {
             (GetMouse(0).bHeld && lastPlacedPos != alignedWorldPos)) {
           brushTile->SetPos(alignedWorldPos);
           brushTile->SetFacing(selectedBrushFacing);
-          std::shared_ptr<GridTile> sharedBrushTile = std::move(brushTile);
-          grid.SetTile(alignedWorldPos, sharedBrushTile,
-                       sharedBrushTile->IsEmitter());
+          bool isEmitter = brushTile->IsEmitter();
+          grid.SetTile(alignedWorldPos, std::move(brushTile), isEmitter);
           CreateBrushTile();
           lastPlacedPos = alignedWorldPos;
           grid.ResetSimulation();
@@ -296,7 +322,6 @@ class Game : public olc::PixelGameEngine {
     // Draw grid and UI
     int drawnTiles = grid.Draw(this, &highlightWorldPos);
     if (!IsTextEntryEnabled()) {
-
       // Status string
       std::stringstream ss;
       ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ")"
@@ -334,6 +359,41 @@ class Game : public olc::PixelGameEngine {
       promptCall(text);
     }
   }
+
+  bool OnConsoleCommand(const std::string& command) override {
+    if (command == "exit") {
+      engineRunning = false;
+    } else if (command == "togglelog") {
+      consoleLogging = !consoleLogging;
+      ConsoleOut() << "Console logging "
+                   << (consoleLogging ? "enabled" : "disabled") << std::endl;
+      ConsoleCaptureStdOut(consoleLogging);
+    } else if (command == "pause") {
+      paused = !paused;
+      ConsoleOut() << "Simulation " << (paused ? "paused" : "running")
+                   << std::endl;
+    } else if (command == "reset") {
+      grid.ResetSimulation();
+      std::cout << "Simulation reset" << std::endl;
+    } else if (command == "clear") {
+      ConsoleClear();
+    } else if (command == "new") {
+      grid.Clear();
+      ConsoleOut() << "Grid cleared" << std::endl;
+    } else if (command == "help") {
+      ConsoleOut() << "Available commands: exit, pause, reset, clear, new, help"
+                   << std::endl;
+    } else {
+      std::cout << "Unknown command: " << command << std::endl;
+    }
+    return true;
+  }
+
+  bool OnUserDestroy() override {
+    ConsoleCaptureStdOut(false);
+    ConsoleOut() << std::endl;
+    return true;
+  }
 };
 
 // --- Static member initialization ---
@@ -343,6 +403,7 @@ const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
 int main(int argc, char** argv) {
   (void)argc;
   (void)argv;
+
   Game game;
   if (game.Construct(640 * 2, 480 * 2, 1, 1, false, true, false)) {
     game.Start();

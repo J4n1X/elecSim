@@ -12,4 +12,5 @@ cmake_install.cmake
 *.sln
 *.dir
 /out
-grid.bin
+/include/PGE
+/include/nativefiledialog-extended

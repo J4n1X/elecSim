@@ -10,7 +10,12 @@ Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
       renderScale(renderScale),
       renderOffset(renderOffset),
       uiLayer(uiLayer),
-      gameLayer(gameLayer) {}
+      gameLayer(gameLayer) {
+  std::cout << "Grid initialized with size: " << size.x << "x" << size.y
+            << ", renderScale: " << renderScale
+            << ", renderOffset: " << renderOffset.x << ", " << renderOffset.y
+            << std::endl;
+}
 
 void Grid::QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event,
                        int priority) {
@@ -48,9 +53,14 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
 
     auto& targetTile = targetTileIt->second;
     if (targetTile->CanReceiveFrom(signal.fromDirection)) {
-      // if the targetTile has the same state as we do, we don't need to queue
-      // the signal again
-      if (targetTile->GetActivation() == signal.isActive) continue;
+      if (targetTile->GetActivation() == signal.isActive) {
+        // We are pushing an active signal into an already active tile.
+        // This is needed for some logic, like when a wire is connected to two
+        // sides which both give it an input signal. You don't want to turn it
+        // off if one of the signals is turned off. However, this enables
+        // infinite energy loops... Hold on, just got a great idea, I gotta test
+        // it.
+      }
 
       QueueUpdate(targetTile, SignalEvent(targetPos, signal.fromDirection,
                                           signal.isActive));
@@ -103,11 +113,24 @@ void Grid::ResetSimulation() {
   // Reset all tiles
   for (auto& [pos, tile] : tiles) {
     tile->ResetActivation();
+
+    // Queue "off" signals from all directions with highest priority (100)
+    // This ensures all inputs to each tile are properly initialized
+    for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+      Direction dir = static_cast<Direction>(i);
+      if (tile->CanReceiveFrom(dir)) {
+        QueueUpdate(tile, SignalEvent(pos, dir, false), 100);
+      }
+    }
   }
 }
 
 int Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
   if (!renderer) throw std::runtime_error("Grid has no renderer available");
+
+  // Clear Background
+  renderer->SetDrawTarget(gameLayer);
+  renderer->Clear(backgroundColor);
 
   // Tiles exclusively render as decals.
 
@@ -143,18 +166,15 @@ int Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
 }
 
 olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
-  return olc::vf2d(
-      (pos.x * renderScale) + renderOffset.x,
-      (pos.y * renderScale) + renderOffset.y);
+  return olc::vf2d((pos.x * renderScale) + renderOffset.x,
+                   (pos.y * renderScale) + renderOffset.y);
 }
 
 olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
-    auto screenPosFloating = WorldToScreenFloating(pos);
-  return olc::vi2d(
-      static_cast<int>(std::floor(screenPosFloating.x)),
-      static_cast<int>(std::floor(screenPosFloating.y)));
+  auto screenPosFloating = WorldToScreenFloating(pos);
+  return olc::vi2d(static_cast<int>(std::floor(screenPosFloating.x)),
+                   static_cast<int>(std::floor(screenPosFloating.y)));
 }
-
 
 olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
   return olc::vf2d((pos.x - renderOffset.x) / renderScale,
@@ -198,15 +218,14 @@ void Grid::Load(const std::string& filename) {
     return;
   }
 
-  tiles.clear();
-  emitters.clear();
+  Clear();
 
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
     if (file.gcount() == 0) break;
 
-    auto tile = GridTile::Deserialize(data);
+    std::shared_ptr<GridTile> tile = std::move(GridTile::Deserialize(data));
     tiles.insert_or_assign(tile->GetPos(), tile);
     if (tile->IsEmitter()) {
       emitters.push_back(tile);

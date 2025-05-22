@@ -38,7 +38,7 @@ class Grid {
        int uiLayer, int gameLayer)
       : Grid(olc::vi2d(size_x, size_y), renderScale, renderOffset, uiLayer,
              gameLayer) {}
-  Grid() : Grid(0, 0, 0, olc::vi2d(0, 0), 0, 0) {};
+  Grid() = default;
   ~Grid() = default;
 
   // Core simulation functions
@@ -55,10 +55,10 @@ class Grid {
   void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
   void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
 
-  void SetTile(olc::vf2d pos, std::shared_ptr<GridTile> tile, bool emitter) {
-    tiles.insert_or_assign(pos, tile);
+  void SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile, bool emitter) {
+    tiles.insert_or_assign(pos, std::move(tile));
     if (emitter) {
-      emitters.push_back(tile);
+      emitters.push_back(tiles.at(pos));
     }
   }
 
@@ -84,10 +84,15 @@ class Grid {
   void Resize(int newWidth, int newHeight) {
     Resize(olc::vi2d(newWidth, newHeight));
   }
+  void Clear() {
+    tiles.clear();
+    emitters.clear();
+    ResetSimulation();
+  }
   void SetRenderOffset(olc::vf2d newOffset) { renderOffset = newOffset; }
   void SetRenderScale(float newScale) { renderScale = newScale; }
 
   // Save/load
-  void Save(const std::string& filename = "grid.bin");
+  void Save(const std::string& filename);
   void Load(const std::string& filename);
 };

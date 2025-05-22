@@ -64,20 +64,20 @@ GridTile::GridTile(olc::vi2d pos, Direction facing, float size,
       activated(defaultActivation),
       defaultActivation(defaultActivation),
       inactiveColor(inactiveColor),
-      activeColor(activeColor) {
+      activeColor(activeColor),
+      canReceive{},
+      canOutput{},
+      inputStates{} {
   // Initialize I/O arrays
-  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-    canReceive[i] = false;
-    canOutput[i] = false;
-  }
 }
 
 void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
                     float screenSize) {
   renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
-                     activated ? activeColor : inactiveColor);
+                          activated ? activeColor : inactiveColor);
   auto [p1, p2, p3] = GetTrianglePoints(screenPos, screenSize, facing);
-  renderer->FillTriangleDecal(p1, p2, p3, activated ? inactiveColor : activeColor);
+  renderer->FillTriangleDecal(p1, p2, p3,
+                              activated ? inactiveColor : activeColor);
 }
 
 void GridTile::SetFacing(Direction newFacing) {
@@ -116,14 +116,10 @@ std::string GridTile::GetTileInformation() const {
 }
 
 Direction GridTile::RotateDirection(Direction dir, Direction facing) {
-  // Since Direction enum goes clockwise, we need to subtract facing to rotate
-  // clockwise
   int baseDir = static_cast<int>(dir);
   int rotationAmount = static_cast<int>(facing);
-
-  // Okay, time to think. Nevermind, this is just a simple modulo operation
   int rotatedDir =
-      (baseDir + rotationAmount) % (static_cast<int>(Direction::Count));
+      (baseDir + rotationAmount) % static_cast<int>(Direction::Count);
   return static_cast<Direction>(rotatedDir);
 }
 
@@ -152,7 +148,7 @@ std::array<char, GRIDTILE_BYTESIZE> GridTile::Serialize() {
   return data;
 }
 
-std::shared_ptr<GridTile> GridTile::Deserialize(
+std::unique_ptr<GridTile> GridTile::Deserialize(
     std::array<char, GRIDTILE_BYTESIZE> data) {
   int id = *reinterpret_cast<int*>(data.data());
   Direction facing = *reinterpret_cast<Direction*>(data.data() + sizeof(id));
@@ -161,25 +157,36 @@ std::shared_ptr<GridTile> GridTile::Deserialize(
                                      sizeof(posX));
   olc::vi2d pos = {posX, posY};
 
-  std::shared_ptr<GridTile> tile;
+  std::unique_ptr<GridTile> tile;
   switch (id) {
     case 0:
-      tile = std::make_shared<WireGridTile>(pos, facing);
+      tile = std::make_unique<WireGridTile>(pos, facing);
       break;
     case 1:
-      tile = std::make_shared<JunctionGridTile>(pos, facing);
+      tile = std::make_unique<JunctionGridTile>(pos, facing);
       break;
     case 2:
-      tile = std::make_shared<EmitterGridTile>(pos, facing);
+      tile = std::make_unique<EmitterGridTile>(pos, facing);
       break;
     case 3:
-      tile = std::make_shared<SemiConductorGridTile>(pos, facing);
+      tile = std::make_unique<SemiConductorGridTile>(pos, facing);
       break;
     case 4:
-      tile = std::make_shared<ButtonGridTile>(pos, facing);
+      tile = std::make_unique<ButtonGridTile>(pos, facing);
+      break;
+    case 5:
+      tile = std::make_unique<InverterGridTile>(pos, facing);
       break;
     default:
       throw std::runtime_error("Unknown tile ID");
   }
   return tile;
+}
+
+void GridTile::ResetActivation() {
+  activated = defaultActivation;
+  // Reset all input states
+  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+    inputStates[i] = false;
+  }
 }

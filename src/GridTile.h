@@ -35,8 +35,10 @@ struct SignalEvent {
   Direction fromDirection;
   bool isActive;
 
-  SignalEvent(olc::vi2d pos, Direction dir, bool active)
-      : sourcePos(pos), fromDirection(FlipDirection(dir)), isActive(active) {}
+  SignalEvent(olc::vi2d pos, Direction toDirection, bool active)
+      : sourcePos(pos),
+        fromDirection(FlipDirection(toDirection)),
+        isActive(active) {}
 };
 
 // Forward declare GridTile for UpdateEvent
@@ -68,6 +70,8 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   olc::Pixel activeColor;
   bool canReceive[static_cast<int>(Direction::Count)];
   bool canOutput[static_cast<int>(Direction::Count)];
+  bool inputStates[static_cast<int>(
+      Direction::Count)];  // Track state from each input direction
 
  public:
   GridTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
@@ -76,7 +80,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
            olc::Pixel inactiveColor = olc::BLACK,
            olc::Pixel activeColor = olc::BLACK);
 
-  virtual ~GridTile() = default;
+  virtual ~GridTile() {};
 
   void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
             float screenSize);
@@ -87,7 +91,8 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   void SetFacing(Direction newFacing);
   void SetActivation(bool newActivation) { activated = newActivation; }
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
-  virtual void ResetActivation() { activated = defaultActivation; }
+  virtual void
+  ResetActivation();  // Changed from inline to virtual with implementation
 
   bool GetActivation() const { return activated; }
   bool GetDefaultActivation() const { return defaultActivation; }
@@ -108,7 +113,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual int GetTileId() const = 0;
 
   std::array<char, GRIDTILE_BYTESIZE> Serialize();
-  static std::shared_ptr<GridTile> Deserialize(
+  static std::unique_ptr<GridTile> Deserialize(
       std::array<char, GRIDTILE_BYTESIZE> data);
 
   static Direction RotateDirection(Direction dir, Direction facing);

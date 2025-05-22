@@ -16,11 +16,11 @@ WireGridTile::WireGridTile(olc::vi2d pos, Direction facing, float size)
 
 std::vector<SignalEvent> WireGridTile::ProcessSignal(
     const SignalEvent& signal) {
-  // Update the input state for this direction
+  // Restore previous logic: flip direction for inputStates update
   inputStates[static_cast<int>(FlipDirection(signal.fromDirection))] =
       signal.isActive;
 
-  // Check if any input is active
+  // Check if any input is active (from a direction we can receive from)
   bool shouldBeActive = false;
   for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
     if (canReceive[i] && inputStates[i]) {
@@ -38,24 +38,15 @@ std::vector<SignalEvent> WireGridTile::ProcessSignal(
   return {};
 }
 
-void WireGridTile::ResetActivation() {
-  GridTile::ResetActivation();
-  // Reset all input states
-  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-    inputStates[i] = false;
-  }
-}
-
 // --- JunctionGridTile Implementation ---
 
 JunctionGridTile::JunctionGridTile(olc::vi2d pos, Direction facing, float size)
     : GridTile(pos, facing, size, false, olc::GREY, olc::YELLOW) {
+  auto inputDir = static_cast<int>(FlipDirection(facing));
   // Can receive from one direction and output to all others
-  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-    Direction dir = static_cast<Direction>(i);
-    canReceive[i] = (dir == FlipDirection(facing));
-    canOutput[i] = (dir != FlipDirection(facing));
-  }
+  std::fill_n(canOutput, static_cast<int>(Direction::Count), true);
+  canOutput[inputDir] = false;
+  canReceive[inputDir] = true;
 }
 
 std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
@@ -123,47 +114,28 @@ bool EmitterGridTile::ShouldEmit(int currentTick) const {
 
 SemiConductorGridTile::SemiConductorGridTile(olc::vi2d pos, Direction facing,
                                              float size)
-    : GridTile(pos, facing, size, false, olc::DARK_GREEN, olc::GREEN),
-      internalState(0) {
-  // Can receive from sides and bottom relative to facing
-  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-    Direction dir = static_cast<Direction>(i);
-    Direction rotated = RotateDirection(dir, facing);
-    canReceive[i] =
-        (rotated == Direction::Left || rotated == Direction::Right ||
-         rotated == Direction::Bottom);
-    canOutput[i] = (dir == facing);
-  }
+    : GridTile(pos, facing, size, false, olc::DARK_GREEN, olc::GREEN) {
+  // Only allow input from world directions that, relative to facing, are local
+  // Left, Right, or Bottom
+  std::fill_n(canReceive, static_cast<int>(Direction::Count), true);
+  canOutput[static_cast<int>(facing)] = true;
+  canReceive[static_cast<int>(facing)] = false;
 }
 
 std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
     const SignalEvent& signal) {
-  // Convert signal direction to facing-relative direction
-  // Here's the sides and their flags:
-  // 0b0001 = Left
-  // 0b0010 = Right
-  // 0b0100 = Bottom
-  Direction relativeDir =
-      RotateDirection(FlipDirection(signal.fromDirection), facing);
+  // Restore previous logic: flip direction for inputStates update
+  inputStates[static_cast<int>(FlipDirection(signal.fromDirection))] =
+      signal.isActive;
 
-  // Update internal state based on inputs
-  if (relativeDir == Direction::Left) {
-    // set the bit to the activation given
-    internalState =
-        internalState & (0b110) |
-        (0b001 & static_cast<int>(signal.isActive) << 0);  // Set side input bit
-  }
-  if (relativeDir == Direction::Right) {
-    internalState = internalState & (0b101) |
-                    (0b010 & static_cast<int>(signal.isActive) << 1);
-  }
-  if (relativeDir == Direction::Bottom) {
-    internalState = internalState & (0b011) |
-                    (0b100 & static_cast<int>(signal.isActive) << 2);
-  }
+  // Check if both side (left or right) and bottom are active
+  bool sideActive =
+      inputStates[static_cast<int>(RotateDirection(Direction::Left, facing))] ||
+      inputStates[static_cast<int>(RotateDirection(Direction::Right, facing))];
+  bool bottomActive =
+      inputStates[static_cast<int>(RotateDirection(Direction::Bottom, facing))];
 
-  // Check if both side and bottom are active
-  if ((internalState & 0b11) && (internalState & 0b100)) {
+  if (sideActive && bottomActive) {
     if (activated) return {};  // Prevent feedback loops
     activated = true;
     return {SignalEvent(pos, facing, true)};
@@ -177,11 +149,20 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
 
 void SemiConductorGridTile::ResetActivation() {
   activated = defaultActivation;
-  internalState = 0;
+  // inputStates is reset in base class
 }
 
 std::vector<SignalEvent> SemiConductorGridTile::Interact() {
-  internalState ^= 1;  // Toggle side input bit
+  // Toggle input for a specific direction (default: left) for demonstration
+  int targetIdx = -1;
+  Direction targetDirection = Direction::Left;  // Change this to generalize
+  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+    if (RotateDirection(static_cast<Direction>(i), facing) == targetDirection) {
+      targetIdx = i;
+      break;
+    }
+  }
+  if (targetIdx != -1) inputStates[targetIdx] = !inputStates[targetIdx];
   return {};
 }
 
@@ -200,4 +181,30 @@ std::vector<SignalEvent> ButtonGridTile::ProcessSignal(
 std::vector<SignalEvent> ButtonGridTile::Interact() {
   activated = !activated;
   return {SignalEvent(pos, facing, activated)};
+}
+
+// --- InverterGridTile Implementation ---
+
+std::vector<SignalEvent> InverterGridTile::ProcessSignal(
+    const SignalEvent& signal) {
+  // Restore previous logic: flip direction for inputStates update
+  inputStates[static_cast<int>(FlipDirection(signal.fromDirection))] =
+      signal.isActive;
+
+  // Check if any input is active
+  bool shouldBeActive = false;
+  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+    if (canReceive[i] && inputStates[i]) {
+      shouldBeActive = true;
+      break;
+    }
+  }
+
+  // Invert the logic for output
+  bool inverted = !shouldBeActive;
+  if (inverted != activated) {
+    activated = inverted;
+    return {SignalEvent(pos, facing, activated)};
+  }
+  return {};
 }

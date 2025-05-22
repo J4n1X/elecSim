@@ -6,29 +6,14 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-set(PROJECT_SOURCE_DIR ${PROJECT_SOURCE_DIR}/src)
 
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/PGE)
-
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  add_compile_options(-Wall -Wextra -Wpedantic -Wno-unknown-pragmas)
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  add_compile_options(/W4)
-endif()
-
-file(GLOB CXXFILES ${PROJECT_SOURCE_DIR}/*.cpp)
-
-add_executable(elecSim ${CXXFILES})
-target_include_directories(elecSim SYSTEM PUBLIC
-  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
-  ${PROJECT_SOURCE_DIR}/PGE
-)
-target_link_libraries(elecSim PRIVATE PixelGameEngine)
-set_property(TARGET elecSim PROPERTY CXX_STANDARD 20)
+add_subdirectory(${PROJECT_SOURCE_DIR}/include/PGE)
+add_subdirectory(${PROJECT_SOURCE_DIR}/include/nativefiledialog-extended)
+add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 add_custom_target(
   run
@@ -36,6 +21,3 @@ add_custom_target(
   DEPENDS elecSim
   WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
 )
-
-include(cmake/PGE.cmake)
-pge_set_emscripten_options(elecSim)
