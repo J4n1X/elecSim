@@ -9,8 +9,14 @@ on:
     branches: [ "master" ]
 
 jobs:
+  install-libraries: 
+    runs-on: ubuntu-latest       
+    steps:
+      - name: "Install required packages"
+        run: sudo apt install libgtk-3-dev -y
   build:
     runs-on: ${{ matrix.os }}
+    needs: install-libraries
 
     strategy:
       # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
@@ -53,6 +59,7 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
+        
     - name: Fetch Dependencies
       run: |
         git clone https://github.com/OneLoneCoder/olcPixelGameEngine include/olcPixelGameEngine
