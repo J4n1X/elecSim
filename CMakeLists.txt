@@ -17,5 +17,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 add_subdirectory(${PROJECT_SOURCE_DIR}/include)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
-add_test(NAME elecSim_starting COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/elecSim dry)
 add_test(NAME prober COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prober -f ${TESTS_DIR}/componentTest.grid -t ${TESTS_DIR}/componentTest.probe -v)

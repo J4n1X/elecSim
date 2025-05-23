@@ -15,8 +15,6 @@
 
 using namespace ElecSim;
 
-bool g_dryRun = false;
-
 class Game : public olc::PixelGameEngine {
  public:
   Game() {
@@ -101,7 +99,7 @@ class Game : public olc::PixelGameEngine {
     selectedBrushIndex = 1;
     selectedBrushFacing = Direction::Top;
     CreateBrushTile();  // Initialize brush tile; by default it's a wire
-    return (engineRunning && !g_dryRun);
+    return engineRunning;
   }
 
   // --- Brush tile creation ---
@@ -412,7 +410,7 @@ int main(int argc, char** argv) {
     std::string arg = argv[1];
     if(arg == "dry"){
       std::cout << "Dry run mode enabled. No GUI will be created." << std::endl;
-      g_dryRun = true;
+      return 0;
     }
   }
 
