@@ -53,8 +53,8 @@ jobs:
       shell: bash
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
-    - name: Install Dependencies (Ubuntu)
-      if: runner.os == 'ubuntu-latest'
+    - name: Install Dependencies (Linux)
+      if: runner.os == 'Linux'
       run: sudo apt install libgtk-3-dev -y
     
     - name: Fetch Dependencies
