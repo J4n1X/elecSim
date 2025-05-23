@@ -54,7 +54,7 @@ jobs:
       run: |
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
     - name: Fetch Dependencies
-      run: >
+      run: |
         git clone https://github.com/OneLoneCoder/olcPixelGameEngine include/olcPixelGameEngine
         git clone https://github.com/btzy/nativefiledialog-extended include/nativefiledialog-extended
 
