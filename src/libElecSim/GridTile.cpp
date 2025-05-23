@@ -4,6 +4,8 @@
 
 #include "GridTileTypes.h"
 
+namespace ElecSim {
+
 // --- GridTile Implementation ---
 
 // Helper function to get the points of the triangle for a tile
@@ -190,3 +192,5 @@ void GridTile::ResetActivation() {
     inputStates[i] = false;
   }
 }
+
+}  // namespace ElecSim

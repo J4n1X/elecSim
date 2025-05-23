@@ -1,0 +1,7 @@
+add_library(hope STATIC ${CMAKE_CURRENT_SOURCE_DIR}/hope.c)
+set_property(TARGET hope PROPERTY C_STANDARD 17)
+set_property(TARGET hope PROPERTY C_STANDARD_REQUIRED ON)
+target_include_directories(hope PUBLIC
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+)

@@ -9,6 +9,8 @@
 #include "GridTileTypes.h"
 #include "olcPixelGameEngine.h"
 
+namespace ElecSim {
+
 class Grid {
  private:
   using TileField = std::map<olc::vi2d, std::shared_ptr<GridTile>>;
@@ -26,7 +28,7 @@ class Grid {
   std::priority_queue<UpdateEvent> updateQueue;
 
   float renderScale;
-  olc::vf2d renderOffset = {};
+  olc::vf2d renderOffset;
 
   void ProcessSignalEvent(const SignalEvent& event);
   olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir) const;
@@ -96,3 +98,5 @@ class Grid {
   void Save(const std::string& filename);
   void Load(const std::string& filename);
 };
+
+}  // namespace ElecSim

@@ -13,8 +13,9 @@
 #define OLC_PGE_APPLICATION
 #include "olcPixelGameEngine.h"
 
+using namespace ElecSim;
 
-#define TILE_SCALE 1.0F
+bool g_dryRun = false;
 
 class Game : public olc::PixelGameEngine {
  public:
@@ -100,7 +101,7 @@ class Game : public olc::PixelGameEngine {
     selectedBrushIndex = 1;
     selectedBrushFacing = Direction::Top;
     CreateBrushTile();  // Initialize brush tile; by default it's a wire
-    return engineRunning;
+    return (engineRunning && !g_dryRun);
   }
 
   // --- Brush tile creation ---
@@ -407,10 +408,17 @@ const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
 // --- Main entry point ---
 int main(int argc, char** argv) {
   (void)argc;
-  (void)argv;
+  if(argv[1] != nullptr){
+    std::string arg = argv[1];
+    if(arg == "dry"){
+      std::cout << "Dry run mode enabled. No GUI will be created." << std::endl;
+      g_dryRun = true;
+    }
+  }
 
   Game game;
   if (game.Construct(640 * 2, 480 * 2, 1, 1, false, true, false)) {
     game.Start();
   }
+  return 0;
 }

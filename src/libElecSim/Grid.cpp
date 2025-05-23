@@ -4,6 +4,8 @@
 #include <fstream>
 #include <iostream>
 
+namespace ElecSim {
+
 Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
            int uiLayer, int gameLayer)
     : renderWindow(size),
@@ -238,3 +240,5 @@ void Grid::Load(const std::string& filename) {
   std::cout << "Total tiles: " << tiles.size() << std::endl;
   ResetSimulation();
 }
+
+}  // namespace ElecSim

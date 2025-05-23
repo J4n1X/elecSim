@@ -2,6 +2,8 @@
 
 #include "GridTile.h"
 
+namespace ElecSim {
+
 // Each derived tile class has its own responsibilities:
 
 // Wire: Basic signal conductor, propagates signals in one direction
@@ -99,3 +101,5 @@ class InverterGridTile : public GridTile {
   bool IsEmitter() const override { return false; }
   int GetTileId() const override { return 5; }
 };
+
+}  // namespace ElecSim

@@ -9,6 +9,8 @@
 
 #include "olcPixelGameEngine.h"
 
+namespace ElecSim {
+
 constexpr int GRIDTILE_BYTESIZE =
     sizeof(int) * 4;  // TileId + Facing + PosX + PosY
 
@@ -123,3 +125,5 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
                                                     int screenSize,
                                                     Direction facing);
 };
+
+}  // namespace ElecSim

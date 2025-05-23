@@ -1,0 +1,82 @@
+#-Testing Emitters:
+#---Base state (Tick 0): 
+r 4 5 1
+s
+#---Tick 1: Should be active
+r 4 5 0
+s 
+#---Tick 2: Should be active
+r 4 5 1
+s
+#---Tick 3: Should be inactive
+r 4 5 0
+#---Skipping to Tick 6
+s
+s
+s
+r 4 5 1
+#---Disabling the emitter
+i 4 0 
+
+#-Testing Wires: Simple transmission
+#---Base state:
+r 0 5 0
+#---Activate tile at 0 0, with the signal being pushed from 0 -1 toward the bottom
+i 0 0
+s
+r 0 5 1
+
+#-Testing Junctions
+#---Base state:
+r 2 5 0
+i 2 0
+s
+r 2 5 1
+
+#-Testing Semiconductors: 
+#-Base state: 
+r 7 5 0
+#---Variant 1: Input comes into one side, but nothing else
+i 6 0
+s
+r 7 5 0
+i 6 0
+s
+
+#---Variant 2: Input comes from both sides but not the back
+i 6 0
+i 8 0
+s
+r 7 5 0
+i 6 0
+i 8 0
+s
+
+#---Variant 3: Input comes from the side and the back
+i 6 0
+i 7 0
+s
+r 7 5 1
+i 6 0
+i 7 0
+s
+
+#---Variant 4: Input comes from both sides and the back
+i 6 0
+i 7 0
+i 8 0
+s
+r 7 5 1
+i 6 0
+i 7 0
+i 8 0
+s
+
+#---Variant 5: Input comes from the other side and the back
+i 7 0
+i 8 0
+s
+r 7 5 1
+i 7 0
+i 8 0
+s

@@ -1,22 +1,21 @@
 cmake_minimum_required(VERSION 3.8)
 
 project("elecSim")
+enable_testing()
+
+set(TESTS_DIR ${PROJECT_SOURCE_DIR}/examples/tests)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-
+message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(${PROJECT_SOURCE_DIR}/include/nativefiledialog-extended)
+add_subdirectory(${PROJECT_SOURCE_DIR}/include)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
-add_custom_target(
-  run
-  COMMAND elecSim
-  DEPENDS elecSim
-  WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-)
+add_test(NAME elecSim_starting COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/elecSim dry)
+add_test(NAME prober COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prober -f ${TESTS_DIR}/componentTest.grid -t ${TESTS_DIR}/componentTest.probe -v)

@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+namespace ElecSim {
+
 // --- WireGridTile Implementation ---
 
 WireGridTile::WireGridTile(olc::vi2d pos, Direction facing, float size)
@@ -208,3 +210,5 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   }
   return {};
 }
+
+}  // namespace ElecSim
