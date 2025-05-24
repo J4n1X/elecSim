@@ -12,5 +12,6 @@ cmake_install.cmake
 *.sln
 *.dir
 /out
-/include/PGE
+/include/hope
+/include/olcPixelGameEngine
 /include/nativefiledialog-extended
