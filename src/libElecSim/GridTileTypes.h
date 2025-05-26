@@ -16,6 +16,13 @@ class WireGridTile : public GridTile {
   std::string_view TileTypeName() const override { return "Wire"; }
   bool IsEmitter() const override { return false; }
   int GetTileId() const override { return 0; }
+  
+  std::unique_ptr<GridTile> Clone() const override {
+    auto clone = std::make_unique<WireGridTile>(GetPos(), GetFacing(), GetSize());
+    clone->SetActivation(GetActivation());
+    clone->SetDefaultActivation(GetDefaultActivation());
+    return clone;
+  }
 };
 
 // Junction: Multi-directional signal splitter
@@ -28,6 +35,13 @@ class JunctionGridTile : public GridTile {
   std::string_view TileTypeName() const override { return "Junction"; }
   bool IsEmitter() const override { return false; }
   int GetTileId() const override { return 1; }
+  
+  std::unique_ptr<GridTile> Clone() const override {
+    auto clone = std::make_unique<JunctionGridTile>(GetPos(), GetFacing(), GetSize());
+    clone->SetActivation(GetActivation());
+    clone->SetDefaultActivation(GetDefaultActivation());
+    return clone;
+  }
 };
 
 // Emitter: Signal source that can be toggled
@@ -49,6 +63,19 @@ class EmitterGridTile : public GridTile {
   std::string_view TileTypeName() const override { return "Emitter"; }
   bool IsEmitter() const override { return true; }
   int GetTileId() const override { return 2; }
+  
+  std::unique_ptr<GridTile> Clone() const override {
+    auto clone = std::make_unique<EmitterGridTile>(GetPos(), GetFacing(), GetSize());
+    clone->SetActivation(GetActivation());
+    clone->SetDefaultActivation(GetDefaultActivation());
+    
+    // Copy additional internal state
+    auto* typedClone = static_cast<EmitterGridTile*>(clone.get());
+    typedClone->enabled = this->enabled;
+    typedClone->lastEmitTick = this->lastEmitTick;
+    
+    return clone;
+  }
 };
 
 // SemiConductor: Logic gate that requires multiple inputs
@@ -67,6 +94,18 @@ class SemiConductorGridTile : public GridTile {
   std::string_view TileTypeName() const override { return "Semiconductor"; }
   bool IsEmitter() const override { return false; }
   int GetTileId() const override { return 3; }
+  
+  std::unique_ptr<GridTile> Clone() const override {
+    auto clone = std::make_unique<SemiConductorGridTile>(GetPos(), GetFacing(), GetSize());
+    clone->SetActivation(GetActivation());
+    clone->SetDefaultActivation(GetDefaultActivation());
+    
+    // Copy additional internal state
+    auto* typedClone = static_cast<SemiConductorGridTile*>(clone.get());
+    typedClone->internalState = this->internalState;
+    
+    return clone;
+  }
 };
 
 // Button: Momentary signal source
@@ -81,6 +120,13 @@ class ButtonGridTile : public GridTile {
   std::string_view TileTypeName() const override { return "Button"; }
   bool IsEmitter() const override { return false; }
   int GetTileId() const override { return 4; }
+  
+  std::unique_ptr<GridTile> Clone() const override {
+    auto clone = std::make_unique<ButtonGridTile>(GetPos(), GetFacing(), GetSize());
+    clone->SetActivation(GetActivation());
+    clone->SetDefaultActivation(GetDefaultActivation());
+    return clone;
+  }
 };
 
 // --- InverterGridTile: Inverts the signal from the base GridTile ---
@@ -100,6 +146,13 @@ class InverterGridTile : public GridTile {
   std::string_view TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
   int GetTileId() const override { return 5; }
+  
+  std::unique_ptr<GridTile> Clone() const override {
+    auto clone = std::make_unique<InverterGridTile>(GetPos(), GetFacing(), GetSize());
+    clone->SetActivation(GetActivation());
+    clone->SetDefaultActivation(GetDefaultActivation());
+    return clone;
+  }
 };
 
 }  // namespace ElecSim

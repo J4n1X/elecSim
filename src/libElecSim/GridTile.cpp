@@ -74,7 +74,13 @@ GridTile::GridTile(olc::vi2d pos, Direction facing, float size,
 }
 
 void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
-                    float screenSize) {
+                    float screenSize, int alpha) {
+  // Get colors based on activation state and alpha
+  olc::Pixel activeColor = this->activeColor;
+  olc::Pixel inactiveColor = this->inactiveColor;
+  activeColor.a = alpha;
+  inactiveColor.a = alpha;
+
   renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
                           activated ? activeColor : inactiveColor);
   auto [p1, p2, p3] = GetTrianglePoints(screenPos, screenSize, facing);
@@ -84,10 +90,6 @@ void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
 
 void GridTile::SetFacing(Direction newFacing) {
   if (facing == newFacing) return;  // No change in facing
-
-  // Calculate the rotation amount as difference between new and old facing
-  int rotationAmount =
-      (4 + static_cast<int>(newFacing) - static_cast<int>(facing)) % 4;
   facing = newFacing;
 
   // Store old directions

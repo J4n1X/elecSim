@@ -1,10 +1,5 @@
-#include <cstddef>
-#include <cstdio>
-#include <memory>
-#include <sstream>
+#include <ranges>
 #include <string>
-#include <vector>
-#include <filesystem>
 
 #include "Grid.h"
 #include "GridTileTypes.h"
@@ -22,8 +17,6 @@ class Game : public olc::PixelGameEngine {
     // Print class sizes on startup
   }
   ~Game() {}
-
-  // Print memory sizes of all tile classes (for debugging)
   void PrintClassSizes() {
     ConsoleOut() << "\n=== Class Memory Sizes ===\n";
     ConsoleOut() << "Base GridTile: " << sizeof(GridTile) << " bytes\n";
@@ -63,15 +56,22 @@ class Game : public olc::PixelGameEngine {
   bool engineRunning = true;  // If this is false, the game quits
   bool consoleLogging =
       false;  // If this is true, stdout is redirected to the console
+  bool selectionActive = false;  // If true, selection is active (duh)
   int updatesPerTick = 0;
+
+  // --- Highlight colors ---
+  olc::Pixel highlightColor = olc::RED;
 
   // --- Prompt values ---
   std::string promptText = "";                            // Text for prompt
   std::function<void(std::string)> promptCall = nullptr;  // Callback for prompt
 
   // --- Placement logic ---
+  olc::vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
   olc::vf2d lastPlacedPos = {0.0f, 0.0f};  // Prevents overwriting same tile
-  std::unique_ptr<GridTile> brushTile;     // Next tile to be placed
+  std::vector<std::unique_ptr<GridTile>>
+      tileBuffer;  // Selected tiles for operations (stored as unique_ptr
+                   // copies)
   int selectedBrushIndex = 1;
   Direction selectedBrushFacing = Direction::Top;
 
@@ -95,38 +95,130 @@ class Game : public olc::PixelGameEngine {
     paused = true;
     engineRunning = true;
     lastPlacedPos = olc::vf2d(0.0f, 0.0f);
-    brushTile = nullptr;
     selectedBrushIndex = 1;
     selectedBrushFacing = Direction::Top;
-    CreateBrushTile();  // Initialize brush tile; by default it's a wire
+    CreateBrushTile();  // Initialize tile buffer with default brush tile
     return engineRunning;
   }
 
-  // --- Brush tile creation ---
+  // --- Create tile for placing in the buffer ---
   void CreateBrushTile() {
+    // Clear the current buffer
+    tileBuffer.clear();
+
+    // Create a new tile based on the selected type
+    std::unique_ptr<GridTile> newTile = nullptr;
+
     switch (selectedBrushIndex) {
       case 1:
-        brushTile = std::make_unique<WireGridTile>();
+        newTile = std::make_unique<WireGridTile>();
+        std::cout << "Selected Wire tile" << std::endl;
         break;
       case 2:
-        brushTile = std::make_unique<JunctionGridTile>();
+        newTile = std::make_unique<JunctionGridTile>();
+        std::cout << "Selected Junction tile" << std::endl;
         break;
       case 3:
-        brushTile = std::make_unique<EmitterGridTile>();
+        newTile = std::make_unique<EmitterGridTile>();
+        std::cout << "Selected Emitter tile" << std::endl;
         break;
       case 4:
-        brushTile = std::make_unique<SemiConductorGridTile>();
+        newTile = std::make_unique<SemiConductorGridTile>();
+        std::cout << "Selected Semiconductor tile" << std::endl;
         break;
       case 5:
-        brushTile = std::make_unique<ButtonGridTile>();
+        newTile = std::make_unique<ButtonGridTile>();
+        std::cout << "Selected Button tile" << std::endl;
         break;
       case 6:
-        brushTile = std::make_unique<InverterGridTile>();
+        newTile = std::make_unique<InverterGridTile>();
+        std::cout << "Selected Inverter tile" << std::endl;
         break;
       default:
-        brushTile = nullptr;
-        break;
+        // Leave tileBuffer empty if no valid selection
+        std::cout << "No tile selected" << std::endl;
+        return;
     }
+
+    // Set the facing direction
+    newTile->SetFacing(selectedBrushFacing);
+
+    // Add to buffer
+    tileBuffer.push_back(std::move(newTile));
+  }
+
+  // | 0 1 0 |
+  // | 1 0 1|
+  // Should turn to
+  // | 1 0 |
+  // | 0 1 |
+  // | 1 0 |
+  // So the coords are
+  // (1, 0) -> (1, 1)
+  // (0, 1) -> (0, 0)
+  // (2, 1) -> (0, 2)
+  // But a rotation matrix does not support non-square matrices.
+  // Thus, we expand into a square matrix, and then, in the end, justify.
+  void RotateBufferTiles() {
+    olc::vi2d minPos = {INT_MAX, INT_MAX};
+    olc::vi2d maxPos = {INT_MIN, INT_MIN};
+
+    // Rotate all tiles in the buffer to the next facing direction
+    Direction newFacing =
+        static_cast<Direction>((static_cast<int>(selectedBrushFacing) + 1) %
+                               static_cast<int>(Direction::Count));
+
+    if (selectedBrushFacing == newFacing) {
+      throw std::runtime_error(
+          "New facing should never be the same as the old facing");
+    }
+    selectedBrushFacing = newFacing;
+
+    for (const auto& tile : tileBuffer) {
+      olc::vi2d pos = tile->GetPos();
+      maxPos.x = std::max(maxPos.x, pos.x);
+      maxPos.y = std::max(maxPos.y, pos.y);
+    }
+    // Calculate width and height of the bounding box (must be square, so adjust
+    // if needed)
+    int boxSize = std::max(maxPos.x, maxPos.y);
+
+    // Apply rotation to each tile
+    for (auto& tile : tileBuffer) {
+      olc::vi2d rotatedRelPos = {0, 0};
+      int newX = 0, newY = 0;
+      olc::vi2d relPos = tile->GetPos();
+      newY = relPos.x;
+      newX = boxSize - relPos.y;
+      rotatedRelPos = olc::vi2d(newX, newY);
+      rotatedRelPos.x = std::abs(rotatedRelPos.x);
+      rotatedRelPos.y = std::abs(rotatedRelPos.y);
+      minPos.x = std::min(minPos.x, rotatedRelPos.x);
+      minPos.y = std::min(minPos.y, rotatedRelPos.y);
+      tile->SetPos(rotatedRelPos);
+    }
+
+    // Justify - get the minimum
+    olc::vi2d adjustVec = {0, 0};
+    if (minPos.x > 0) {
+      adjustVec.x = minPos.x;
+    }
+    if (minPos.y > 0) {
+      adjustVec.y = minPos.y;
+    }
+    for (auto& tile : tileBuffer) {
+      auto oldPos = tile->GetPos();
+      auto oldFacing = tile->GetFacing();
+      tile->SetPos(oldPos - adjustVec);
+      tile->SetFacing(GridTile::RotateDirection(oldFacing, Direction::Right));
+    }
+    std::cout << "Rotated tile buffer to facing: "
+              << static_cast<int>(selectedBrushFacing) << std::endl;
+  }
+
+  void ClearBuffer() {
+    tileBuffer.clear();
+    std::cout << "Cleared tile buffer" << std::endl;
   }
 
   // --- Parse number key input (0-9) ---
@@ -141,7 +233,7 @@ class Game : public olc::PixelGameEngine {
   }
 
   // --- User input processing (delegates to helpers) ---
-  void ProcessUserInput(olc::vf2d& alignedWorldPos) {
+  void ProcessUserInput(olc::vi2d& alignedWorldPos) {
     // If we're in text entry mode, we can't process this.
     if (IsTextEntryEnabled()) return;
 
@@ -157,7 +249,7 @@ class Game : public olc::PixelGameEngine {
 
     HandleCameraAndZoom(selTileXIndex, selTileYIndex, hoverWorldPos);
 
-    HandleTileInteractions(alignedWorldPos, hoverWorldPos);
+    HandleTileInteractions(alignedWorldPos);
 
     HandleSaveLoad();
 
@@ -241,9 +333,80 @@ class Game : public olc::PixelGameEngine {
     NFD::Quit();
   }
 
+  // --- Tile selection and clipboard operations ---
+  void CopyTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
+    // This sets the original facing direction to Top
+    selectedBrushFacing = Direction::Top;
+
+    // Get all tiles in the selection area as weak pointers
+    auto weakSelection = grid.GetSelection(startIndex, endIndex);
+
+    // Clear the current buffer
+    tileBuffer.clear();
+
+    // Create actual copies (clones) of the tiles and store them in our buffer
+    for (auto& weakTile : weakSelection) {
+      if (weakTile.expired()) continue;
+      if (auto tilePtr = weakTile.lock()) {
+        auto retTile = tilePtr->Clone();
+        retTile->SetPos(retTile->GetPos() - startIndex);  // Adjust position
+        tileBuffer.push_back(std::move(retTile));
+      }
+    }
+
+    // Log selection information to console
+    std::cout << "Copied tiles from selection: "
+              << "Start: " << startIndex << ", End: " << endIndex
+              << ", Count: " << tileBuffer.size() << std::endl;
+  }
+
+  void PasteTiles(const olc::vi2d& pastePosition) {
+    // Check if we have something to paste
+    if (tileBuffer.empty()) {
+      return;  // Early return if buffer is empty
+    }
+
+    // Copy each tile in the selection
+    for (const auto& tile : tileBuffer) {
+      // Create a deep copy of the tile using Clone method
+      std::unique_ptr<GridTile> newTile = tile->Clone();
+
+      // Calculate new position relative to paste position
+      auto newPos = pastePosition + tile->GetPos();
+      newTile->SetPos(newPos);
+
+      // Add the new tile to the grid
+      bool isEmitter = newTile->IsEmitter();
+      grid.SetTile(newPos, std::move(newTile), isEmitter);
+    }
+
+    grid.ResetSimulation();
+    std::cout << "Pasted tiles at position: " << pastePosition << std::endl;
+  }
+
+  void CutTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
+    // First copy the tiles to buffer
+    CopyTiles(startIndex, endIndex);
+
+    // Then delete them from the grid
+    // Ensure startIndex is actually the top-left corner
+    olc::vi2d topLeft = startIndex.min(endIndex);
+    olc::vi2d bottomRight = startIndex.max(endIndex);
+
+    // Delete all tiles in the selection rectangle
+    for (int y = topLeft.y; y <= bottomRight.y; y++) {
+      for (int x = topLeft.x; x <= bottomRight.x; x++) {
+        olc::vi2d pos(x, y);
+        grid.EraseTile(pos);
+      }
+    }
+
+    grid.ResetSimulation();
+    std::cout << "Cut tiles from selection: "
+              << "Start: " << startIndex << ", End: " << endIndex << std::endl;
+  }
   // --- Tile placement, removal, and interaction ---
-  void HandleTileInteractions(const olc::vf2d& alignedWorldPos,
-                              const olc::vf2d& hoverWorldPos) {
+  void HandleTileInteractions(const olc::vi2d& alignedWorldPos) {
     // Building mode controls
     if (paused) {
       // Select brush
@@ -252,21 +415,52 @@ class Game : public olc::PixelGameEngine {
         selectedBrushIndex = numInput;
         CreateBrushTile();
       }
-      // Change facing
-      if (GetKey(olc::Key::R).bPressed) {
-        selectedBrushFacing =
-            static_cast<Direction>((static_cast<int>(selectedBrushFacing) + 1) %
-                                   static_cast<int>(Direction::Count));
+
+      // Start selection
+      if (GetKey(olc::Key::CTRL).bPressed && !selectionActive) {
+        // hoverWorldPos is already aligned to grid, so just downcast to vi2d
+        selectionStartIndex = alignedWorldPos;
+        selectionActive = true;
       }
-      // Place tile (left click)
-      if (brushTile != nullptr) {
+      // Do something with the selection
+      if (GetKey(olc::Key::CTRL).bHeld && selectionActive) {
+        // Update the selection rectangle
+        auto endTileIndex = alignedWorldPos;
+        // Copying
+        if (GetKey(olc::Key::C).bPressed) {
+          CopyTiles(selectionStartIndex, endTileIndex);
+        }
+        // Pasting
+        if (GetKey(olc::Key::V).bPressed) {
+          PasteTiles(selectionStartIndex);
+        }
+        // Cutting
+        if (GetKey(olc::Key::X).bPressed) {
+          CutTiles(selectionStartIndex, endTileIndex);
+        }
+      }
+
+      // End selection
+      if (GetKey(olc::Key::CTRL).bReleased && selectionActive) {
+        selectionActive = false;
+      }
+
+      // Change facing for all tiles in buffer
+      if (GetKey(olc::Key::R).bPressed) {
+        RotateBufferTiles();
+      }
+
+      // Clear buffer with P (when not exiting the app)
+      if (GetKey(olc::Key::P).bPressed) {
+        ClearBuffer();
+      }
+      // Place tiles from buffer (left click)
+      if (!tileBuffer.empty()) {
         if (GetMouse(0).bPressed ||
             (GetMouse(0).bHeld && lastPlacedPos != alignedWorldPos)) {
-          brushTile->SetPos(alignedWorldPos);
-          brushTile->SetFacing(selectedBrushFacing);
-          bool isEmitter = brushTile->IsEmitter();
-          grid.SetTile(alignedWorldPos, std::move(brushTile), isEmitter);
-          CreateBrushTile();
+          // Paste buffer
+          PasteTiles(alignedWorldPos);
+
           lastPlacedPos = alignedWorldPos;
           grid.ResetSimulation();
         }
@@ -318,41 +512,126 @@ class Game : public olc::PixelGameEngine {
     }
 
     // User input
-    olc::vf2d highlightWorldPos = {0.0f, 0.0f};
+    olc::vi2d highlightWorldPos = {0, 0};
     ProcessUserInput(highlightWorldPos);
 
     if (paused) updatesPerTick = 0;
 
     // Draw grid and UI
-    int drawnTiles = grid.Draw(this, &highlightWorldPos);
-    if (!IsTextEntryEnabled()) {
-      // Status string
-      std::stringstream ss;
-      ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ")"
-         << " Selected: "
-         << (brushTile != nullptr ? brushTile->TileTypeName() : "None") << "; "
-         << "Facing: "
-         << (selectedBrushFacing == Direction::Top      ? "Top"
-             : selectedBrushFacing == Direction::Right  ? "Right"
-             : selectedBrushFacing == Direction::Bottom ? "Bottom"
-                                                        : "Left")
-         << "; " << (paused ? "Paused" : "; Running") << '\n'
-         << "Tiles: " << grid.GetTileCount() << " (" << drawnTiles << " visible"
-         << ")" << "; "
-         << "Updates: " << updatesPerTick << " per tick" << '\n'
-         << "Press ',' to increase and '.' to decrease speed";
+    int drawnTiles = grid.Draw(this);
 
-      SetDrawTarget((uint8_t)(uiLayer & 0x0F));
-      Clear(olc::BLANK);
-      DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
+    if (selectionActive) {
+      olc::vi2d start = selectionStartIndex;
+      olc::vi2d end = highlightWorldPos;
+      // Ensure start is the top-left and end is the bottom-right
+      // We also need to encount for entering the negative domain
+      olc::vi2d topLeft = start.min(end);
+      olc::vi2d bottomRight = start.max(end);
+
+      olc::vi2d gridSize = bottomRight - topLeft + olc::vi2d(1, 1);
+      if (gridSize.x < 0 || gridSize.y < 0) {
+        throw std::runtime_error(
+            "Selection rectangle has negative size, this should not happen");
+      }
+      olc::vf2d posScreen = grid.WorldToScreenFloating(topLeft);
+      olc::vf2d sizeScreen = {gridSize.x * grid.GetRenderScale(),
+                              gridSize.y * grid.GetRenderScale()};
+      SetDrawTarget(uiLayer);
+      DrawRectDecal(posScreen, sizeScreen, highlightColor);
     } else {
-      // Freeze the program and show prompt
-      paused = true;
-      auto outputText = promptText + " " + TextEntryGetString();
-      SetDrawTarget((uint8_t)(uiLayer & 0x0F));
-      Clear(olc::BLANK);
-      DrawString(olc::vi2d(0, 0), outputText, olc::BLACK, 2);
+      SetDrawTarget(uiLayer);
+      DrawRectDecal(grid.WorldToScreenFloating(highlightWorldPos),
+                    {grid.GetRenderScale(), grid.GetRenderScale()},
+                    highlightColor);
     }
+
+    // Draw the current buffer tiles half transparent (preview)
+    // TODO: We should move the scale variables out of the Grid, it has no right
+    // to manage those
+    if (!tileBuffer.empty() && !selectionActive) {
+      // First, show a light rectangular highlight around the entire buffer area
+      // if multiple tiles
+      if (tileBuffer.size() > 1) {
+        // Calculate bounding box of all tiles in buffer
+        olc::vi2d minPos = {INT_MAX, INT_MAX};
+        olc::vi2d maxPos = {INT_MIN, INT_MIN};
+
+        for (const auto& tile : tileBuffer) {
+          olc::vi2d relPos = tile->GetPos() + highlightWorldPos;
+          minPos.x = std::min(minPos.x, relPos.x);
+          minPos.y = std::min(minPos.y, relPos.y);
+          maxPos.x = std::max(maxPos.x, relPos.x);
+          maxPos.y = std::max(maxPos.y, relPos.y);
+        }
+
+        // Draw highlight for the bounding box
+        olc::vi2d size = maxPos - minPos + olc::vi2d(1, 1);
+        olc::vf2d sizeScreen = {size.x * grid.GetRenderScale(),
+                                size.y * grid.GetRenderScale()};
+
+        olc::vf2d topLeftScreen =
+            grid.WorldToScreenFloating(highlightWorldPos + minPos);
+
+        SetDrawTarget(uiLayer);
+        DrawRectDecal(
+            topLeftScreen, sizeScreen,
+            olc::Pixel(255, 255, 0, 64));  // Light yellow with transparency
+      }
+
+      // Then draw each tile with transparency
+      for (const auto& tile : tileBuffer) {
+        // Calculate position for preview
+        auto previewPos = tile->GetPos() + highlightWorldPos;
+
+        // Draw with transparency
+        tile->Draw(this, grid.WorldToScreen(previewPos), grid.GetRenderScale(),
+                   128);
+      }
+    }
+
+    // Status string
+    std::stringstream ss;
+    ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ")"
+       << " Buffer: ";
+
+    if (tileBuffer.empty()) {
+      ss << "Empty";
+    } else if (tileBuffer.size() == 1) {
+      ss << tileBuffer[0]->TileTypeName().data();
+    } else {
+      ss << tileBuffer.size() << " tiles";
+
+      // Count tile types
+      std::map<std::string, int> typeCounts;
+      for (const auto& tile : tileBuffer) {
+        typeCounts[std::string(tile->TileTypeName())]++;
+      }
+
+      ss << " (";
+      bool first = true;
+      for (const auto& [type, count] : typeCounts) {
+        if (!first) ss << ", ";
+        ss << count << " " << type;
+        first = false;
+      }
+      ss << ")";
+    }
+
+    ss << "; "
+       << "Facing: "
+       << (selectedBrushFacing == Direction::Top      ? "Top"
+           : selectedBrushFacing == Direction::Right  ? "Right"
+           : selectedBrushFacing == Direction::Bottom ? "Bottom"
+                                                      : "Left")
+       << "; " << (paused ? "Paused" : "; Running") << '\n'
+       << "Tiles: " << grid.GetTileCount() << " (" << drawnTiles << " visible"
+       << ")" << "; "
+       << "Updates: " << updatesPerTick << " per tick" << '\n'
+       << "Press ',' to increase and '.' to decrease speed";
+
+    SetDrawTarget((uint8_t)(uiLayer & 0x0F));
+    Clear(olc::BLANK);
+    DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
 
     return engineRunning;
   }
@@ -388,7 +667,7 @@ class Game : public olc::PixelGameEngine {
       ConsoleOut() << "Available commands: exit, pause, reset, clear, new, help"
                    << std::endl;
     } else {
-      ConsoleOut()  << "Unknown command: " << command << std::endl;
+      ConsoleOut() << "Unknown command: " << command << std::endl;
     }
     return true;
   }
@@ -406,9 +685,9 @@ const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
 // --- Main entry point ---
 int main(int argc, char** argv) {
   (void)argc;
-  if(argv[1] != nullptr){
+  if (argv[1] != nullptr) {
     std::string arg = argv[1];
-    if(arg == "dry"){
+    if (arg == "dry") {
       std::cout << "Dry run mode enabled. No GUI will be created." << std::endl;
       return 0;
     }

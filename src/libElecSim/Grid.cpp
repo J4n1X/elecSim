@@ -3,16 +3,17 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <ranges>
 
 namespace ElecSim {
 
 Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
            int uiLayer, int gameLayer)
     : renderWindow(size),
-      renderScale(renderScale),
-      renderOffset(renderOffset),
       uiLayer(uiLayer),
-      gameLayer(gameLayer) {
+      gameLayer(gameLayer),
+      renderScale(renderScale),
+      renderOffset(renderOffset) {
   std::cout << "Grid initialized with size: " << size.x << "x" << size.y
             << ", renderScale: " << renderScale
             << ", renderOffset: " << renderOffset.x << ", " << renderOffset.y
@@ -127,7 +128,7 @@ void Grid::ResetSimulation() {
   }
 }
 
-int Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
+int Grid::Draw(olc::PixelGameEngine* renderer) {
   if (!renderer) throw std::runtime_error("Grid has no renderer available");
 
   // Clear Background
@@ -153,18 +154,25 @@ int Grid::Draw(olc::PixelGameEngine* renderer, olc::vf2d* highlightPos) {
     }
 
     tile->Draw(renderer, screenPos, spriteSize);
-    // renderer->SetDrawTarget((uint8_t)gameLayer);
-    // renderer->DrawSprite(screenPos, &buffer, 1);
     drawnTiles++;
   }
 
-  // Draw highlight if provided
-  if (highlightPos) {
-    olc::vf2d screenPos = WorldToScreenFloating(*highlightPos);
-    renderer->DrawRectDecal(screenPos, olc::vf2d(renderScale, renderScale),
-                            highlightColor);
-  }
+  // Highlight drawing has been moved to the Game class
   return drawnTiles;
+}
+
+void Grid::SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile,
+                   bool emitter) {
+  tiles.insert_or_assign(pos, std::move(tile));
+  if (emitter) {
+    emitters.push_back(tiles.at(pos));
+  }
+}
+
+void Grid::SetSelection(olc::vi2d startPos, olc::vi2d endPos) {
+  // TODO: Implement this function instead of repeatedly calling SetTile
+  (void)startPos;  // Avoid unused variable warning
+  (void)endPos;    // Avoid unused variable warning
 }
 
 olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
@@ -183,8 +191,8 @@ olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
                    (pos.y - renderOffset.y) / renderScale);
 }
 
-olc::vf2d Grid::AlignToGrid(const olc::vf2d& pos) {
-  return olc::vf2d(std::floor(pos.x), std::floor(pos.y));
+olc::vi2d Grid::AlignToGrid(const olc::vf2d& pos) {
+  return olc::vf2d(static_cast<int>(std::floor(pos.x)), static_cast<int>(std::floor(pos.y)));
 }
 
 olc::vf2d Grid::CenterOfSquare(const olc::vf2d& pos) {
@@ -194,6 +202,27 @@ olc::vf2d Grid::CenterOfSquare(const olc::vf2d& pos) {
 std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(olc::vi2d pos) {
   auto tileIt = tiles.find(pos);
   return tileIt != tiles.end() ? std::optional{tileIt->second} : std::nullopt;
+}
+
+std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(olc::vi2d startPos,
+                                                        olc::vi2d endPos) {
+  // ensure StartPos is actually the top-left corner
+  olc::vi2d topLeft = startPos.min(endPos);
+  olc::vi2d bottomRight = startPos.max(endPos);
+  // lambda to select tiles in the area
+  auto selectTilesInArea = [&](const auto& pair) {
+    const auto& [pos, tile] = pair;
+    return (pos.x >= topLeft.x && pos.x <= bottomRight.x &&
+            pos.y >= topLeft.y && pos.y <= bottomRight.y);
+  };
+  auto filtered = tiles | std::ranges::views::filter(selectTilesInArea);
+  std::vector<std::weak_ptr<GridTile>> selection = {};
+  for (const auto& [_, tile] : filtered) {
+    (void)_;
+    // cast to weak
+    selection.push_back(std::weak_ptr<GridTile>(tile));
+  }
+  return selection;
 }
 
 void Grid::Save(const std::string& filename) {

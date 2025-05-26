@@ -2,7 +2,6 @@
 
 #include <array>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -84,8 +83,8 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 
   virtual ~GridTile() {};
 
-  void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
-            float screenSize);
+  virtual void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
+            float screenSize, int alpha = 255);
   virtual std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) = 0;
   virtual std::vector<SignalEvent> Interact() { return {}; }
 
@@ -113,6 +112,9 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual std::string_view TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
   virtual int GetTileId() const = 0;
+  
+  // Virtual clone method for copying tiles
+  virtual std::unique_ptr<GridTile> Clone() const = 0;
 
   std::array<char, GRIDTILE_BYTESIZE> Serialize();
   static std::unique_ptr<GridTile> Deserialize(

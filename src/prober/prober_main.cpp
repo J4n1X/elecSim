@@ -1,5 +1,10 @@
-#include "hope.h"
+#include <fstream>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
+#include "hope.h"
 #define OLC_PGE_APPLICATION
 #include "Grid.h"
 #include "olcPixelGameEngine.h"
@@ -35,12 +40,6 @@ hope_t initParser(const char* prog_name, const char* prog_desc) {
 // Stepping in the simulation: s
 // Reading: r x y (1/0)
 // If the result of a read is not as expected, the test fails.
-#include <fstream>
-#include <sstream>
-#include <stdexcept>
-#include <string>
-#include <vector>
-
 class TestParser {
  public:
   enum class CommandType { Write, Interact, Step, Read, Comment };
