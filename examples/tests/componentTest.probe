@@ -32,6 +32,8 @@ r 2 5 0
 i 2 0
 s
 r 2 5 1
+r 1 5 1
+r 3 5 1
 
 #-Testing Semiconductors: 
 #-Base state: 
@@ -80,3 +82,21 @@ r 7 5 1
 i 7 0
 i 8 0
 s
+
+#-Testing Inverters
+#---Variant 1: Default behavior
+r 10 5 1
+#---Variant 2: Activated behavior
+i 10 0
+s 
+r 10 5 0
+
+#-Testing Crossings
+#---Variant 1
+i 12 0
+s
+r 14 5 1
+i 13 0
+s
+r 13 5 1
+

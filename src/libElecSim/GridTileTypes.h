@@ -155,4 +155,32 @@ class InverterGridTile : public GridTile {
   }
 };
 
+// Crossing: Allows signals to cross without interference
+class CrossingGridTile : public GridTile {
+ public:
+  CrossingGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+                  Direction facing = Direction::Top, float size = 1.0f);
+
+  void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
+            float screenSize, int alpha = 255) override;
+  std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  
+  std::string_view TileTypeName() const override { return "Crossing"; }
+  bool IsEmitter() const override { return false; }
+  int GetTileId() const override { return 6; }
+  
+  std::unique_ptr<GridTile> Clone() const override {
+    auto clone = std::make_unique<CrossingGridTile>(GetPos(), GetFacing(), GetSize());
+    clone->SetActivation(GetActivation());
+    clone->SetDefaultActivation(GetDefaultActivation());
+    
+    // Copy the input states
+    for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+      clone->inputStates[i] = this->inputStates[i];
+    }
+    
+    return clone;
+  }
+};
+
 }  // namespace ElecSim

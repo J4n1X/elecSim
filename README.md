@@ -27,7 +27,7 @@ The compiled binaries can be found in the newly created "bin" directory.
 ## Using the program
 
 The controls are as follows: 
-  - 1-6: Select your tile. The order is: Wire, Junction, Emitter, Semiconductor, Button
+  - 1-7: Select your tile. The order is: Wire, Junction, Emitter, Semiconductor, Button
   - Up, Down, Left, Right: Move the camera
   - J: Zoom in
   - K: Zoom out
@@ -59,6 +59,8 @@ Button: Does nothing, unless interacted with, in which case it will pulse once.
 
 Inverter: Does what the name implies, and inverts a signal, outputting it in the direction of the facing.
 
+Crossing: Takes one input from one side, and puts it out the other. This allows wires to cross. Get messy!
+
 ### Examples
 There are files in the "examples subdirectory to demonstrate the function of the different components. 
 
@@ -69,7 +71,7 @@ tests.grid: Contains different small circuits which demonstrate the function of 
 ## ToDos
 Sorted in order of how important I deem them to the proper function of the game.
   - Add editing tools: Area selection, copy, cut, paste, move around (DONE!)
-  - Add a crossing Tile to allow for more flexible building.
+  - Add a crossing ile to allow for more flexible building. (DONE!)
   - Write more tests
   - Draw Sprites for the tiles instead of just drawing them out of primitives
   - Dispatch game logic to another thread so there's more time to render for more tiles

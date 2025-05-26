@@ -160,7 +160,6 @@ std::unique_ptr<GridTile> GridTile::Deserialize(
   int posY = *reinterpret_cast<int*>(data.data() + sizeof(id) + sizeof(facing) +
                                      sizeof(posX));
   olc::vi2d pos = {posX, posY};
-
   std::unique_ptr<GridTile> tile;
   switch (id) {
     case 0:
@@ -180,6 +179,9 @@ std::unique_ptr<GridTile> GridTile::Deserialize(
       break;
     case 5:
       tile = std::make_unique<InverterGridTile>(pos, facing);
+      break;
+    case 6:
+      tile = std::make_unique<CrossingGridTile>(pos, facing);
       break;
     default:
       throw std::runtime_error("Unknown tile ID");

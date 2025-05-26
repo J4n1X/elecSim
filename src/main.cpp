@@ -68,7 +68,7 @@ class Game : public olc::PixelGameEngine {
 
   // --- Placement logic ---
   olc::vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
-  olc::vf2d lastPlacedPos = {0.0f, 0.0f};  // Prevents overwriting same tile
+  olc::vi2d lastPlacedPos = {0, 0};        // Prevents overwriting same tile
   std::vector<std::unique_ptr<GridTile>>
       tileBuffer;  // Selected tiles for operations (stored as unique_ptr
                    // copies)
@@ -108,7 +108,6 @@ class Game : public olc::PixelGameEngine {
 
     // Create a new tile based on the selected type
     std::unique_ptr<GridTile> newTile = nullptr;
-
     switch (selectedBrushIndex) {
       case 1:
         newTile = std::make_unique<WireGridTile>();
@@ -133,6 +132,10 @@ class Game : public olc::PixelGameEngine {
       case 6:
         newTile = std::make_unique<InverterGridTile>();
         std::cout << "Selected Inverter tile" << std::endl;
+        break;
+      case 7:
+        newTile = std::make_unique<CrossingGridTile>();
+        std::cout << "Selected Crossing tile" << std::endl;
         break;
       default:
         // Leave tileBuffer empty if no valid selection
@@ -539,7 +542,6 @@ class Game : public olc::PixelGameEngine {
       SetDrawTarget(uiLayer);
       DrawRectDecal(posScreen, sizeScreen, highlightColor);
     } else {
-      // TODO: Make this encompass the tileBuffer area
       SetDrawTarget(uiLayer);
       DrawRectDecal(grid.WorldToScreenFloating(highlightWorldPos),
                     {grid.GetRenderScale(), grid.GetRenderScale()},
@@ -549,35 +551,33 @@ class Game : public olc::PixelGameEngine {
     // Draw the current buffer tiles half transparent (preview)
     // TODO: We should move the scale variables out of the Grid, it has no right
     // to manage those
+    // TODO: Actually finish implementing the bounding box highlight.
+
     if (!tileBuffer.empty() && !selectionActive) {
       // First, show a light rectangular highlight around the entire buffer area
       // if multiple tiles
-      if (tileBuffer.size() > 1) {
-        // Calculate bounding box of all tiles in buffer
-        olc::vi2d minPos = {INT_MAX, INT_MAX};
-        olc::vi2d maxPos = {INT_MIN, INT_MIN};
 
-        for (const auto& tile : tileBuffer) {
-          olc::vi2d relPos = tile->GetPos() + highlightWorldPos;
-          minPos.x = std::min(minPos.x, relPos.x);
-          minPos.y = std::min(minPos.y, relPos.y);
-          maxPos.x = std::max(maxPos.x, relPos.x);
-          maxPos.y = std::max(maxPos.y, relPos.y);
-        }
+      // if (tileBuffer.size() > 1) {
+      //   // Calculate bounding box of all tiles in buffer
+      //   olc::vi2d minPos = {INT_MAX, INT_MAX};
+      //   olc::vi2d maxPos = {INT_MIN, INT_MIN};
 
-        // Draw highlight for the bounding box
-        olc::vi2d size = maxPos - minPos + olc::vi2d(1, 1);
-        olc::vf2d sizeScreen = {size.x * grid.GetRenderScale(),
-                                size.y * grid.GetRenderScale()};
+      //   for (const auto& tile : tileBuffer) {
+      //     olc::vi2d relPos = tile->GetPos() + highlightWorldPos;
+      //     minPos.x = std::min(minPos.x, relPos.x);
+      //     minPos.y = std::min(minPos.y, relPos.y);
+      //     maxPos.x = std::max(maxPos.x, relPos.x);
+      //     maxPos.y = std::max(maxPos.y, relPos.y);
+      //   }
 
-        olc::vf2d topLeftScreen =
-            grid.WorldToScreenFloating(highlightWorldPos + minPos);
+      //   // Draw highlight for the bounding box
+      //   olc::vi2d size = maxPos - minPos + olc::vi2d(1, 1);
+      //   olc::vf2d sizeScreen = {size.x * grid.GetRenderScale(),
+      //                           size.y * grid.GetRenderScale()};
 
-        SetDrawTarget(uiLayer);
-        DrawRectDecal(
-            topLeftScreen, sizeScreen,
-            olc::Pixel(255, 255, 0, 64));  // Light yellow with transparency
-      }
+      //   olc::vf2d topLeftScreen =
+      //       grid.WorldToScreenFloating(highlightWorldPos + minPos);
+      // }
 
       // Then draw each tile with transparency
       for (const auto& tile : tileBuffer) {

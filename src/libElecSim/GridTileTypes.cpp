@@ -211,4 +211,56 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   return {};
 }
 
+// --- CrossingGridTile Implementation ---
+
+CrossingGridTile::CrossingGridTile(olc::vi2d pos, Direction facing, float size)
+    : GridTile(pos, facing, size, false, olc::DARK_BLUE, olc::BLUE) {
+  // Allow receiving and outputting from all directions
+  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
+    canReceive[i] = true;
+    canOutput[i] = true;
+    inputStates[i] = false;
+  }
+}
+
+void CrossingGridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
+                          float screenSize, int alpha) {
+  // Get colors based on activation state and alpha
+  olc::Pixel activeColor = this->activeColor;
+  olc::Pixel inactiveColor = this->inactiveColor;
+  activeColor.a = alpha;
+  inactiveColor.a = alpha;
+  
+  // Draw the base square
+  renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
+                         activated ? activeColor : inactiveColor);
+  
+  // Draw crossing lines that touch the edges
+  float lineThickness = screenSize / 10.0f; // Adjust thickness as needed
+  
+  // Horizontal line - top left to bottom right
+  renderer->FillRectDecal(
+      olc::vf2d(screenPos.x, screenPos.y + (screenSize - lineThickness) / 2),
+      olc::vf2d(screenSize, lineThickness),
+      activated ? inactiveColor : activeColor);
+  
+  // Vertical line - top to bottom
+  renderer->FillRectDecal(
+      olc::vf2d(screenPos.x + (screenSize - lineThickness) / 2, screenPos.y),
+      olc::vf2d(lineThickness, screenSize),
+      activated ? inactiveColor : activeColor);
+}
+
+std::vector<SignalEvent> CrossingGridTile::ProcessSignal(const SignalEvent& signal) {
+  // Update the input state for the direction the signal came from
+  Direction inputDir = FlipDirection(signal.fromDirection);
+  inputStates[static_cast<int>(inputDir)] = signal.isActive;
+  
+  // In a crossing, we want to output signals to the opposite side
+  Direction outputDir = FlipDirection(inputDir);
+  
+  // Return a signal event to the opposite direction
+  return {SignalEvent(pos, outputDir, signal.isActive)};
+}
+
 }  // namespace ElecSim
