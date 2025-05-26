@@ -539,6 +539,7 @@ class Game : public olc::PixelGameEngine {
       SetDrawTarget(uiLayer);
       DrawRectDecal(posScreen, sizeScreen, highlightColor);
     } else {
+      // TODO: Make this encompass the tileBuffer area
       SetDrawTarget(uiLayer);
       DrawRectDecal(grid.WorldToScreenFloating(highlightWorldPos),
                     {grid.GetRenderScale(), grid.GetRenderScale()},

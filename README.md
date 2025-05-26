@@ -69,6 +69,7 @@ tests.grid: Contains different small circuits which demonstrate the function of 
 ## ToDos
 Sorted in order of how important I deem them to the proper function of the game.
   - Add editing tools: Area selection, copy, cut, paste, move around (DONE!)
+  - Add a crossing Tile to allow for more flexible building.
   - Write more tests
   - Draw Sprites for the tiles instead of just drawing them out of primitives
   - Dispatch game logic to another thread so there's more time to render for more tiles
