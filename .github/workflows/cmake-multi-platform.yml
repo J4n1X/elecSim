@@ -50,7 +50,9 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
     - name: Install Dependencies (Linux)
       if: runner.os == 'Linux'
-      run: sudo apt install libgtk-3-dev -y
+      run: |
+        sudo apt update
+        sudo apt install libgtk-3-dev -y
     
     - name: Fetch Dependencies
       run: |

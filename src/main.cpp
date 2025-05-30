@@ -1,11 +1,13 @@
+#include <format>
 #include <ranges>
 #include <string>
 
 #include "Grid.h"
 #include "GridTileTypes.h"
-#include "nfd.hpp"
+#include "MessageBox.h"
 
 #define OLC_PGE_APPLICATION
+#include "nfd.hpp"
 #include "olcPixelGameEngine.h"
 
 using namespace ElecSim;
@@ -13,7 +15,7 @@ using namespace ElecSim;
 class Game : public olc::PixelGameEngine {
  public:
   Game() {
-    sAppName = "Electricity Simulator";
+    sAppName = std::format(appNameBaseFmt, "New File");
     // Print class sizes on startup
   }
   ~Game() {}
@@ -39,6 +41,8 @@ class Game : public olc::PixelGameEngine {
   static const olc::vf2d defaultRenderOffset;
   static constexpr float minRenderScale = 2.0f;
   static constexpr float maxRenderScale = 256.0f;
+  static constexpr std::string_view appNameBaseFmt =
+      "Electricity Simulator - {}";
 
   // --- Layer indices ---
   int uiLayer = 0;
@@ -50,23 +54,23 @@ class Game : public olc::PixelGameEngine {
 
   // --- Main grid ---
   Grid grid;
+  MessageBoxGui* unsavedChangesGui = nullptr;
 
   // --- Game state ---
-  bool paused = true;         // Simulation is paused, renderer is not
-  bool engineRunning = true;  // If this is false, the game quits
+  bool paused = true;          // Simulation is paused, renderer is not
+  bool engineRunning = false;  // If this is false, the game quits
   bool consoleLogging =
       false;  // If this is true, stdout is redirected to the console
-  bool selectionActive = false;  // If true, selection is active (duh)
+  bool selectionActive = false;
+  bool unsavedChanges = false;
   int updatesPerTick = 0;
+  std::string curFilename = "";
 
   // --- Highlight colors ---
   olc::Pixel highlightColor = olc::RED;
 
-  // --- Prompt values ---
-  std::string promptText = "";                            // Text for prompt
-  std::function<void(std::string)> promptCall = nullptr;  // Callback for prompt
-
   // --- Placement logic ---
+  bool isPlacing = false;
   olc::vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
   olc::vi2d lastPlacedPos = {0, 0};        // Prevents overwriting same tile
   std::vector<std::unique_ptr<GridTile>>
@@ -79,6 +83,7 @@ class Game : public olc::PixelGameEngine {
   bool OnUserCreate() override {
     // Print class sizes
     PrintClassSizes();
+    curFilename = std::filesystem::current_path().append("default.grid");
 
     gameLayer = CreateLayer();  // initialized as a black screen
 
@@ -92,11 +97,11 @@ class Game : public olc::PixelGameEngine {
 
     grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
                 defaultRenderOffset, uiLayer, gameLayer);
+    unsavedChangesGui = new MessageBoxGui(
+        this, "There are unsaved changes. Do you wish to save?",
+        defaultRenderScale * 5.0f, false);
     paused = true;
     engineRunning = true;
-    lastPlacedPos = olc::vf2d(0.0f, 0.0f);
-    selectedBrushIndex = 1;
-    selectedBrushFacing = Direction::Top;
     CreateBrushTile();  // Initialize tile buffer with default brush tile
     return engineRunning;
   }
@@ -215,8 +220,6 @@ class Game : public olc::PixelGameEngine {
       tile->SetPos(oldPos - adjustVec);
       tile->SetFacing(GridTile::RotateDirection(oldFacing, Direction::Right));
     }
-    std::cout << "Rotated tile buffer to facing: "
-              << static_cast<int>(selectedBrushFacing) << std::endl;
   }
 
   void ClearBuffer() {
@@ -237,9 +240,6 @@ class Game : public olc::PixelGameEngine {
 
   // --- User input processing (delegates to helpers) ---
   void ProcessUserInput(olc::vi2d& alignedWorldPos) {
-    // If we're in text entry mode, we can't process this.
-    if (IsTextEntryEnabled()) return;
-
     // 1. Mouse position and highlight
     auto selTileXIndex = GetMouseX();
     auto selTileYIndex = GetMouseY();
@@ -248,12 +248,10 @@ class Game : public olc::PixelGameEngine {
     alignedWorldPos = grid.AlignToGrid(hoverWorldPos);
 
     if (!engineRunning) return;
+
     HandlePauseAndSpeed();
-
     HandleCameraAndZoom(selTileXIndex, selTileYIndex, hoverWorldPos);
-
     HandleTileInteractions(alignedWorldPos);
-
     HandleSaveLoad();
 
     // When we want to open the console, the key is F1
@@ -299,41 +297,74 @@ class Game : public olc::PixelGameEngine {
     }
   }
 
-  // --- Save/load controls ---
-  void HandleSaveLoad() {
+  std::optional<std::string> OpenSaveDialog() {
     constexpr nfdfilteritem_t filterItem[] = {
         {"Grid files", "grid"},
     };
     NFD::Init();
     NFD::UniquePath resultPath;
-    std::string curPath = std::filesystem::current_path().string();
+    auto curDir = std::filesystem::path(curFilename).parent_path();
+    auto result =
+        NFD::SaveDialog(resultPath, filterItem, 1, curDir.c_str());
+    if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
+    std::string filename = resultPath.get();
+    if (filename == "") return std::nullopt;
+    NFD::Quit();
+    return std::optional(filename);
+  }
 
-    auto checkResultAndYield = [&](nfdresult_t result) {
-      std::string filename = "";
-      if (result == NFD_OKAY) {
-        filename = resultPath.get();
-      } else if (result == NFD_CANCEL) {
-        std::cout << "User cancelled the load dialog." << std::endl;
-      } else {
-        std::cerr << "Error: " << NFD::GetError() << std::endl;
-      }
-      return filename;
+  std::optional<std::string> OpenLoadDialog() {
+    constexpr nfdfilteritem_t filterItem[] = {
+        {"Grid files", "grid"},
     };
+    NFD::Init();
+    NFD::UniquePath resultPath;
+    auto curDir = std::filesystem::path(curFilename).parent_path();
+    auto result =
+        NFD::OpenDialog(resultPath, filterItem, 1, curDir.c_str());
+    if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
+    std::string filename = resultPath.get();
+    if (filename == "") return std::nullopt;
+    NFD::Quit();
+    return std::optional(filename);
+  }
+
+  bool SaveGrid() {
+    auto dialogResult = OpenSaveDialog();
+    if (dialogResult.has_value()) {
+      curFilename = dialogResult.value();
+      grid.Save(curFilename);
+      unsavedChanges = false;
+      sAppName = std::format(appNameBaseFmt, curFilename);
+      return true;
+    }
+    return false;
+  }
+
+  bool LoadGrid() {
+    auto dialogResult = OpenLoadDialog();
+    if (dialogResult.has_value()) {
+      curFilename = dialogResult.value();
+      grid.Load(curFilename);
+      unsavedChanges = false;
+      sAppName = std::format(appNameBaseFmt, curFilename);
+      return true;
+    }
+    return false;
+  }
+
+  // --- Save/load controls ---
+  void HandleSaveLoad() {
     if (GetKey(olc::Key::F2).bPressed) {
-      auto result = NFD::SaveDialog(resultPath, filterItem, 1, curPath.c_str());
-      std::string filename = checkResultAndYield(result);
-      if (filename != "") {
-        grid.Save(filename);
-      }
+      SaveGrid();
     }
     if (GetKey(olc::Key::F3).bPressed) {
-      auto result = NFD::OpenDialog(resultPath, filterItem, 1, curPath.c_str());
-      std::string filename = checkResultAndYield(result);
-      if (filename != "") {
-        grid.Load(filename);
+      if (unsavedChanges) {
+        unsavedChangesGui->Enable();
+      } else {
+        LoadGrid();
       }
     }
-    NFD::Quit();
   }
 
   // --- Tile selection and clipboard operations ---
@@ -358,9 +389,11 @@ class Game : public olc::PixelGameEngine {
     }
 
     // Log selection information to console
-    std::cout << "Copied tiles from selection: "
-              << "Start: " << startIndex << ", End: " << endIndex
-              << ", Count: " << tileBuffer.size() << std::endl;
+    std::cout << std::format(
+                     "Copied tiles from selection: "
+                     "Start: ({},{}), End: ({},{})",
+                     startIndex.x, startIndex.y, endIndex.x, endIndex.y)
+              << std::endl;
   }
 
   void PasteTiles(const olc::vi2d& pastePosition) {
@@ -384,7 +417,6 @@ class Game : public olc::PixelGameEngine {
     }
 
     grid.ResetSimulation();
-    std::cout << "Pasted tiles at position: " << pastePosition << std::endl;
   }
 
   void CutTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
@@ -405,8 +437,9 @@ class Game : public olc::PixelGameEngine {
     }
 
     grid.ResetSimulation();
-    std::cout << "Cut tiles from selection: "
-              << "Start: " << startIndex << ", End: " << endIndex << std::endl;
+    std::cout << std::format("Cut tiles from selection: Start: ({},{}), End: ({},{})",
+                             startIndex.x, startIndex.y, endIndex.x, endIndex.y)
+              << std::endl;
   }
   // --- Tile placement, removal, and interaction ---
   void HandleTileInteractions(const olc::vi2d& alignedWorldPos) {
@@ -459,13 +492,18 @@ class Game : public olc::PixelGameEngine {
       }
       // Place tiles from buffer (left click)
       if (!tileBuffer.empty()) {
-        if (GetMouse(0).bPressed ||
-            (GetMouse(0).bHeld && lastPlacedPos != alignedWorldPos)) {
-          // Paste buffer
-          PasteTiles(alignedWorldPos);
+        if (GetMouse(0).bPressed) isPlacing = true;
+        if (GetMouse(1).bReleased) isPlacing = false;
 
-          lastPlacedPos = alignedWorldPos;
-          grid.ResetSimulation();
+        if (isPlacing) {
+          if (GetMouse(0).bHeld && lastPlacedPos != alignedWorldPos) {
+            // Paste buffer
+            PasteTiles(alignedWorldPos);
+
+            lastPlacedPos = alignedWorldPos;
+            grid.ResetSimulation();
+            unsavedChanges = true;
+          }
         }
       }
       // Toggle default activation (right click)
@@ -497,32 +535,24 @@ class Game : public olc::PixelGameEngine {
     }
   }
 
-  // --- Main update loop ---
-  bool OnUserUpdate(float fElapsedTime) override {
-    // Handle window resizing
-    auto curScreenSize = GetWindowSize() / GetPixelSize();
-    if (grid.GetRenderWindow() != curScreenSize) {
-      std::cout << "Window has been resized to " << curScreenSize << std::endl;
-      grid.Resize(curScreenSize);
-      SetScreenSize(curScreenSize.x, curScreenSize.y);
+  // Draw the current buffer tiles half transparent (preview)
+  // TODO: We should move the scale variables out of the Grid, it has no right
+  // to manage those
+  void DrawTilePreviews(olc::vi2d highlightWorldPos) {
+    if (!tileBuffer.empty() && !selectionActive) {
+      // Then draw each tile with transparency
+      for (const auto& tile : tileBuffer) {
+        // Calculate position for preview
+        auto previewPos = tile->GetPos() + highlightWorldPos;
+
+        // Draw with transparency
+        tile->Draw(this, grid.WorldToScreen(previewPos), grid.GetRenderScale(),
+                   128);
+      }
     }
+  }
 
-    // Simulation step
-    accumulatedTime += fElapsedTime;
-    if (accumulatedTime > updateInterval && !paused) {
-      updatesPerTick = grid.Simulate();
-      accumulatedTime = 0;
-    }
-
-    // User input
-    olc::vi2d highlightWorldPos = {0, 0};
-    ProcessUserInput(highlightWorldPos);
-
-    if (paused) updatesPerTick = 0;
-
-    // Draw grid and UI
-    int drawnTiles = grid.Draw(this);
-
+  void DrawHighlight(olc::vi2d highlightWorldPos) {
     if (selectionActive) {
       olc::vi2d start = selectionStartIndex;
       olc::vi2d end = highlightWorldPos;
@@ -547,49 +577,9 @@ class Game : public olc::PixelGameEngine {
                     {grid.GetRenderScale(), grid.GetRenderScale()},
                     highlightColor);
     }
+  }
 
-    // Draw the current buffer tiles half transparent (preview)
-    // TODO: We should move the scale variables out of the Grid, it has no right
-    // to manage those
-    // TODO: Actually finish implementing the bounding box highlight.
-
-    if (!tileBuffer.empty() && !selectionActive) {
-      // First, show a light rectangular highlight around the entire buffer area
-      // if multiple tiles
-
-      // if (tileBuffer.size() > 1) {
-      //   // Calculate bounding box of all tiles in buffer
-      //   olc::vi2d minPos = {INT_MAX, INT_MAX};
-      //   olc::vi2d maxPos = {INT_MIN, INT_MIN};
-
-      //   for (const auto& tile : tileBuffer) {
-      //     olc::vi2d relPos = tile->GetPos() + highlightWorldPos;
-      //     minPos.x = std::min(minPos.x, relPos.x);
-      //     minPos.y = std::min(minPos.y, relPos.y);
-      //     maxPos.x = std::max(maxPos.x, relPos.x);
-      //     maxPos.y = std::max(maxPos.y, relPos.y);
-      //   }
-
-      //   // Draw highlight for the bounding box
-      //   olc::vi2d size = maxPos - minPos + olc::vi2d(1, 1);
-      //   olc::vf2d sizeScreen = {size.x * grid.GetRenderScale(),
-      //                           size.y * grid.GetRenderScale()};
-
-      //   olc::vf2d topLeftScreen =
-      //       grid.WorldToScreenFloating(highlightWorldPos + minPos);
-      // }
-
-      // Then draw each tile with transparency
-      for (const auto& tile : tileBuffer) {
-        // Calculate position for preview
-        auto previewPos = tile->GetPos() + highlightWorldPos;
-
-        // Draw with transparency
-        tile->Draw(this, grid.WorldToScreen(previewPos), grid.GetRenderScale(),
-                   128);
-      }
-    }
-
+  void DrawStatusString(olc::vi2d highlightWorldPos, int drawnTilesCount) {
     // Status string
     std::stringstream ss;
     ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ")"
@@ -625,23 +615,78 @@ class Game : public olc::PixelGameEngine {
            : selectedBrushFacing == Direction::Bottom ? "Bottom"
                                                       : "Left")
        << "; " << (paused ? "Paused" : "; Running") << '\n'
-       << "Tiles: " << grid.GetTileCount() << " (" << drawnTiles << " visible"
+       << "Tiles: " << grid.GetTileCount() << " (" << drawnTilesCount
+       << " visible"
        << ")" << "; "
        << "Updates: " << updatesPerTick << " per tick" << '\n'
        << "Press ',' to increase and '.' to decrease speed";
 
     SetDrawTarget((uint8_t)(uiLayer & 0x0F));
-    Clear(olc::BLANK);
     DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
-
-    return engineRunning;
   }
 
-  void OnTextEntryComplete(const std::string& text) override {
-    std::cout << "Text entry complete: " << text << std::endl;
-    if (promptCall) {
-      promptCall(text);
+  // --- Main update loop ---
+  bool OnUserUpdate(float fElapsedTime) override {
+    // Handle window resizing
+    auto curScreenSize = GetWindowSize() / GetPixelSize();
+    if (grid.GetRenderWindow() != curScreenSize) {
+      std::cout << std::format("Window resized to {}x{}", curScreenSize.x,
+                               curScreenSize.y)
+                << std::endl;
+      grid.Resize(curScreenSize);
+      SetScreenSize(curScreenSize.x, curScreenSize.y);
     }
+
+    // Simulation step
+    accumulatedTime += fElapsedTime;
+    if (accumulatedTime > updateInterval && !paused) {
+      updatesPerTick = grid.Simulate();
+      accumulatedTime = 0;
+    }
+
+    // User input
+    olc::vi2d highlightWorldPos = {0, 0};
+    if (!unsavedChangesGui->IsEnabled()) ProcessUserInput(highlightWorldPos);
+    auto guiResult = unsavedChangesGui->Update();
+
+    if (paused) updatesPerTick = 0;
+
+    // Draw grid and UI
+    SetDrawTarget(uiLayer);
+    Clear(olc::BLANK);
+    int drawnTiles = grid.Draw(this);
+    unsavedChangesGui->Draw();
+    if (!unsavedChangesGui->IsEnabled()) {
+      // Draw the other GUI elements
+      DrawHighlight(highlightWorldPos);
+      DrawTilePreviews(highlightWorldPos);
+      DrawStatusString(highlightWorldPos, drawnTiles);
+    }
+
+    if (guiResult != MessageBoxGui::Result::Nothing) {
+      switch (guiResult) {
+        case MessageBoxGui::Result::Yes:
+          if (!SaveGrid()) break;
+        case MessageBoxGui::Result::No:  // We can just fall through
+          // If engineRunning is false here, don't prompt to open another file
+          if (engineRunning) {
+            if (LoadGrid()) unsavedChanges = false;
+          } else {
+            unsavedChanges = false;
+          }
+          break;
+        case MessageBoxGui::Result::Cancel:
+          if (!engineRunning)  // Recover if this was a quit attempt
+            engineRunning = true;
+          break;
+      }
+      // When we press an option on the GUI, right after, it'll place a tile
+      // On the first frame after the GUI closes.
+      // Fixed by clearing the buffer, for now at least.
+      tileBuffer.clear();
+      unsavedChangesGui->Disable();
+    }
+    return engineRunning | unsavedChangesGui->IsEnabled();
   }
 
   bool OnConsoleCommand(const std::string& command) override {
@@ -674,8 +719,15 @@ class Game : public olc::PixelGameEngine {
   }
 
   bool OnUserDestroy() override {
+    if (unsavedChanges) {
+      engineRunning = false;
+      unsavedChangesGui->Enable();
+      return false;  // Don't quit yet.
+    }
     ConsoleCaptureStdOut(false);
     ConsoleOut() << std::endl;
+    ConsoleOut() << "Exiting Electricity Simulator..." << std::endl;
+    delete unsavedChangesGui;
     return true;
   }
 };

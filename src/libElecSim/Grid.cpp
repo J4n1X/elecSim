@@ -1,6 +1,7 @@
 #include "Grid.h"
 
 #include <cmath>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <ranges>
@@ -14,9 +15,10 @@ Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
       gameLayer(gameLayer),
       renderScale(renderScale),
       renderOffset(renderOffset) {
-  std::cout << "Grid initialized with size: " << size.x << "x" << size.y
-            << ", renderScale: " << renderScale
-            << ", renderOffset: " << renderOffset.x << ", " << renderOffset.y
+  std::cout << std::format(
+                   "Grid initialized with size: {}x{}, renderScale: {}, "
+                   "renderOffset: ({},{})",
+                   size.x, size.y, renderScale, renderOffset.x, renderOffset.y)
             << std::endl;
 }
 
@@ -93,8 +95,20 @@ int Grid::Simulate() {
     ++it;
   }
 
-  // Process all queued updates
+  // FIXME: There are situations in which circular updates can occur, freezing
+  // the simulation. That's just how this simulation system works, because each
+  // update only addresses the tiles next to it, instead of building a full tree
+  // of updates. When I first implemented it that way, the idea was still that
+  // this would be a pulse simulation. There is no easy fix for this at all.
+  // An idea would be to give the update a origin tile, and if the update is circular
+  // then we could ignore it.
+  // For now, this dirty solution just breaks up the simulation after 100k updates.
+
   while (!updateQueue.empty()) {
+    if(updatesProcessed > 100000){
+      std::cerr << "Warning: Too many updates processed, breaking to avoid infinite loop." << std::endl;
+      break;  // Prevent infinite loops
+    }
     auto update = updateQueue.top();
     updateQueue.pop();
     if (!update.tile) continue;
@@ -192,7 +206,8 @@ olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
 }
 
 olc::vi2d Grid::AlignToGrid(const olc::vf2d& pos) {
-  return olc::vf2d(static_cast<int>(std::floor(pos.x)), static_cast<int>(std::floor(pos.y)));
+  return olc::vf2d(static_cast<int>(std::floor(pos.x)),
+                   static_cast<int>(std::floor(pos.y)));
 }
 
 olc::vf2d Grid::CenterOfSquare(const olc::vf2d& pos) {
@@ -232,13 +247,16 @@ void Grid::Save(const std::string& filename) {
     return;
   }
 
+  size_t dataSize = 0;
   for (const auto& [pos, tile] : tiles) {
     auto data = tile->Serialize();
+    dataSize += data.size();
     file.write(data.data(), data.size());
   }
 
-  std::cout << "Saved grid to " << filename << std::endl;
-  std::cout << "Total tiles: " << tiles.size() << std::endl;
+  std::cout << std::format("Saved {} bytes to {}, total tiles: {}", dataSize,
+                           filename, tiles.size())
+            << std::endl;
   file.close();
 }
 
@@ -250,10 +268,11 @@ void Grid::Load(const std::string& filename) {
   }
 
   Clear();
-
+  size_t dataSize = 0;
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
+    dataSize += file.gcount();
     if (file.gcount() == 0) break;
 
     std::shared_ptr<GridTile> tile = std::move(GridTile::Deserialize(data));
@@ -265,8 +284,9 @@ void Grid::Load(const std::string& filename) {
 
   file.close();
 
-  std::cout << "Loaded grid from " << filename << std::endl;
-  std::cout << "Total tiles: " << tiles.size() << std::endl;
+  std::cout << std::format("Loaded {} bytes from {}, total {} tiles", dataSize,
+                           filename, tiles.size())
+            << std::endl;
   ResetSimulation();
 }
 
