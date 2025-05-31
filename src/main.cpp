@@ -83,7 +83,7 @@ class Game : public olc::PixelGameEngine {
   bool OnUserCreate() override {
     // Print class sizes
     PrintClassSizes();
-    curFilename = std::filesystem::current_path().append("default.grid");
+    curFilename = std::filesystem::current_path().append("default.grid").string();
 
     gameLayer = CreateLayer();  // initialized as a black screen
 
@@ -303,7 +303,7 @@ class Game : public olc::PixelGameEngine {
     };
     NFD::Init();
     NFD::UniquePath resultPath;
-    auto curDir = std::filesystem::path(curFilename).parent_path();
+    auto curDir = std::filesystem::path(curFilename).parent_path().string();
     auto result =
         NFD::SaveDialog(resultPath, filterItem, 1, curDir.c_str());
     if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
@@ -319,7 +319,7 @@ class Game : public olc::PixelGameEngine {
     };
     NFD::Init();
     NFD::UniquePath resultPath;
-    auto curDir = std::filesystem::path(curFilename).parent_path();
+    auto curDir = std::filesystem::path(curFilename).parent_path().string();
     auto result =
         NFD::OpenDialog(resultPath, filterItem, 1, curDir.c_str());
     if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
