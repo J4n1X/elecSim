@@ -7,14 +7,32 @@
 #include <string>
 #include <vector>
 
+#include "GridTileTypes.h"  // Include this for derived tile types
 #include "olcPixelGameEngine.h"
-#include "GridTileTypes.h" // Include this for derived tile types
 
 namespace ElecSim {
 
 class Grid {
- private:
-  using TileField = std::map<olc::vi2d, std::shared_ptr<GridTile>>;
+ private:  struct SignalEdge {
+    olc::vi2d sourcePos;
+    olc::vi2d targetPos;
+    bool operator==(const SignalEdge& other) const;
+  };
+  struct SignalEdgeHash {
+    std::size_t operator()(const SignalEdge& edge) const;
+  };
+  // Hash functor for olc::vi2d to use in unordered sets/maps
+  struct PositionHash {
+    std::size_t operator()(const olc::vi2d& pos) const;
+  };
+
+  // Equals functor for olc::vi2d
+  struct PositionEqual {
+    bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
+  };
+
+  using TileField = std::unordered_map<olc::vi2d, std::shared_ptr<GridTile>,
+                                       PositionHash, PositionEqual>;
 
   olc::Pixel backgroundColor = olc::BLUE;
   olc::vi2d renderWindow;
@@ -25,7 +43,8 @@ class Grid {
 
   TileField tiles;
   std::vector<std::weak_ptr<GridTile>> emitters;
-  std::priority_queue<UpdateEvent> updateQueue;
+  std::unordered_set<SignalEdge, SignalEdgeHash> currentTickVisitedEdges;
+  std::queue<UpdateEvent> updateQueue;
 
   float renderScale;
   olc::vf2d renderOffset = {0.0f, 0.0f};  // Offset for rendering
@@ -51,11 +70,10 @@ class Grid {
   // Rendering
   int Draw(olc::PixelGameEngine* renderer);  // returns amount of tiles drawn
 
-
   // Grid manipulation
   void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
   void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
-  
+
   void SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile, bool emitter);
   void SetSelection(olc::vi2d startPos, olc::vi2d endPos);
 
@@ -74,7 +92,8 @@ class Grid {
   std::optional<std::shared_ptr<GridTile> const> GetTile(int x, int y) {
     return GetTile(olc::vi2d(x, y));
   }
-  std::vector<std::weak_ptr<GridTile>> GetSelection(olc::vi2d startPos, olc::vi2d endPos);
+  std::vector<std::weak_ptr<GridTile>> GetSelection(olc::vi2d startPos,
+                                                    olc::vi2d endPos);
   std::size_t GetTileCount() { return tiles.size(); }
 
   // Configuration

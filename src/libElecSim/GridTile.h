@@ -75,50 +75,21 @@ inline Direction FlipDirection(Direction dir) {
   }
 }
 
-// Hash functor for olc::vi2d to use in unordered sets/maps
-struct PositionHash {
-    std::size_t operator()(const olc::vi2d& pos) const {
-        return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.y) << 1);
-    }
-};
-
-// Equals functor for olc::vi2d
-struct PositionEqual {
-    bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const {
-        return lhs == rhs;
-    }
-};
-
 struct SignalEvent {
   olc::vi2d sourcePos;
   Direction fromDirection;
   bool isActive;
-  std::unordered_set<olc::vi2d, PositionHash, PositionEqual> visitedPositions;
 
-  SignalEvent(olc::vi2d pos, Direction toDirection, bool active, 
-              std::unordered_set<olc::vi2d, PositionHash, PositionEqual> visited)
+  SignalEvent(olc::vi2d pos, Direction toDirection, bool active)
       : sourcePos(pos),
         fromDirection(FlipDirection(toDirection)),
-        isActive(active),
-        visitedPositions(std::move(visited)){}
+        isActive(active){}
   
   // Add a copy constructor to ensure the visitedPositions gets copied
   SignalEvent(const SignalEvent& other)
       : sourcePos(other.sourcePos),
         fromDirection(other.fromDirection),
-        isActive(other.isActive),
-        visitedPositions(other.visitedPositions) {}
-        
-  // Add assignment operator
-  SignalEvent& operator=(const SignalEvent& other) {
-    if (this != &other) {
-      sourcePos = other.sourcePos;
-      fromDirection = other.fromDirection;
-      isActive = other.isActive;
-      visitedPositions = other.visitedPositions;
-    }
-    return *this;
-  }
+        isActive(other.isActive) {}
 };
 
 // Forward declare GridTile for UpdateEvent

@@ -33,10 +33,7 @@ std::vector<SignalEvent> WireGridTile::ProcessSignal(
   // Only propagate state change if our activation state changes
   if (shouldBeActive != activated) {
     activated = shouldBeActive;
-    // append our position to the visited path
-    auto appendedPath = signal.visitedPositions;
-    appendedPath.insert(pos);
-    return {SignalEvent(pos, facing, activated, appendedPath)};
+    return {SignalEvent(pos, facing, activated)};
   }
 
   return {};
@@ -61,9 +58,7 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
     std::vector<SignalEvent> events;
     for (auto& dir : AllDirections) {
       if (canOutput[dir]) {
-        auto appendedPath = signal.visitedPositions;
-        appendedPath.insert(pos);
-        events.push_back(SignalEvent(pos, dir, false, appendedPath));
+        events.push_back(SignalEvent(pos, dir, false));
       }
     }
     return events;
@@ -73,9 +68,7 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
   std::vector<SignalEvent> events;
   for (auto& dir : AllDirections) {
     if (canOutput[dir] && dir != FlipDirection(facing)) {
-      auto appendedPath = signal.visitedPositions;
-      appendedPath.insert(pos);
-      events.push_back(SignalEvent(pos, dir, true, appendedPath));
+      events.push_back(SignalEvent(pos, dir, true));
     }
   }
   return events;
@@ -96,14 +89,14 @@ EmitterGridTile::EmitterGridTile(olc::vi2d pos, Direction facing, float size)
 
 std::vector<SignalEvent> EmitterGridTile::ProcessSignal(
     [[maybe_unused]] const SignalEvent& signal) {
-  return {SignalEvent(pos, facing, activated, {pos})};
+  return {SignalEvent(pos, facing, activated)};
 }
 
 std::vector<SignalEvent> EmitterGridTile::Interact() {
   enabled = !enabled;
   if (!enabled) {
     activated = false;
-    return {SignalEvent(pos, facing, false, {pos})};
+    return {SignalEvent(pos, facing, false)};
   }
   return {};
 }
@@ -140,15 +133,13 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
                     inputStates[RotateDirection(Direction::Right, facing)];
   bool bottomActive = inputStates[RotateDirection(Direction::Bottom, facing)];
 
-  auto appendedPath = signal.visitedPositions;
-  appendedPath.insert(pos);
   if (sideActive && bottomActive) {
     if (activated) return {};  // Prevent feedback loops
     activated = true;
-    return {SignalEvent(pos, facing, true, appendedPath)};
+    return {SignalEvent(pos, facing, true)};
   } else if (activated) {
     activated = false;
-    return {SignalEvent(pos, facing, false, appendedPath)};
+    return {SignalEvent(pos, facing, false)};
   }
 
   return {};
@@ -168,18 +159,18 @@ ButtonGridTile::ButtonGridTile(olc::vi2d pos, Direction facing, float size)
 
 std::vector<SignalEvent> ButtonGridTile::ProcessSignal(
     [[maybe_unused]] const SignalEvent& signal) {
-  return {SignalEvent(pos, facing, activated, {pos})};
+  return {SignalEvent(pos, facing, activated)};
 }
 
 std::vector<SignalEvent> ButtonGridTile::Interact() {
   activated = !activated;
-  return {SignalEvent(pos, facing, activated, {pos})};
+  return {SignalEvent(pos, facing, activated)};
 }
 
 // --- InverterGridTile Implementation ---
 
 std::vector<SignalEvent> InverterGridTile::Init() {
-  return {SignalEvent(pos, FlipDirection(facing), false, {pos})};
+  return {SignalEvent(pos, FlipDirection(facing), false)};
 }
 
 std::vector<SignalEvent> InverterGridTile::ProcessSignal(
@@ -199,9 +190,7 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   bool inverted = !shouldBeActive;
   if (inverted != activated) {
     activated = inverted;
-    auto appendedPath = signal.visitedPositions;
-    appendedPath.insert(pos);
-    return {SignalEvent(pos, facing, activated, appendedPath)};
+    return {SignalEvent(pos, facing, activated)};
   }
   return {};
 }
@@ -256,9 +245,7 @@ std::vector<SignalEvent> CrossingGridTile::ProcessSignal(
   Direction outputDir = FlipDirection(inputDir);
 
   // Return a signal event to the opposite direction
-  auto appendedPath = signal.visitedPositions;
-  appendedPath.insert(pos);
-  return {SignalEvent(pos, outputDir, signal.isActive, appendedPath)};
+  return {SignalEvent(pos, outputDir, signal.isActive)};
 }
 
 }  // namespace ElecSim

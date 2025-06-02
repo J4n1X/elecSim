@@ -9,6 +9,41 @@
 
 namespace ElecSim {
 
+// Implementation of SignalEdge::operator==
+bool Grid::SignalEdge::operator==(const SignalEdge& other) const {
+  return sourcePos == other.sourcePos && targetPos == other.targetPos;
+}
+
+// Implementation of SignalEdgeHash::operator()
+std::size_t Grid::SignalEdgeHash::operator()(const SignalEdge& edge) const {
+  // Naive approach for now. I want to implement this quickly.
+  // TODO: More sophisticated hash function that is FASTER!
+  return std::hash<int>()(edge.sourcePos.x) ^
+         (std::hash<int>()(edge.sourcePos.y) << 1) ^
+         (std::hash<int>()(edge.targetPos.x) << 2) ^
+         (std::hash<int>()(edge.targetPos.y) << 3);
+}
+
+// Implementation of PositionHash::operator()
+std::size_t Grid::PositionHash::operator()(const olc::vi2d& pos) const {
+  size_t x = static_cast<size_t>(pos.x);
+  size_t y = static_cast<size_t>(pos.y);  // Fixed a bug here - changed pos.x to pos.y
+  if constexpr (sizeof(std::size_t) == 8 && sizeof(int) == 4) {
+    // Just bitwise or them together, we have the space
+    return (x << 32) | y;
+  } else {
+    // Szudzik's Pairing Function - apparently it's fast.
+    return x >= y ? (x * x + x + y) : (x + y * y);
+    // This line is unreachable but was in the original code:
+    // return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.y) << 1);
+  }
+}
+
+// Implementation of PositionEqual::operator()
+bool Grid::PositionEqual::operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const {
+  return lhs == rhs;
+}
+
 Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
            int uiLayer, int gameLayer)
     : renderWindow(size),
@@ -54,29 +89,34 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
   for (const auto& signal : newSignals) {
     auto targetPos = TranslatePosition(signal.sourcePos,
                                        FlipDirection(signal.fromDirection));
-
-    if (event.visitedPositions.contains(targetPos)) {
-#ifdef NDEBUG
-      // This would create a cycle - skip over it.
-      continue;
-#else
-      // This would create a cycle - throw an exception instead of continuing
+                                       
+    // Create signal edge
+    SignalEdge edge{signal.sourcePos, targetPos};
+    
+    // Check if this edge has been traversed in this tick
+    if (currentTickVisitedEdges.contains(edge)) {
+      // This would create a cycle - throw an exception
+      // If we didn't, and just skipped, it would result in false behavior.
       throw std::runtime_error(std::format(
-          "Cycle detected in signal processing at position ({},{}). Offending "
-          "signal side: {}",
-          targetPos.x, targetPos.y, DirectionToString(signal.fromDirection)));
-#endif
+          "Cycle detected in signal processing: edge from ({},{}) to ({},{}). "
+          "Offending signal side: {}",
+          edge.sourcePos.x, edge.sourcePos.y, edge.targetPos.x, edge.targetPos.y,
+          DirectionToString(signal.fromDirection)));
     }
+    
+    // Record this edge as visited
+    currentTickVisitedEdges.insert(edge);
 
     auto targetTileIt = tiles.find(targetPos);
     if (targetTileIt == tiles.end()) continue;
 
     auto& targetTile = targetTileIt->second;
     if (targetTile->CanReceiveFrom(signal.fromDirection)) {
+      // Create a simpler signal event (no visited positions)
       QueueUpdate(
           targetTile,
           SignalEvent(targetPos, FlipDirection(signal.fromDirection),
-                      signal.isActive, std::move(signal.visitedPositions)));
+                      signal.isActive));
     }
   }
   return;
@@ -85,6 +125,9 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
 int Grid::Simulate() {
   int updatesProcessed = 0;
   currentTick++;  // Increment the tick counter
+  
+  // Clear edge tracking for this simulation tick
+  currentTickVisitedEdges.clear();
 
   // Queue updates from emitters first
   for (auto it = emitters.begin(); it != emitters.end();) {
@@ -96,8 +139,9 @@ int Grid::Simulate() {
     auto tile = std::dynamic_pointer_cast<EmitterGridTile>(it->lock());
     if (tile && tile->ShouldEmit(currentTick)) {
       tile->SetActivation(!tile->GetActivation());  // Toggle emitter state
+      // Now using the simpler SignalEvent constructor
       QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
-                                    tile->GetActivation(), {tile->GetPos()}));
+                                  tile->GetActivation()));
     }
     ++it;
   }
@@ -106,7 +150,7 @@ int Grid::Simulate() {
   // circular updates. Each signal keeps track of all positions it has visited,
   // and we throw a runtime_error when we detect a cycle.
   // However, we'll still keep a reasonable upper limit as a safety measure:
-  constexpr int MAX_UPDATES = 10000;
+  constexpr int MAX_UPDATES = 100000;
 
   while (!updateQueue.empty()) {
     // Safety check - prevent extremely long update chains
@@ -118,7 +162,7 @@ int Grid::Simulate() {
       break;
     }
 
-    auto update = updateQueue.top();
+    auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
     ProcessSignalEvent(update.event);
@@ -130,7 +174,7 @@ int Grid::Simulate() {
 void Grid::ResetSimulation() {
   // Clear the update queue
   if (!updateQueue.empty()) {
-    updateQueue = std::priority_queue<UpdateEvent>();
+    updateQueue = std::queue<UpdateEvent>();
   }
 
   // Reset tick counter
