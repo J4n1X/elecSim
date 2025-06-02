@@ -5,8 +5,6 @@
 #include "Grid.h"
 #include "GridTileTypes.h"
 #include "MessageBox.h"
-
-#define OLC_PGE_APPLICATION
 #include "nfd.hpp"
 #include "olcPixelGameEngine.h"
 
@@ -58,6 +56,7 @@ class Game : public olc::PixelGameEngine {
 
   // --- Game state ---
   bool paused = true;          // Simulation is paused, renderer is not
+  bool isReset = true;         // If true, the Grid is in the default state.
   bool engineRunning = false;  // If this is false, the game quits
   bool consoleLogging =
       false;  // If this is true, stdout is redirected to the console
@@ -83,7 +82,8 @@ class Game : public olc::PixelGameEngine {
   bool OnUserCreate() override {
     // Print class sizes
     PrintClassSizes();
-    curFilename = std::filesystem::current_path().append("default.grid").string();
+    curFilename =
+        std::filesystem::current_path().append("default.grid").string();
 
     gameLayer = CreateLayer();  // initialized as a black screen
 
@@ -226,6 +226,11 @@ class Game : public olc::PixelGameEngine {
     tileBuffer.clear();
     std::cout << "Cleared tile buffer" << std::endl;
   }
+  
+  void Reset() {
+    grid.ResetSimulation();
+    isReset = true;
+  }
 
   // --- Parse number key input (0-9) ---
   int ParseNumberFromInput() {
@@ -304,8 +309,7 @@ class Game : public olc::PixelGameEngine {
     NFD::Init();
     NFD::UniquePath resultPath;
     auto curDir = std::filesystem::path(curFilename).parent_path().string();
-    auto result =
-        NFD::SaveDialog(resultPath, filterItem, 1, curDir.c_str());
+    auto result = NFD::SaveDialog(resultPath, filterItem, 1, curDir.c_str());
     if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
     std::string filename = resultPath.get();
     if (filename == "") return std::nullopt;
@@ -320,8 +324,7 @@ class Game : public olc::PixelGameEngine {
     NFD::Init();
     NFD::UniquePath resultPath;
     auto curDir = std::filesystem::path(curFilename).parent_path().string();
-    auto result =
-        NFD::OpenDialog(resultPath, filterItem, 1, curDir.c_str());
+    auto result = NFD::OpenDialog(resultPath, filterItem, 1, curDir.c_str());
     if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
     std::string filename = resultPath.get();
     if (filename == "") return std::nullopt;
@@ -416,7 +419,7 @@ class Game : public olc::PixelGameEngine {
       grid.SetTile(newPos, std::move(newTile), isEmitter);
     }
 
-    grid.ResetSimulation();
+    if (!isReset) Reset();
   }
 
   void CutTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
@@ -436,9 +439,10 @@ class Game : public olc::PixelGameEngine {
       }
     }
 
-    grid.ResetSimulation();
-    std::cout << std::format("Cut tiles from selection: Start: ({},{}), End: ({},{})",
-                             startIndex.x, startIndex.y, endIndex.x, endIndex.y)
+    if (!isReset) Reset();
+    std::cout << std::format(
+                     "Cut tiles from selection: Start: ({},{}), End: ({},{})",
+                     startIndex.x, startIndex.y, endIndex.x, endIndex.y)
               << std::endl;
   }
   // --- Tile placement, removal, and interaction ---
@@ -496,12 +500,14 @@ class Game : public olc::PixelGameEngine {
         if (GetMouse(1).bReleased) isPlacing = false;
 
         if (isPlacing) {
-          if (GetMouse(0).bHeld && lastPlacedPos != alignedWorldPos) {
+          // If we hold, don't replace the tile at the same spot constantly.
+          // If we just press, you can do it.
+          if (GetMouse(0).bHeld &&
+              (GetMouse(0).bPressed || lastPlacedPos != alignedWorldPos)) {
             // Paste buffer
             PasteTiles(alignedWorldPos);
 
             lastPlacedPos = alignedWorldPos;
-            grid.ResetSimulation();
             unsavedChanges = true;
           }
         }
@@ -518,7 +524,7 @@ class Game : public olc::PixelGameEngine {
       // Remove tile (middle click)
       if (GetMouse(2).bHeld) {
         grid.EraseTile(alignedWorldPos);
-        grid.ResetSimulation();
+        if (!isReset) Reset();
       }
     } else {
       // Right click: interact
@@ -564,7 +570,7 @@ class Game : public olc::PixelGameEngine {
       olc::vi2d gridSize = bottomRight - topLeft + olc::vi2d(1, 1);
       if (gridSize.x < 0 || gridSize.y < 0) {
         throw std::runtime_error(
-            "Selection rectangle has negative size, this should not happen");
+            "Selection rectangle has negative size, this should never happen");
       }
       olc::vf2d posScreen = grid.WorldToScreenFloating(topLeft);
       olc::vf2d sizeScreen = {gridSize.x * grid.GetRenderScale(),
@@ -640,7 +646,15 @@ class Game : public olc::PixelGameEngine {
     // Simulation step
     accumulatedTime += fElapsedTime;
     if (accumulatedTime > updateInterval && !paused) {
-      updatesPerTick = grid.Simulate();
+      isReset = false;
+      try {
+        updatesPerTick = grid.Simulate();
+      } catch (const std::exception& e) {
+        std::cout << "Simulation error: " << e.what() << std::endl;
+        paused = true;
+        Reset();
+        updatesPerTick = 0;  // Reset updates per tick on error
+      }
       accumulatedTime = 0;
     }
 
@@ -667,7 +681,8 @@ class Game : public olc::PixelGameEngine {
       switch (guiResult) {
         case MessageBoxGui::Result::Yes:
           if (!SaveGrid()) break;
-        case MessageBoxGui::Result::No:  // We can just fall through
+          /* FALLTHRU */
+        case MessageBoxGui::Result::No:
           // If engineRunning is false here, don't prompt to open another file
           if (engineRunning) {
             if (LoadGrid()) unsavedChanges = false;
@@ -679,6 +694,8 @@ class Game : public olc::PixelGameEngine {
           if (!engineRunning)  // Recover if this was a quit attempt
             engineRunning = true;
           break;
+        case MessageBoxGui::Result::Nothing:
+          throw std::runtime_error("Unreachable");
       }
       // When we press an option on the GUI, right after, it'll place a tile
       // On the first frame after the GUI closes.
@@ -702,7 +719,7 @@ class Game : public olc::PixelGameEngine {
       ConsoleOut() << "Simulation " << (paused ? "paused" : "running")
                    << std::endl;
     } else if (command == "reset") {
-      grid.ResetSimulation();
+      Reset();
       std::cout << "Simulation reset" << std::endl;
     } else if (command == "clear") {
       ConsoleClear();

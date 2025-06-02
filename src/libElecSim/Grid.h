@@ -21,7 +21,7 @@ class Grid {
 
   int uiLayer;
   int gameLayer;
-  int currentTick = 0;  // Current game tick (used by emitters)
+  uint32_t currentTick = 0;  // Current game tick (used by emitters)
 
   TileField tiles;
   std::vector<std::weak_ptr<GridTile>> emitters;
@@ -44,8 +44,7 @@ class Grid {
   ~Grid() = default;
 
   // Core simulation functions
-  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event,
-                   int priority = 0);
+  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event);
   int Simulate();
   void ResetSimulation();
 

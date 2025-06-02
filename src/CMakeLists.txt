@@ -7,7 +7,7 @@ target_link_libraries(elecSim PRIVATE libElecSim)
 
 # Warnings
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  target_compile_options(elecSim PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(elecSim PRIVATE -Wall -Wextra)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
   target_compile_options(elecSim PRIVATE /W3)
 endif()

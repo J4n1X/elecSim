@@ -191,7 +191,7 @@ int main(int argc, char** argv) {
             tile->SetActivation(command.value);
             grid.QueueUpdate(tile,
                              ElecSim::SignalEvent(tile->GetPos(), command.dir,
-                                                  command.value));
+                                                  command.value, {tile->GetPos()}));
           }
         }
         break;

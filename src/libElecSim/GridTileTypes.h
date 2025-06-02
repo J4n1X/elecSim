@@ -88,7 +88,6 @@ class SemiConductorGridTile : public GridTile {
                         Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
-  std::vector<SignalEvent> Interact() override;
   void ResetActivation() override;
 
   std::string_view TileTypeName() const override { return "Semiconductor"; }
@@ -136,12 +135,13 @@ class InverterGridTile : public GridTile {
   InverterGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                    Direction facing = Direction::Top, float size = .10f)
       : GridTile(pos, facing, size, false, olc::DARK_MAGENTA, olc::MAGENTA) {
-    for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-      canReceive[i] = (static_cast<Direction>(i) != facing);
-      canOutput[i] = (static_cast<Direction>(i) == facing);
-      inputStates[i] = false;
+    for (auto& dir : AllDirections) {
+      canReceive[dir] = (dir != facing);
+      canOutput[dir] = (dir == facing);
+      inputStates[dir] = false;
     }
   }
+  std::vector<SignalEvent> Init() override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::string_view TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
@@ -175,8 +175,8 @@ class CrossingGridTile : public GridTile {
     clone->SetDefaultActivation(GetDefaultActivation());
     
     // Copy the input states
-    for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-      clone->inputStates[i] = this->inputStates[i];
+    for (auto& dir : AllDirections) {
+      clone->inputStates[dir] = this->inputStates[dir];
     }
     
     return clone;

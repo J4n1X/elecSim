@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <ranges>
+#include <stdexcept>
 
 namespace ElecSim {
 
@@ -22,9 +23,9 @@ Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
             << std::endl;
 }
 
-void Grid::QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event,
-                       int priority) {
-  updateQueue.push(UpdateEvent(tile, event, priority));
+void Grid::QueueUpdate(std::shared_ptr<GridTile> tile,
+                       const SignalEvent& event) {
+  updateQueue.push(UpdateEvent(tile, event, currentTick));
 }
 
 olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) const {
@@ -53,24 +54,32 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
   for (const auto& signal : newSignals) {
     auto targetPos = TranslatePosition(signal.sourcePos,
                                        FlipDirection(signal.fromDirection));
+
+    if (event.visitedPositions.contains(targetPos)) {
+#ifdef NDEBUG
+      // This would create a cycle - skip over it.
+      continue;
+#else
+      // This would create a cycle - throw an exception instead of continuing
+      throw std::runtime_error(std::format(
+          "Cycle detected in signal processing at position ({},{}). Offending "
+          "signal side: {}",
+          targetPos.x, targetPos.y, DirectionToString(signal.fromDirection)));
+#endif
+    }
+
     auto targetTileIt = tiles.find(targetPos);
     if (targetTileIt == tiles.end()) continue;
 
     auto& targetTile = targetTileIt->second;
     if (targetTile->CanReceiveFrom(signal.fromDirection)) {
-      if (targetTile->GetActivation() == signal.isActive) {
-        // We are pushing an active signal into an already active tile.
-        // This is needed for some logic, like when a wire is connected to two
-        // sides which both give it an input signal. You don't want to turn it
-        // off if one of the signals is turned off. However, this enables
-        // infinite energy loops... Hold on, just got a great idea, I gotta test
-        // it.
-      }
-
-      QueueUpdate(targetTile, SignalEvent(targetPos, signal.fromDirection,
-                                          signal.isActive));
+      QueueUpdate(
+          targetTile,
+          SignalEvent(targetPos, FlipDirection(signal.fromDirection),
+                      signal.isActive, std::move(signal.visitedPositions)));
     }
   }
+  return;
 }
 
 int Grid::Simulate() {
@@ -87,28 +96,28 @@ int Grid::Simulate() {
     auto tile = std::dynamic_pointer_cast<EmitterGridTile>(it->lock());
     if (tile && tile->ShouldEmit(currentTick)) {
       tile->SetActivation(!tile->GetActivation());  // Toggle emitter state
-      QueueUpdate(
-          tile,
-          SignalEvent(tile->GetPos(), tile->GetFacing(), tile->GetActivation()),
-          1);
+      QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
+                                    tile->GetActivation(), {tile->GetPos()}));
     }
     ++it;
   }
 
-  // FIXME: There are situations in which circular updates can occur, freezing
-  // the simulation. That's just how this simulation system works, because each
-  // update only addresses the tiles next to it, instead of building a full tree
-  // of updates. When I first implemented it that way, the idea was still that
-  // this would be a pulse simulation. There is no easy fix for this at all.
-  // An idea would be to give the update a origin tile, and if the update is circular
-  // then we could ignore it.
-  // For now, this dirty solution just breaks up the simulation after 100k updates.
+  // We're now using signal chain tracking with visited positions to detect
+  // circular updates. Each signal keeps track of all positions it has visited,
+  // and we throw a runtime_error when we detect a cycle.
+  // However, we'll still keep a reasonable upper limit as a safety measure:
+  constexpr int MAX_UPDATES = 10000;
 
   while (!updateQueue.empty()) {
-    if(updatesProcessed > 100000){
-      std::cerr << "Warning: Too many updates processed, breaking to avoid infinite loop." << std::endl;
-      break;  // Prevent infinite loops
+    // Safety check - prevent extremely long update chains
+    if (updatesProcessed > MAX_UPDATES) {
+      std::cerr << "Warning: Maximum update limit reached (" << MAX_UPDATES
+                << " updates). This may indicate a complex circuit or "
+                   "potential issue."
+                << std::endl;
+      break;
     }
+
     auto update = updateQueue.top();
     updateQueue.pop();
     if (!update.tile) continue;
@@ -120,8 +129,8 @@ int Grid::Simulate() {
 
 void Grid::ResetSimulation() {
   // Clear the update queue
-  while (!updateQueue.empty()) {
-    updateQueue.pop();
+  if (!updateQueue.empty()) {
+    updateQueue = std::priority_queue<UpdateEvent>();
   }
 
   // Reset tick counter
@@ -130,14 +139,9 @@ void Grid::ResetSimulation() {
   // Reset all tiles
   for (auto& [pos, tile] : tiles) {
     tile->ResetActivation();
-
-    // Queue "off" signals from all directions with highest priority (100)
-    // This ensures all inputs to each tile are properly initialized
-    for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-      Direction dir = static_cast<Direction>(i);
-      if (tile->CanReceiveFrom(dir)) {
-        QueueUpdate(tile, SignalEvent(pos, dir, false), 100);
-      }
+    auto initState = tile->Init();
+    for (const auto& event : initState) {
+      QueueUpdate(tile, event);
     }
   }
 }
@@ -152,9 +156,8 @@ int Grid::Draw(olc::PixelGameEngine* renderer) {
   // Tiles exclusively render as decals.
 
   // Draw tiles
-  // This spriteSize causes overdraw all the time, but without it, we get pixel
-  // gaps
-  // Update: Now that we use decals, this is a non-issue.
+  // This spriteSize causes overdraw all the time, but without it, we get
+  // pixel gaps Update: Now that we use decals, this is a non-issue.
   auto spriteSize = std::ceil(renderScale);
   int drawnTiles = 0;
   for (const auto& [pos, tile] : tiles) {
@@ -180,6 +183,10 @@ void Grid::SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile,
   tiles.insert_or_assign(pos, std::move(tile));
   if (emitter) {
     emitters.push_back(tiles.at(pos));
+  }
+  auto initSignals = tiles.at(pos)->Init();
+  for (const auto& signal : initSignals) {
+    QueueUpdate(tiles.at(pos), signal);
   }
 }
 

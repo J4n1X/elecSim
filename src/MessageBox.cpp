@@ -1,11 +1,14 @@
 #include "olcPixelGameEngine.h"
-
-#define OLC_PGEX_QUICKGUI
 #include "extensions/olcPGEX_QuickGUI.h"
 
 #include "MessageBox.h"
 
-MessageBoxGui::MessageBoxGui(olc::PixelGameEngine* pge, std::string labelText, float scale, bool enabled): engine(pge), labelText(labelText), renderScale(scale), enabled(enabled) {
+MessageBoxGui::MessageBoxGui(olc::PixelGameEngine* pge, std::string labelText, float scale, bool enabled){
+    engine = pge;
+    this->labelText = labelText;
+    renderScale = scale;
+    this->enabled = enabled;
+    
     guiManager = olc::QuickGUI::Manager(false);
     unsavedChangesInfoLabel = new olc::QuickGUI::Label(
         guiManager, labelText,

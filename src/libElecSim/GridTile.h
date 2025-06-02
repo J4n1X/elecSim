@@ -1,9 +1,9 @@
 #pragma once
 
 #include <array>
-#include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "olcPixelGameEngine.h"
@@ -14,6 +14,50 @@ constexpr int GRIDTILE_BYTESIZE =
     sizeof(int) * 4;  // TileId + Facing + PosX + PosY
 
 enum class Direction { Top = 0, Right = 1, Bottom = 2, Left = 3, Count = 4 };
+constexpr std::string_view DirectionToString(Direction dir) {
+  switch (dir) {
+    case Direction::Top:
+      return "Top";
+    case Direction::Right:
+      return "Right";
+    case Direction::Bottom:
+      return "Bottom";
+    case Direction::Left:
+      return "Left";
+    default:
+      return "Unknown";
+  }
+}
+static constexpr std::array<Direction, static_cast<int>(Direction::Count)>
+    AllDirections = {Direction::Top, Direction::Right, Direction::Bottom,
+                     Direction::Left};
+
+// This is used only to inform if an update happened or not
+struct TileSideStates
+    : private std::array<bool, static_cast<int>(Direction::Count)> {
+ private:
+  typedef bool T;
+  typedef std::array<bool, static_cast<int>(Direction::Count)> array;
+ public:
+  using array::fill;
+  using array::operator[];
+  using array::begin;
+  using array::end;
+  using array::size;
+  TileSideStates() { this->fill(false); }
+  TileSideStates(std::initializer_list<std::tuple<Direction, bool>> dirs) {
+    this->fill(false);
+    for (const auto& [dir, val] : dirs) {
+      if (dir >= Direction::Top && dir < Direction::Count) {
+        (*this)[static_cast<int>(dir)] = val;
+      }
+    }
+  }
+  bool& operator[](Direction dir) { return (*this)[static_cast<int>(dir)]; }
+  const bool& operator[](Direction dir) const {
+    return std::array<bool, static_cast<int>(Direction::Count)>::operator[](static_cast<int>(dir));
+  }
+};
 
 // Direction utility functions
 inline Direction FlipDirection(Direction dir) {
@@ -31,15 +75,50 @@ inline Direction FlipDirection(Direction dir) {
   }
 }
 
+// Hash functor for olc::vi2d to use in unordered sets/maps
+struct PositionHash {
+    std::size_t operator()(const olc::vi2d& pos) const {
+        return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.y) << 1);
+    }
+};
+
+// Equals functor for olc::vi2d
+struct PositionEqual {
+    bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const {
+        return lhs == rhs;
+    }
+};
+
 struct SignalEvent {
   olc::vi2d sourcePos;
   Direction fromDirection;
   bool isActive;
+  std::unordered_set<olc::vi2d, PositionHash, PositionEqual> visitedPositions;
 
-  SignalEvent(olc::vi2d pos, Direction toDirection, bool active)
+  SignalEvent(olc::vi2d pos, Direction toDirection, bool active, 
+              std::unordered_set<olc::vi2d, PositionHash, PositionEqual> visited)
       : sourcePos(pos),
         fromDirection(FlipDirection(toDirection)),
-        isActive(active) {}
+        isActive(active),
+        visitedPositions(std::move(visited)){}
+  
+  // Add a copy constructor to ensure the visitedPositions gets copied
+  SignalEvent(const SignalEvent& other)
+      : sourcePos(other.sourcePos),
+        fromDirection(other.fromDirection),
+        isActive(other.isActive),
+        visitedPositions(other.visitedPositions) {}
+        
+  // Add assignment operator
+  SignalEvent& operator=(const SignalEvent& other) {
+    if (this != &other) {
+      sourcePos = other.sourcePos;
+      fromDirection = other.fromDirection;
+      isActive = other.isActive;
+      visitedPositions = other.visitedPositions;
+    }
+    return *this;
+  }
 };
 
 // Forward declare GridTile for UpdateEvent
@@ -49,17 +128,19 @@ class GridTile;
 struct UpdateEvent {
   std::shared_ptr<GridTile> tile;
   SignalEvent event;
-  int priority;
+  uint32_t updateCycleId;
 
-  UpdateEvent(std::shared_ptr<GridTile> t, const SignalEvent& e, int p = 0)
-      : tile(t), event(e), priority(p) {}
+  UpdateEvent(std::shared_ptr<GridTile> t, const SignalEvent& e, int id)
+      : tile(t), event(e), updateCycleId(id) {}
 
   bool operator<(const UpdateEvent& other) const {
-    return priority < other.priority;
+    return updateCycleId < other.updateCycleId;
   }
 };
 
 // Base tile class
+// TODO: I want to add a Construct() function that creates a new tile of any
+// type, maybe with templates? A factory?
 class GridTile : public std::enable_shared_from_this<GridTile> {
  protected:
   olc::vi2d pos;
@@ -69,10 +150,9 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   bool defaultActivation;
   olc::Pixel inactiveColor;
   olc::Pixel activeColor;
-  bool canReceive[static_cast<int>(Direction::Count)];
-  bool canOutput[static_cast<int>(Direction::Count)];
-  bool inputStates[static_cast<int>(
-      Direction::Count)];  // Track state from each input direction
+  TileSideStates canReceive;
+  TileSideStates canOutput;
+  TileSideStates inputStates;
 
  public:
   GridTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
@@ -84,7 +164,9 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual ~GridTile() {};
 
   virtual void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
-            float screenSize, int alpha = 255);
+                    float screenSize, int alpha = 255);
+
+  virtual std::vector<SignalEvent> Init() { return {}; };
   virtual std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) = 0;
   virtual std::vector<SignalEvent> Interact() { return {}; }
 
@@ -102,17 +184,12 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   Direction GetFacing() const { return facing; }
   std::string GetTileInformation() const;
 
-  bool CanReceiveFrom(Direction dir) const {
-    return canReceive[static_cast<int>(dir)];
-  }
-  bool CanSendTo(Direction dir) const {
-    return canOutput[static_cast<int>(dir)];
-  }
+  bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
 
   virtual std::string_view TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
   virtual int GetTileId() const = 0;
-  
+
   // Virtual clone method for copying tiles
   virtual std::unique_ptr<GridTile> Clone() const = 0;
 
