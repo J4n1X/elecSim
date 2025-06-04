@@ -15,7 +15,7 @@ class WireGridTile : public GridTile {
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::string_view TileTypeName() const override { return "Wire"; }
   bool IsEmitter() const override { return false; }
-  int GetTileId() const override { return 0; }
+  int GetTileTypeId() const override { return 0; }
   
   std::unique_ptr<GridTile> Clone() const override {
     auto clone = std::make_unique<WireGridTile>(GetPos(), GetFacing(), GetSize());
@@ -34,7 +34,7 @@ class JunctionGridTile : public GridTile {
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::string_view TileTypeName() const override { return "Junction"; }
   bool IsEmitter() const override { return false; }
-  int GetTileId() const override { return 1; }
+  int GetTileTypeId() const override { return 1; }
   
   std::unique_ptr<GridTile> Clone() const override {
     auto clone = std::make_unique<JunctionGridTile>(GetPos(), GetFacing(), GetSize());
@@ -62,7 +62,7 @@ class EmitterGridTile : public GridTile {
 
   std::string_view TileTypeName() const override { return "Emitter"; }
   bool IsEmitter() const override { return true; }
-  int GetTileId() const override { return 2; }
+  int GetTileTypeId() const override { return 2; }
   
   std::unique_ptr<GridTile> Clone() const override {
     auto clone = std::make_unique<EmitterGridTile>(GetPos(), GetFacing(), GetSize());
@@ -91,7 +91,7 @@ class SemiConductorGridTile : public GridTile {
 
   std::string_view TileTypeName() const override { return "Semiconductor"; }
   bool IsEmitter() const override { return false; }
-  int GetTileId() const override { return 3; }
+  int GetTileTypeId() const override { return 3; }
   
   std::unique_ptr<GridTile> Clone() const override {
     auto clone = std::make_unique<SemiConductorGridTile>(GetPos(), GetFacing(), GetSize());
@@ -117,7 +117,7 @@ class ButtonGridTile : public GridTile {
 
   std::string_view TileTypeName() const override { return "Button"; }
   bool IsEmitter() const override { return false; }
-  int GetTileId() const override { return 4; }
+  int GetTileTypeId() const override { return 4; }
   
   std::unique_ptr<GridTile> Clone() const override {
     auto clone = std::make_unique<ButtonGridTile>(GetPos(), GetFacing(), GetSize());
@@ -144,7 +144,7 @@ class InverterGridTile : public GridTile {
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::string_view TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
-  int GetTileId() const override { return 5; }
+  int GetTileTypeId() const override { return 5; }
   
   std::unique_ptr<GridTile> Clone() const override {
     auto clone = std::make_unique<InverterGridTile>(GetPos(), GetFacing(), GetSize());
@@ -166,7 +166,7 @@ class CrossingGridTile : public GridTile {
   
   std::string_view TileTypeName() const override { return "Crossing"; }
   bool IsEmitter() const override { return false; }
-  int GetTileId() const override { return 6; }
+  int GetTileTypeId() const override { return 6; }
   
   std::unique_ptr<GridTile> Clone() const override {
     auto clone = std::make_unique<CrossingGridTile>(GetPos(), GetFacing(), GetSize());

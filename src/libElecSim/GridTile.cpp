@@ -101,14 +101,13 @@ void GridTile::SetFacing(Direction newFacing) {
 
   // Rotate permissions by the difference amount
   for (auto& dir : AllDirections) {
-    Direction newIndex =
-        RotateDirection(dir, facing);
+    Direction newIndex = RotateDirection(dir, facing);
     canReceive[newIndex] = oldReceive[dir];
     canOutput[newIndex] = oldOutput[dir];
   }
 }
 
-std::string GridTile::GetTileInformation() const {
+const std::string& GridTile::GetTileInformation() const {
   std::stringstream stream;
   // All in one line
   stream << "Tile Type: " << TileTypeName() << ", "
@@ -144,7 +143,7 @@ std::string_view GridTile::DirectionToString(Direction dir) {
 
 std::array<char, GRIDTILE_BYTESIZE> GridTile::Serialize() {
   std::array<char, GRIDTILE_BYTESIZE> data{};
-  *reinterpret_cast<int*>(data.data()) = GetTileId();
+  *reinterpret_cast<int*>(data.data()) = GetTileTypeId();
   *reinterpret_cast<Direction*>(data.data() + sizeof(int)) = facing;
   *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing)) = pos.x;
   *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing) +

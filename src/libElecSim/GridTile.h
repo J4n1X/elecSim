@@ -13,6 +13,8 @@ namespace ElecSim {
 // Base tile class
 // TODO: I want to add a Construct() function that creates a new tile of any
 // type, maybe with templates? A factory?
+// TODO: Maybe we should not store refNum in here, but this is the easiest way
+// right now.
 class GridTile : public std::enable_shared_from_this<GridTile> {
  protected:
   olc::vi2d pos;
@@ -25,6 +27,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   TileSideStates canReceive;
   TileSideStates canOutput;
   TileSideStates inputStates;
+  size_t refNum;
 
  public:
   GridTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
@@ -43,24 +46,26 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual std::vector<SignalEvent> Interact() { return {}; }
 
   void SetPos(olc::vi2d newPos) { pos = newPos; }
+  void SetRefNum(size_t newRefNum) { refNum = newRefNum; }
   void SetFacing(Direction newFacing);
   void SetActivation(bool newActivation) { activated = newActivation; }
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
   virtual void
   ResetActivation();  // Changed from inline to virtual with implementation
 
-  bool GetActivation() const { return activated; }
-  bool GetDefaultActivation() const { return defaultActivation; }
-  olc::vi2d GetPos() const { return pos; }
-  float GetSize() const { return size; }
-  Direction GetFacing() const { return facing; }
-  std::string GetTileInformation() const;
+  const bool GetActivation() const { return activated; }
+  const bool GetDefaultActivation() const { return defaultActivation; }
+  const olc::vi2d& GetPos() const { return pos; }
+  const float GetSize() const { return size; }
+  const Direction& GetFacing() const { return facing; }
+  const std::string& GetTileInformation() const;
+  const size_t GetRefNum() const { return refNum; }
 
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
 
   virtual std::string_view TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
-  virtual int GetTileId() const = 0;
+  virtual int GetTileTypeId() const = 0;
 
   // Virtual clone method for copying tiles
   virtual std::unique_ptr<GridTile> Clone() const = 0;

@@ -12,8 +12,9 @@
 #include "ankerl/unordered_dense.h"
 #include "olcPixelGameEngine.h"
 
-namespace ElecSim {
 
+namespace ElecSim {
+// TODO: Solve the tile lookup speed problem or find a way around it.
 class Grid {
  private:  struct SignalEdge {
     olc::vi2d sourcePos;
@@ -47,6 +48,7 @@ class Grid {
 
   TileField tiles;
   std::vector<std::weak_ptr<GridTile>> emitters;
+
   // Using a segmented set here because we are inserting a lot of things
   ankerl::unordered_dense::segmented_set<SignalEdge, SignalEdgeHash> currentTickVisitedEdges;
   std::queue<UpdateEvent> updateQueue;
