@@ -50,3 +50,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nfd)
 # NFD already defines its own targets in its CMakeLists.txt, so we don't need to create one
+
+FetchContent_Declare(unordered_dense
+  GIT_REPOSITORY https://github.com/martinus/unordered_dense
+  GIT_TAG main
+)
+FetchContent_MakeAvailable(unordered_dense)

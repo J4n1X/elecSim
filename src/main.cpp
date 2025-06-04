@@ -1,4 +1,7 @@
+#include <algorithm>
+#include <chrono>
 #include <format>
+#include <numeric>
 #include <ranges>
 #include <string>
 
@@ -226,7 +229,7 @@ class Game : public olc::PixelGameEngine {
     tileBuffer.clear();
     std::cout << "Cleared tile buffer" << std::endl;
   }
-  
+
   void Reset() {
     grid.ResetSimulation();
     isReset = true;
@@ -585,6 +588,9 @@ class Game : public olc::PixelGameEngine {
     }
   }
 
+  uint64_t drawTimeMicros = 0;
+  uint64_t simTimeMicros = 0;
+
   void DrawStatusString(olc::vi2d highlightWorldPos, int drawnTilesCount) {
     // Status string
     std::stringstream ss;
@@ -624,8 +630,16 @@ class Game : public olc::PixelGameEngine {
        << "Tiles: " << grid.GetTileCount() << " (" << drawnTilesCount
        << " visible"
        << ")" << "; "
-       << "Updates: " << updatesPerTick << " per tick" << '\n'
-       << "Press ',' to increase and '.' to decrease speed";
+       << "Updates: " << updatesPerTick << " per tick\n"
+       << "Draw Time: " << std::format("{:.3f} ms\n", drawTimeMicros / 1000.f)
+       << "Sim Time: ";
+    if (paused) {
+      ss << "Paused\n";
+    } else {
+      ss << std::format("{:.3f} ms\n", simTimeMicros / 1000.f);
+    }
+
+    ss << "Press ',' to increase and '.' to decrease speed";
 
     SetDrawTarget((uint8_t)(uiLayer & 0x0F));
     DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
@@ -648,7 +662,13 @@ class Game : public olc::PixelGameEngine {
     if (accumulatedTime > updateInterval && !paused) {
       isReset = false;
       try {
+        auto simStartTime = std::chrono::high_resolution_clock::now();
         updatesPerTick = grid.Simulate();
+        auto simEndTime = std::chrono::high_resolution_clock::now();
+
+        simTimeMicros = std::chrono::duration_cast<std::chrono::microseconds>(
+                            simEndTime - simStartTime)
+                            .count();
       } catch (const std::exception& e) {
         std::cout << "Simulation error: " << e.what() << std::endl;
         paused = true;
@@ -666,6 +686,8 @@ class Game : public olc::PixelGameEngine {
     if (paused) updatesPerTick = 0;
 
     // Draw grid and UI
+
+    auto drawStartTime = std::chrono::high_resolution_clock::now();
     SetDrawTarget(uiLayer);
     Clear(olc::BLANK);
     int drawnTiles = grid.Draw(this);
@@ -674,6 +696,10 @@ class Game : public olc::PixelGameEngine {
       // Draw the other GUI elements
       DrawHighlight(highlightWorldPos);
       DrawTilePreviews(highlightWorldPos);
+      auto drawEndTime = std::chrono::high_resolution_clock::now();
+      drawTimeMicros = std::chrono::duration_cast<std::chrono::microseconds>(
+                           drawEndTime - drawStartTime)
+                           .count();
       DrawStatusString(highlightWorldPos, drawnTiles);
     }
 

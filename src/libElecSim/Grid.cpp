@@ -6,6 +6,7 @@
 #include <iostream>
 #include <ranges>
 #include <stdexcept>
+#include <type_traits>
 
 namespace ElecSim {
 
@@ -16,28 +17,14 @@ bool Grid::SignalEdge::operator==(const SignalEdge& other) const {
 
 // Implementation of SignalEdgeHash::operator()
 std::size_t Grid::SignalEdgeHash::operator()(const SignalEdge& edge) const {
-  // Naive approach for now. I want to implement this quickly.
-  // TODO: More sophisticated hash function that is FASTER!
-  return std::hash<int>()(edge.sourcePos.x) ^
-         (std::hash<int>()(edge.sourcePos.y) << 1) ^
-         (std::hash<int>()(edge.targetPos.x) << 2) ^
-         (std::hash<int>()(edge.targetPos.y) << 3);
+  using ankerl::unordered_dense::detail::wyhash::hash;
+  return hash(&edge, sizeof(SignalEdge));
 }
 
 // Implementation of PositionHash::operator()
 std::size_t Grid::PositionHash::operator()(const olc::vi2d& pos) const {
-  size_t x = static_cast<size_t>(pos.x);
-  size_t y =
-      static_cast<size_t>(pos.y);  // Fixed a bug here - changed pos.x to pos.y
-  if constexpr (sizeof(std::size_t) == 8 && sizeof(int) == 4) {
-    // Just bitwise or them together, we have the space
-    return (x << 32) | y;
-  } else {
-    // Szudzik's Pairing Function - apparently it's fast.
-    return x >= y ? (x * x + x + y) : (x + y * y);
-    // This line is unreachable but was in the original code:
-    // return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.y) << 1);
-  }
+  using ankerl::unordered_dense::detail::wyhash::hash;
+  return hash(&pos, sizeof(olc::vi2d));
 }
 
 // Implementation of PositionEqual::operator()
@@ -80,12 +67,8 @@ olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) const {
   }
 }
 
-void Grid::ProcessSignalEvent(const SignalEvent& event) {
-  auto tileIt = tiles.find(event.sourcePos);
-  if (tileIt == tiles.end()) return;
-
-  auto& tile = tileIt->second;
-  auto newSignals = tile->ProcessSignal(event);
+void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
+  auto newSignals = updateEvent.tile->ProcessSignal(updateEvent.event);
 
   // Queue up new signals
   for (const auto& signal : newSignals) {
@@ -107,13 +90,13 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
     }
 
     // Record this edge as visited
-    currentTickVisitedEdges.insert(edge);
-
+    
     auto targetTileIt = tiles.find(targetPos);
     if (targetTileIt == tiles.end()) continue;
-
+    
     auto& targetTile = targetTileIt->second;
     if (targetTile->CanReceiveFrom(signal.fromDirection)) {
+      currentTickVisitedEdges.insert(edge);
       // Create a simpler signal event (no visited positions)
       QueueUpdate(targetTile,
                   SignalEvent(targetPos, FlipDirection(signal.fromDirection),
@@ -122,6 +105,8 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
   }
   return;
 }
+
+
 
 int Grid::Simulate() {
   int updatesProcessed = 0;
@@ -166,7 +151,7 @@ int Grid::Simulate() {
     auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
-    ProcessSignalEvent(update.event);
+    ProcessUpdateEvent(update);
     updatesProcessed++;
   }
   std::cout << std::flush;
@@ -182,7 +167,6 @@ void Grid::ResetSimulation() {
     updateQueue = std::queue<UpdateEvent>();
   }
   currentTickVisitedEdges.clear();
-  emitters.clear();
 
   // Reset all tiles
   for (auto& [pos, tile] : tiles) {
@@ -206,6 +190,22 @@ int Grid::Draw(olc::PixelGameEngine* renderer) {
   // Draw tiles
   // This spriteSize causes overdraw all the time, but without it, we get
   // pixel gaps Update: Now that we use decals, this is a non-issue.
+
+  //const olc::vi2d worldRenderWindowStart = ScreenToWorld(renderOffset);
+  //const olc::vi2d worldRenderWindowEnd = ScreenToWorld(renderWindow);
+  //// std::cout << std::format("World render window: ({}, {})", worldRenderWindow.x, worldRenderWindow.y) << std::endl;
+  //auto visibleTiles = tiles | std::views::filter([&worldRenderWindowEnd, &worldRenderWindowStart](const auto& pair){
+  //  const auto& [pos, tile] = pair;
+  //  return pos > worldRenderWindowStart && pos < worldRenderWindowEnd;
+  //}) | std::views::transform([&](const auto& pair) {
+  //  return std::make_pair(WorldToScreenFloating(pair.first), std::move(pair.second));
+  //});
+  //for (const auto& [screenPos, tile] : visibleTiles) {
+  //  if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
+  //  tile->Draw(renderer, screenPos, spriteSize);
+  //  drawnTiles++;
+  //}
+
   auto spriteSize = std::ceil(renderScale);
   int drawnTiles = 0;
   for (const auto& [pos, tile] : tiles) {

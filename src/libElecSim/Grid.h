@@ -6,8 +6,10 @@
 #include <queue>
 #include <string>
 #include <vector>
+#include <type_traits>
 
 #include "GridTileTypes.h"  // Include this for derived tile types
+#include "ankerl/unordered_dense.h"
 #include "olcPixelGameEngine.h"
 
 namespace ElecSim {
@@ -19,10 +21,12 @@ class Grid {
     bool operator==(const SignalEdge& other) const;
   };
   struct SignalEdgeHash {
+    using is_avalanching = void;
     std::size_t operator()(const SignalEdge& edge) const;
   };
   // Hash functor for olc::vi2d to use in unordered sets/maps
   struct PositionHash {
+    using is_avalanching = void;
     std::size_t operator()(const olc::vi2d& pos) const;
   };
 
@@ -31,7 +35,7 @@ class Grid {
     bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
   };
 
-  using TileField = std::unordered_map<olc::vi2d, std::shared_ptr<GridTile>,
+  using TileField = ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
                                        PositionHash, PositionEqual>;
 
   olc::Pixel backgroundColor = olc::BLUE;
@@ -43,13 +47,14 @@ class Grid {
 
   TileField tiles;
   std::vector<std::weak_ptr<GridTile>> emitters;
-  std::unordered_set<SignalEdge, SignalEdgeHash> currentTickVisitedEdges;
+  // Using a segmented set here because we are inserting a lot of things
+  ankerl::unordered_dense::segmented_set<SignalEdge, SignalEdgeHash> currentTickVisitedEdges;
   std::queue<UpdateEvent> updateQueue;
 
   float renderScale;
   olc::vf2d renderOffset = {0.0f, 0.0f};  // Offset for rendering
 
-  void ProcessSignalEvent(const SignalEvent& event);
+  void ProcessUpdateEvent(const UpdateEvent& updateEvent);
   olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir) const;
 
  public:
