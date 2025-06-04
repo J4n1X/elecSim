@@ -1,7 +1,14 @@
 cmake_minimum_required(VERSION 3.20)
-
 project("elecSim")
-enable_testing()
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+
+include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  target_link_libraries(olcPixelGameEngine PUBLIC X11 GL pthread png stdc++fs)
+endif()
+
 
 set(TESTS_DIR ${PROJECT_SOURCE_DIR}/examples/tests)
 
@@ -39,11 +46,7 @@ endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-add_subdirectory(${PROJECT_SOURCE_DIR}/include)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
-
+enable_testing()
 add_test(NAME prober COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prober -f ${TESTS_DIR}/componentTest.grid -t ${TESTS_DIR}/componentTest.probe -v)

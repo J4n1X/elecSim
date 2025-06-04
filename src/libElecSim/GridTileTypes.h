@@ -88,7 +88,6 @@ class SemiConductorGridTile : public GridTile {
                         Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
-  void ResetActivation() override;
 
   std::string_view TileTypeName() const override { return "Semiconductor"; }
   bool IsEmitter() const override { return false; }

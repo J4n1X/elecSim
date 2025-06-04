@@ -145,11 +145,6 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
   return {};
 }
 
-void SemiConductorGridTile::ResetActivation() {
-  activated = defaultActivation;
-  // inputStates is reset in base class
-}
-
 // --- ButtonGridTile Implementation ---
 
 ButtonGridTile::ButtonGridTile(olc::vi2d pos, Direction facing, float size)

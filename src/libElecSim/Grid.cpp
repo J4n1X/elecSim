@@ -27,7 +27,8 @@ std::size_t Grid::SignalEdgeHash::operator()(const SignalEdge& edge) const {
 // Implementation of PositionHash::operator()
 std::size_t Grid::PositionHash::operator()(const olc::vi2d& pos) const {
   size_t x = static_cast<size_t>(pos.x);
-  size_t y = static_cast<size_t>(pos.y);  // Fixed a bug here - changed pos.x to pos.y
+  size_t y =
+      static_cast<size_t>(pos.y);  // Fixed a bug here - changed pos.x to pos.y
   if constexpr (sizeof(std::size_t) == 8 && sizeof(int) == 4) {
     // Just bitwise or them together, we have the space
     return (x << 32) | y;
@@ -40,7 +41,8 @@ std::size_t Grid::PositionHash::operator()(const olc::vi2d& pos) const {
 }
 
 // Implementation of PositionEqual::operator()
-bool Grid::PositionEqual::operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const {
+bool Grid::PositionEqual::operator()(const olc::vi2d& lhs,
+                                     const olc::vi2d& rhs) const {
   return lhs == rhs;
 }
 
@@ -89,21 +91,21 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
   for (const auto& signal : newSignals) {
     auto targetPos = TranslatePosition(signal.sourcePos,
                                        FlipDirection(signal.fromDirection));
-                                       
+
     // Create signal edge
     SignalEdge edge{signal.sourcePos, targetPos};
-    
+
     // Check if this edge has been traversed in this tick
     if (currentTickVisitedEdges.contains(edge)) {
       // This would create a cycle - throw an exception
       // If we didn't, and just skipped, it would result in false behavior.
       throw std::runtime_error(std::format(
           "Cycle detected in signal processing: edge from ({},{}) to ({},{}). "
-          "Offending signal side: {}",
-          edge.sourcePos.x, edge.sourcePos.y, edge.targetPos.x, edge.targetPos.y,
-          DirectionToString(signal.fromDirection)));
+          "Offending signal side: {}; Total processed edges this tick: {}",
+          edge.sourcePos.x, edge.sourcePos.y, edge.targetPos.x,
+          edge.targetPos.y, DirectionToString(signal.fromDirection), currentTickVisitedEdges.size()));
     }
-    
+
     // Record this edge as visited
     currentTickVisitedEdges.insert(edge);
 
@@ -113,10 +115,9 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
     auto& targetTile = targetTileIt->second;
     if (targetTile->CanReceiveFrom(signal.fromDirection)) {
       // Create a simpler signal event (no visited positions)
-      QueueUpdate(
-          targetTile,
-          SignalEvent(targetPos, FlipDirection(signal.fromDirection),
-                      signal.isActive));
+      QueueUpdate(targetTile,
+                  SignalEvent(targetPos, FlipDirection(signal.fromDirection),
+                              signal.isActive));
     }
   }
   return;
@@ -125,7 +126,7 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
 int Grid::Simulate() {
   int updatesProcessed = 0;
   currentTick++;  // Increment the tick counter
-  
+
   // Clear edge tracking for this simulation tick
   currentTickVisitedEdges.clear();
 
@@ -141,7 +142,7 @@ int Grid::Simulate() {
       tile->SetActivation(!tile->GetActivation());  // Toggle emitter state
       // Now using the simpler SignalEvent constructor
       QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
-                                  tile->GetActivation()));
+                                    tile->GetActivation()));
     }
     ++it;
   }
@@ -168,17 +169,20 @@ int Grid::Simulate() {
     ProcessSignalEvent(update.event);
     updatesProcessed++;
   }
+  std::cout << std::flush;
+
   return updatesProcessed;
 }
 
 void Grid::ResetSimulation() {
+  // Reset tick counter
+  currentTick = 0;
   // Clear the update queue
   if (!updateQueue.empty()) {
     updateQueue = std::queue<UpdateEvent>();
   }
-
-  // Reset tick counter
-  currentTick = 0;
+  currentTickVisitedEdges.clear();
+  emitters.clear();
 
   // Reset all tiles
   for (auto& [pos, tile] : tiles) {
