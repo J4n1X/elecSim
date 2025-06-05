@@ -107,7 +107,7 @@ void GridTile::SetFacing(Direction newFacing) {
   }
 }
 
-const std::string& GridTile::GetTileInformation() const {
+std::string GridTile::GetTileInformation() const {
   std::stringstream stream;
   // All in one line
   stream << "Tile Type: " << TileTypeName() << ", "

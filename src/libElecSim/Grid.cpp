@@ -52,7 +52,7 @@ void Grid::QueueUpdate(std::shared_ptr<GridTile> tile,
   updateQueue.push(UpdateEvent(tile, event, currentTick));
 }
 
-olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) const {
+olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) {
   switch (dir) {
     case Direction::Top:
       return pos + olc::vi2d(0, -1);
@@ -65,6 +65,53 @@ olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) const {
     default:
       return pos;
   }
+}
+
+Grid::DeterministicPath Grid::ChartDeterministicPath(
+    const UpdateEvent& updateEvent) {
+  std::queue<UpdateEvent> pathQueue;
+  DeterministicPath path = DeterministicPath::Begin(updateEvent.tile->GetPos());
+  if (!updateEvent.tile->IsDeterministic()) {
+    throw std::runtime_error(
+        "ChartDeterministicPath called on non-deterministic tile");
+  }
+  pathQueue.push(updateEvent);
+
+  while (!pathQueue.empty()) {
+    auto update = pathQueue.front();
+    pathQueue.pop();
+
+    // We are certainly a deterministic tile here, so push
+    path.AddTile(update.tile);
+
+    auto signals = update.tile->ProcessSignal(update.event);
+    int newUpdateCount = 0;
+    for (const auto& signal : signals) {
+      auto targetPos = TranslatePosition(signal.sourcePos,
+                                         FlipDirection(signal.fromDirection));
+
+      auto targetTileIt = tiles.find(targetPos);
+      if (targetTileIt == tiles.end()) {
+        path.AddPathEnd(targetPos, signal.fromDirection);
+        continue;
+      }
+      auto& targetTile = targetTileIt->second;
+
+      // If the target tile is deterministic, we can chart a path
+      if (targetTile->IsDeterministic()) {
+        // queue up another update
+        pathQueue.push(UpdateEvent(
+            targetTile,
+            SignalEvent(targetPos, FlipDirection(signal.fromDirection),
+                        signal.isActive),
+            update.updateCycleId));
+        newUpdateCount++;
+      } else {
+        path.AddPathEnd(targetPos, signal.fromDirection);
+      }
+    }
+  }
+  return path;
 }
 
 void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
@@ -86,14 +133,15 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
           "Cycle detected in signal processing: edge from ({},{}) to ({},{}). "
           "Offending signal side: {}; Total processed edges this tick: {}",
           edge.sourcePos.x, edge.sourcePos.y, edge.targetPos.x,
-          edge.targetPos.y, DirectionToString(signal.fromDirection), currentTickVisitedEdges.size()));
+          edge.targetPos.y, DirectionToString(signal.fromDirection),
+          currentTickVisitedEdges.size()));
     }
 
     // Record this edge as visited
-    
+
     auto targetTileIt = tiles.find(targetPos);
     if (targetTileIt == tiles.end()) continue;
-    
+
     auto& targetTile = targetTileIt->second;
     if (targetTile->CanReceiveFrom(signal.fromDirection)) {
       currentTickVisitedEdges.insert(edge);
@@ -105,8 +153,6 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
   }
   return;
 }
-
-
 
 int Grid::Simulate() {
   int updatesProcessed = 0;
@@ -137,7 +183,6 @@ int Grid::Simulate() {
   // and we throw a runtime_error when we detect a cycle.
   // However, we'll still keep a reasonable upper limit as a safety measure:
   constexpr int MAX_UPDATES = 100000;
-
   while (!updateQueue.empty()) {
     // Safety check - prevent extremely long update chains
     if (updatesProcessed > MAX_UPDATES) {
@@ -151,8 +196,52 @@ int Grid::Simulate() {
     auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
-    ProcessUpdateEvent(update);
-    updatesProcessed++;
+
+    // TODO: Fix this, then split it into a nice seperate function.
+    // Patched out for the time being because it's broken :(
+    if (false && update.tile->IsDeterministic()) {
+      auto path = deterministicPaths.find(update.tile->GetPos());
+      if (path == deterministicPaths.end()) {
+        auto flippedUpdate = update;
+        flippedUpdate.event.isActive =
+            !update.event.isActive;  // Flip the signal state
+        auto pathA = ChartDeterministicPath(update);
+        auto pathB = ChartDeterministicPath(flippedUpdate);
+        if (flippedUpdate.event.isActive) {
+          std::swap(pathA, pathB);  // Ensure pathA is always the active one
+        }
+        std::array<DeterministicPath, 2> paths = {pathA, pathB};
+        deterministicPaths.insert_or_assign(update.tile->GetPos(),
+                                            std::move(paths));
+      }
+      // Apply it
+      DeterministicPath applPath =
+          deterministicPaths.at(update.tile->GetPos())[update.event.isActive];
+      auto signals = applPath.Apply();  // Apply the path and get updates
+      for (const auto& [targetPos, signal] : signals) {
+        auto targetTileIt = tiles.find(targetPos);
+        if (targetTileIt == tiles.end()) continue;
+
+        auto& targetTile = targetTileIt->second;
+        if (targetTile->CanReceiveFrom(signal.fromDirection)) {
+          // Queue the update for the target tile
+          std::cout
+              << std::format(
+                     "Queueing update for tile at ({},{}) with signal: {} value {}",
+                     targetTile->GetPos().x, targetTile->GetPos().y,
+                     DirectionToString(signal.fromDirection), signal.isActive)
+              << std::endl;
+          QueueUpdate(targetTile, signal);
+          updatesProcessed++;
+        }
+      }
+      std::cout << std::format("Applied deterministic path:\n{}",
+                               applPath.GetPathInformation())
+                << std::endl;
+    } else {
+      ProcessUpdateEvent(update);
+      updatesProcessed++;
+    }
   }
   std::cout << std::flush;
 
@@ -167,11 +256,13 @@ void Grid::ResetSimulation() {
     updateQueue = std::queue<UpdateEvent>();
   }
   currentTickVisitedEdges.clear();
+  deterministicPaths.clear();
 
   // Reset all tiles
   for (auto& [pos, tile] : tiles) {
     tile->ResetActivation();
     auto initState = tile->Init();
+    if (initState.empty()) continue;  // No initial state to process
     for (const auto& event : initState) {
       QueueUpdate(tile, event);
     }
@@ -190,21 +281,6 @@ int Grid::Draw(olc::PixelGameEngine* renderer) {
   // Draw tiles
   // This spriteSize causes overdraw all the time, but without it, we get
   // pixel gaps Update: Now that we use decals, this is a non-issue.
-
-  //const olc::vi2d worldRenderWindowStart = ScreenToWorld(renderOffset);
-  //const olc::vi2d worldRenderWindowEnd = ScreenToWorld(renderWindow);
-  //// std::cout << std::format("World render window: ({}, {})", worldRenderWindow.x, worldRenderWindow.y) << std::endl;
-  //auto visibleTiles = tiles | std::views::filter([&worldRenderWindowEnd, &worldRenderWindowStart](const auto& pair){
-  //  const auto& [pos, tile] = pair;
-  //  return pos > worldRenderWindowStart && pos < worldRenderWindowEnd;
-  //}) | std::views::transform([&](const auto& pair) {
-  //  return std::make_pair(WorldToScreenFloating(pair.first), std::move(pair.second));
-  //});
-  //for (const auto& [screenPos, tile] : visibleTiles) {
-  //  if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
-  //  tile->Draw(renderer, screenPos, spriteSize);
-  //  drawnTiles++;
-  //}
 
   auto spriteSize = std::ceil(renderScale);
   int drawnTiles = 0;

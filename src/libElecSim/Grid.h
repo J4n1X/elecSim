@@ -5,18 +5,18 @@
 #include <optional>
 #include <queue>
 #include <string>
-#include <vector>
 #include <type_traits>
+#include <vector>
 
 #include "GridTileTypes.h"  // Include this for derived tile types
 #include "ankerl/unordered_dense.h"
 #include "olcPixelGameEngine.h"
 
-
 namespace ElecSim {
 // TODO: Solve the tile lookup speed problem or find a way around it.
 class Grid {
- private:  struct SignalEdge {
+ private:
+  struct SignalEdge {
     olc::vi2d sourcePos;
     olc::vi2d targetPos;
     bool operator==(const SignalEdge& other) const;
@@ -36,8 +36,71 @@ class Grid {
     bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
   };
 
-  using TileField = ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
-                                       PositionHash, PositionEqual>;
+  struct DeterministicPath {
+   private:
+   // This could probably be another shared_ptr to a non-deterministic tile.
+    struct PathEnd {
+      olc::vi2d pos;
+      Direction facing;
+      size_t index;
+    };
+
+   public:
+    olc::vi2d pathStart;            // Location of first determininistic tile
+    std::vector<PathEnd> pathEnds;  // Location of last deterministic tile
+    std::vector<std::shared_ptr<GridTile>> path;
+    // If the value needs to be flipped when applying, it's true on this list.
+    std::vector<bool> flippedStateList;
+
+    static DeterministicPath Begin(olc::vi2d startPos) {
+      return DeterministicPath{startPos, {}, {}, {}};
+    }
+
+    void AddTile(std::shared_ptr<GridTile> tile) {
+      flippedStateList.push_back(tile->GetActivation());
+      path.push_back(std::move(tile));
+    }
+
+    // Take the position of the tile right outside the path and the
+    // Direction from which it is to be activated.
+    void AddPathEnd(olc::vi2d endPos, Direction endOutputFacing) {
+      pathEnds.push_back({endPos, endOutputFacing, path.size() - 1});
+    }
+
+    std::vector<std::pair<olc::vi2d, SignalEvent>> Apply() {
+      decltype(this->Apply()) updates;
+      for (size_t i = 0; i < path.size(); ++i) {
+        path[i]->SetActivation(flippedStateList[i]);
+      }
+      for (auto& pathEnd : pathEnds) {
+        auto targetPos = pathEnd.pos;
+        auto targetInputFacing = FlipDirection(pathEnd.facing);
+        auto targetNewState = flippedStateList[pathEnd.index];
+        updates.emplace_back(
+            targetPos,
+            SignalEvent(path[pathEnd.index]->GetPos(), targetInputFacing, targetNewState));
+      }
+      return updates;
+    }
+
+    std::string GetPathInformation() const {
+      std::stringstream ss;
+      ss << std::format("Path Start: ({}, {})\n", pathStart.x, pathStart.y)
+         << "Path Ends:\n";
+      for (const auto& end : pathEnds) {
+        ss << std::format("  - ({}, {})\n", end.pos.x, end.pos.y);
+      }
+      ss << "Path Tiles:\n";
+      for (const auto& tile : path) {
+        ss << tile->GetTileInformation() + "\n";
+      }
+      return ss.str();
+    }
+  };
+
+  using TileField =
+      ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
+                                   PositionHash, PositionEqual>;
 
   olc::Pixel backgroundColor = olc::BLUE;
   olc::vi2d renderWindow;
@@ -47,17 +110,22 @@ class Grid {
   uint32_t currentTick = 0;  // Current game tick (used by emitters)
 
   TileField tiles;
+  ankerl::unordered_dense::map<olc::vi2d, std::array<DeterministicPath, 2>,
+                               PositionHash, PositionEqual>
+      deterministicPaths;  // Maps start positions to their paths
   std::vector<std::weak_ptr<GridTile>> emitters;
 
   // Using a segmented set here because we are inserting a lot of things
-  ankerl::unordered_dense::segmented_set<SignalEdge, SignalEdgeHash> currentTickVisitedEdges;
+  ankerl::unordered_dense::segmented_set<SignalEdge, SignalEdgeHash>
+      currentTickVisitedEdges;
   std::queue<UpdateEvent> updateQueue;
 
   float renderScale;
   olc::vf2d renderOffset = {0.0f, 0.0f};  // Offset for rendering
 
+  DeterministicPath ChartDeterministicPath(const UpdateEvent& updateEvent);
   void ProcessUpdateEvent(const UpdateEvent& updateEvent);
-  olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir) const;
+  static olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir);
 
  public:
   Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset, int uiLayer,

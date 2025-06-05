@@ -6,8 +6,8 @@
 #include <unordered_set>
 #include <vector>
 
-#include "olcPixelGameEngine.h"
 #include "Common.h"
+#include "olcPixelGameEngine.h"
 
 namespace ElecSim {
 // Base tile class
@@ -53,18 +53,19 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual void
   ResetActivation();  // Changed from inline to virtual with implementation
 
-  const bool GetActivation() const { return activated; }
-  const bool GetDefaultActivation() const { return defaultActivation; }
+  bool GetActivation() const { return activated; }
+  bool GetDefaultActivation() const { return defaultActivation; }
   const olc::vi2d& GetPos() const { return pos; }
-  const float GetSize() const { return size; }
+  float GetSize() const { return size; }
   const Direction& GetFacing() const { return facing; }
-  const std::string& GetTileInformation() const;
-  const size_t GetRefNum() const { return refNum; }
+  std::string GetTileInformation() const;
+  size_t GetRefNum() const { return refNum; }
 
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
 
   virtual std::string_view TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
+  virtual bool IsDeterministic() const = 0;
   virtual int GetTileTypeId() const = 0;
 
   // Virtual clone method for copying tiles
@@ -81,5 +82,4 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
                                                     int screenSize,
                                                     Direction facing);
 };
-
 }  // namespace ElecSim

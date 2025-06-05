@@ -15,6 +15,7 @@ class WireGridTile : public GridTile {
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::string_view TileTypeName() const override { return "Wire"; }
   bool IsEmitter() const override { return false; }
+  bool IsDeterministic() const override { return true; }
   int GetTileTypeId() const override { return 0; }
   
   std::unique_ptr<GridTile> Clone() const override {
@@ -34,6 +35,7 @@ class JunctionGridTile : public GridTile {
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::string_view TileTypeName() const override { return "Junction"; }
   bool IsEmitter() const override { return false; }
+  bool IsDeterministic() const override { return true; }
   int GetTileTypeId() const override { return 1; }
   
   std::unique_ptr<GridTile> Clone() const override {
@@ -62,6 +64,7 @@ class EmitterGridTile : public GridTile {
 
   std::string_view TileTypeName() const override { return "Emitter"; }
   bool IsEmitter() const override { return true; }
+  bool IsDeterministic() const override { return false; }
   int GetTileTypeId() const override { return 2; }
   
   std::unique_ptr<GridTile> Clone() const override {
@@ -91,6 +94,7 @@ class SemiConductorGridTile : public GridTile {
 
   std::string_view TileTypeName() const override { return "Semiconductor"; }
   bool IsEmitter() const override { return false; }
+  bool IsDeterministic() const override { return false; }
   int GetTileTypeId() const override { return 3; }
   
   std::unique_ptr<GridTile> Clone() const override {
@@ -117,6 +121,7 @@ class ButtonGridTile : public GridTile {
 
   std::string_view TileTypeName() const override { return "Button"; }
   bool IsEmitter() const override { return false; }
+  bool IsDeterministic() const override { return false; }
   int GetTileTypeId() const override { return 4; }
   
   std::unique_ptr<GridTile> Clone() const override {
@@ -144,6 +149,7 @@ class InverterGridTile : public GridTile {
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::string_view TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
+  bool IsDeterministic() const override { return true; }
   int GetTileTypeId() const override { return 5; }
   
   std::unique_ptr<GridTile> Clone() const override {
@@ -166,6 +172,7 @@ class CrossingGridTile : public GridTile {
   
   std::string_view TileTypeName() const override { return "Crossing"; }
   bool IsEmitter() const override { return false; }
+  bool IsDeterministic() const override { return true; }
   int GetTileTypeId() const override { return 6; }
   
   std::unique_ptr<GridTile> Clone() const override {
