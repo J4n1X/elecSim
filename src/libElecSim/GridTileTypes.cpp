@@ -19,7 +19,6 @@ WireGridTile::WireGridTile(olc::vi2d pos, Direction facing, float size)
 
 std::vector<SignalEvent> WireGridTile::ProcessSignal(
     const SignalEvent& signal) {
-  // Restore previous logic: flip direction for inputStates update
   inputStates[signal.fromDirection] = signal.isActive;
 
   // Check if any input is active (from a direction we can receive from)
@@ -241,6 +240,15 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
     return {SignalEvent(pos, facing, activated)};
   }
   return {};
+}
+std::vector<SignalEvent> InverterGridTile::PreprocessSignal(
+    const std::vector<SignalEvent> incomingSignals) {
+  for(const auto& signal : incomingSignals){
+    if(signal.isActive && canReceive[facing]) {
+      // If any incoming signal is active, we output the inverted state
+      return {SignalEvent(pos, facing, !activated)};
+    }
+  }
 }
 
 // --- CrossingGridTile Implementation ---
