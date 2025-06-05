@@ -13,6 +13,7 @@ class WireGridTile : public GridTile {
                Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) override;
   std::string_view TileTypeName() const override { return "Wire"; }
   bool IsEmitter() const override { return false; }
   bool IsDeterministic() const override { return true; }
@@ -33,6 +34,7 @@ class JunctionGridTile : public GridTile {
                    Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) override;
   std::string_view TileTypeName() const override { return "Junction"; }
   bool IsEmitter() const override { return false; }
   bool IsDeterministic() const override { return true; }
@@ -58,6 +60,7 @@ class EmitterGridTile : public GridTile {
                   Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) override;
   std::vector<SignalEvent> Interact() override;
   void ResetActivation() override;
   bool ShouldEmit(int currentTick) const;
@@ -91,6 +94,7 @@ class SemiConductorGridTile : public GridTile {
                         Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) override;
 
   std::string_view TileTypeName() const override { return "Semiconductor"; }
   bool IsEmitter() const override { return false; }
@@ -117,6 +121,7 @@ class ButtonGridTile : public GridTile {
                  Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) override;
   std::vector<SignalEvent> Interact() override;
 
   std::string_view TileTypeName() const override { return "Button"; }
@@ -147,6 +152,7 @@ class InverterGridTile : public GridTile {
   }
   std::vector<SignalEvent> Init() override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) override;
   std::string_view TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
   bool IsDeterministic() const override { return true; }
@@ -169,6 +175,7 @@ class CrossingGridTile : public GridTile {
   void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
             float screenSize, int alpha = 255) override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+  std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) override;
   
   std::string_view TileTypeName() const override { return "Crossing"; }
   bool IsEmitter() const override { return false; }

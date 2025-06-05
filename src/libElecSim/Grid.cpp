@@ -67,56 +67,50 @@ olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) {
   }
 }
 
-Grid::DeterministicPath Grid::ChartDeterministicPath(
+std::vector<UpdateEvent> Grid::ChartDeterministicPath(
     const UpdateEvent& updateEvent) {
   std::queue<UpdateEvent> pathQueue;
-  DeterministicPath path = DeterministicPath::Begin(updateEvent.tile->GetPos());
+  std::vector<UpdateEvent> updateCache;
   if (!updateEvent.tile->IsDeterministic()) {
     throw std::runtime_error(
         "ChartDeterministicPath called on non-deterministic tile");
   }
   pathQueue.push(updateEvent);
-
   while (!pathQueue.empty()) {
     auto update = pathQueue.front();
     pathQueue.pop();
+    // We cache these updates so we can apply them in sequence later.
+    updateCache.push_back(update);
 
-    // We are certainly a deterministic tile here, so push
-    path.AddTile(update.tile);
+    auto newSignals = update.tile->ProcessSignal(update.event);
 
-    auto signals = update.tile->ProcessSignal(update.event);
-    int newUpdateCount = 0;
-    for (const auto& signal : signals) {
+    for (const auto& signal : newSignals) {
       auto targetPos = TranslatePosition(signal.sourcePos,
                                          FlipDirection(signal.fromDirection));
 
       auto targetTileIt = tiles.find(targetPos);
       if (targetTileIt == tiles.end()) {
-        path.AddPathEnd(targetPos, signal.fromDirection);
+        // path.AddPathEnd(targetPos, std::nullopt);
         continue;
       }
-      auto& targetTile = targetTileIt->second;
 
-      // If the target tile is deterministic, we can chart a path
-      if (targetTile->IsDeterministic()) {
-        // queue up another update
-        pathQueue.push(UpdateEvent(
-            targetTile,
-            SignalEvent(targetPos, FlipDirection(signal.fromDirection),
-                        signal.isActive),
-            update.updateCycleId));
-        newUpdateCount++;
-      } else {
-        path.AddPathEnd(targetPos, signal.fromDirection);
+      auto& targetTile = targetTileIt->second;
+      if (targetTile->CanReceiveFrom(signal.fromDirection)) {
+        if (targetTile->IsDeterministic()) {
+          // If the target tile is deterministic, we can chart the path
+          pathQueue.push(UpdateEvent(targetTile, signal, currentTick));
+        } else {
+          // If not, we just add the signal end
+          // path.AddPathEnd(targetPos, signal);
+        }
       }
     }
   }
-  return path;
+  return updateCache;
 }
 
 void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
   auto newSignals = updateEvent.tile->ProcessSignal(updateEvent.event);
-
   // Queue up new signals
   for (const auto& signal : newSignals) {
     auto targetPos = TranslatePosition(signal.sourcePos,
@@ -130,7 +124,8 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
       // This would create a cycle - throw an exception
       // If we didn't, and just skipped, it would result in false behavior.
       throw std::runtime_error(std::format(
-          "Cycle detected in signal processing: edge from ({},{}) to ({},{}). "
+          "Cycle detected in signal processing: edge from ({},{}) to "
+          "({},{}). "
           "Offending signal side: {}; Total processed edges this tick: {}",
           edge.sourcePos.x, edge.sourcePos.y, edge.targetPos.x,
           edge.targetPos.y, DirectionToString(signal.fromDirection),
@@ -151,7 +146,6 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
                               signal.isActive));
     }
   }
-  return;
 }
 
 int Grid::Simulate() {
@@ -179,9 +173,9 @@ int Grid::Simulate() {
   }
 
   // We're now using signal chain tracking with visited positions to detect
-  // circular updates. Each signal keeps track of all positions it has visited,
-  // and we throw a runtime_error when we detect a cycle.
-  // However, we'll still keep a reasonable upper limit as a safety measure:
+  // circular updates. Each signal keeps track of all positions it has
+  // visited, and we throw a runtime_error when we detect a cycle. However,
+  // we'll still keep a reasonable upper limit as a safety measure:
   constexpr int MAX_UPDATES = 100000;
   while (!updateQueue.empty()) {
     // Safety check - prevent extremely long update chains
@@ -196,55 +190,9 @@ int Grid::Simulate() {
     auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
-
-    // TODO: Fix this, then split it into a nice seperate function.
-    // Patched out for the time being because it's broken :(
-    if (false && update.tile->IsDeterministic()) {
-      auto path = deterministicPaths.find(update.tile->GetPos());
-      if (path == deterministicPaths.end()) {
-        auto flippedUpdate = update;
-        flippedUpdate.event.isActive =
-            !update.event.isActive;  // Flip the signal state
-        auto pathA = ChartDeterministicPath(update);
-        auto pathB = ChartDeterministicPath(flippedUpdate);
-        if (flippedUpdate.event.isActive) {
-          std::swap(pathA, pathB);  // Ensure pathA is always the active one
-        }
-        std::array<DeterministicPath, 2> paths = {pathA, pathB};
-        deterministicPaths.insert_or_assign(update.tile->GetPos(),
-                                            std::move(paths));
-      }
-      // Apply it
-      DeterministicPath applPath =
-          deterministicPaths.at(update.tile->GetPos())[update.event.isActive];
-      auto signals = applPath.Apply();  // Apply the path and get updates
-      for (const auto& [targetPos, signal] : signals) {
-        auto targetTileIt = tiles.find(targetPos);
-        if (targetTileIt == tiles.end()) continue;
-
-        auto& targetTile = targetTileIt->second;
-        if (targetTile->CanReceiveFrom(signal.fromDirection)) {
-          // Queue the update for the target tile
-          std::cout
-              << std::format(
-                     "Queueing update for tile at ({},{}) with signal: {} value {}",
-                     targetTile->GetPos().x, targetTile->GetPos().y,
-                     DirectionToString(signal.fromDirection), signal.isActive)
-              << std::endl;
-          QueueUpdate(targetTile, signal);
-          updatesProcessed++;
-        }
-      }
-      std::cout << std::format("Applied deterministic path:\n{}",
-                               applPath.GetPathInformation())
-                << std::endl;
-    } else {
-      ProcessUpdateEvent(update);
-      updatesProcessed++;
-    }
+    ProcessUpdateEvent(update);
+    updatesProcessed++;
   }
-  std::cout << std::flush;
-
   return updatesProcessed;
 }
 

@@ -1,6 +1,7 @@
 #include "GridTileTypes.h"
 
 #include <cmath>
+#include <ranges>
 
 namespace ElecSim {
 
@@ -39,6 +40,16 @@ std::vector<SignalEvent> WireGridTile::ProcessSignal(
   return {};
 }
 
+std::vector<SignalEvent> WireGridTile::PreprocessSignal(
+    const std::vector<SignalEvent> incomingSignals) {
+  for (auto& signal : incomingSignals) {
+    if (signal.isActive) {
+      return {SignalEvent(pos, facing, true)};
+    }
+  }
+  return {SignalEvent(pos, facing, false)};
+}
+
 // --- JunctionGridTile Implementation ---
 
 JunctionGridTile::JunctionGridTile(olc::vi2d pos, Direction facing, float size)
@@ -74,6 +85,27 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
   return events;
 }
 
+std::vector<SignalEvent> JunctionGridTile::PreprocessSignal(
+    const std::vector<SignalEvent> incomingSignals) {
+  std::vector<SignalEvent> events;
+  for (const auto& dir : AllDirections) {
+    if (canOutput[dir]) {
+      events.push_back(SignalEvent(pos, dir, false));
+    }
+  }
+
+  for (auto& signal : incomingSignals) {
+    Direction toDir = FlipDirection(facing);
+    if (signal.isActive && canReceive[toDir]) {
+      for (auto& signal : events) {
+        signal.isActive = true;
+      }
+      return events;
+    }
+  }
+  return events;
+}
+
 // --- EmitterGridTile Implementation ---
 
 EmitterGridTile::EmitterGridTile(olc::vi2d pos, Direction facing, float size)
@@ -90,6 +122,13 @@ EmitterGridTile::EmitterGridTile(olc::vi2d pos, Direction facing, float size)
 std::vector<SignalEvent> EmitterGridTile::ProcessSignal(
     [[maybe_unused]] const SignalEvent& signal) {
   return {SignalEvent(pos, facing, activated)};
+}
+
+std::vector<SignalEvent> EmitterGridTile::PreprocessSignal(
+    const std::vector<SignalEvent> incomingSignals) {
+  (void)incomingSignals;
+  throw std::runtime_error(
+      "Tried to preprocess an EmitterGridTile, which is not deterministic.");
 }
 
 std::vector<SignalEvent> EmitterGridTile::Interact() {
@@ -145,6 +184,13 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
   return {};
 }
 
+std::vector<SignalEvent> SemiConductorGridTile::PreprocessSignal(
+    const std::vector<SignalEvent> incomingSignals) {
+  (void)incomingSignals;
+  throw std::runtime_error(
+      "Tried to preprocess a SemiConductorGridTile, which is not deterministic.");
+}
+
 // --- ButtonGridTile Implementation ---
 
 ButtonGridTile::ButtonGridTile(olc::vi2d pos, Direction facing, float size)
@@ -155,6 +201,13 @@ ButtonGridTile::ButtonGridTile(olc::vi2d pos, Direction facing, float size)
 std::vector<SignalEvent> ButtonGridTile::ProcessSignal(
     [[maybe_unused]] const SignalEvent& signal) {
   return {SignalEvent(pos, facing, activated)};
+}
+
+std::vector<SignalEvent> ButtonGridTile::PreprocessSignal(
+    const std::vector<SignalEvent> incomingSignals) {
+  (void)incomingSignals;
+  throw std::runtime_error(
+      "Tried to preprocess a ButtonGridTile, which is not deterministic.");
 }
 
 std::vector<SignalEvent> ButtonGridTile::Interact() {
@@ -241,6 +294,21 @@ std::vector<SignalEvent> CrossingGridTile::ProcessSignal(
 
   // Return a signal event to the opposite direction
   return {SignalEvent(pos, outputDir, signal.isActive)};
+}
+
+std::vector<SignalEvent> CrossingGridTile::PreprocessSignal(
+    const std::vector<SignalEvent> incomingSignals) {
+  if(incomingSignals.size() > 2 ){
+    throw std::runtime_error(
+        "CrossingGridTile can only handle up to 2 incoming signals.");
+  }
+  std::vector<SignalEvent> events;
+  for(const auto& signal : incomingSignals) {
+    // For each incoming signal, we output it to the opposite direction
+    Direction outputDir = FlipDirection(signal.fromDirection);
+    events.push_back(SignalEvent(pos, outputDir, signal.isActive));
+  }
+  return events;
 }
 
 }  // namespace ElecSim

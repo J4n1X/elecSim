@@ -2,7 +2,7 @@
 #---Base state (Tick 0): 
 r 4 5 1
 s
-#---Tick 1: Should be active
+#---Tick 1: Should be inactive
 r 4 5 0
 s 
 #---Tick 2: Should be active

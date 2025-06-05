@@ -41,8 +41,9 @@ class Grid {
    // This could probably be another shared_ptr to a non-deterministic tile.
     struct PathEnd {
       olc::vi2d pos;
-      Direction facing;
       size_t index;
+      // This is what needs to be sent to the end. If not set, nothing happens.
+      std::optional<SignalEvent> resultingEvent; 
     };
 
    public:
@@ -63,22 +64,25 @@ class Grid {
 
     // Take the position of the tile right outside the path and the
     // Direction from which it is to be activated.
-    void AddPathEnd(olc::vi2d endPos, Direction endOutputFacing) {
-      pathEnds.push_back({endPos, endOutputFacing, path.size() - 1});
+    void AddPathEnd(olc::vi2d endPos, std::optional<SignalEvent> endEvent) {
+      pathEnds.push_back({endPos, path.size() - 1, endEvent});
     }
 
-    std::vector<std::pair<olc::vi2d, SignalEvent>> Apply() {
-      decltype(this->Apply()) updates;
+    std::vector<std::pair<olc::vi2d, SignalEvent>> Apply(bool enable) {
+      using UpdatesContainer = std::vector<std::pair<olc::vi2d, SignalEvent>>;
+      UpdatesContainer updates;
       for (size_t i = 0; i < path.size(); ++i) {
-        path[i]->SetActivation(flippedStateList[i]);
+        path[i]->SetActivation(
+            enable ? flippedStateList[i] : !flippedStateList[i]);
       }
       for (auto& pathEnd : pathEnds) {
-        auto targetPos = pathEnd.pos;
-        auto targetInputFacing = FlipDirection(pathEnd.facing);
-        auto targetNewState = flippedStateList[pathEnd.index];
+        if(!pathEnd.resultingEvent.has_value()) continue;
+        auto realResultingEvent = pathEnd.resultingEvent.value();
+        realResultingEvent.isActive = enable ? realResultingEvent.isActive
+                                             : !realResultingEvent.isActive;
         updates.emplace_back(
-            targetPos,
-            SignalEvent(path[pathEnd.index]->GetPos(), targetInputFacing, targetNewState));
+            pathEnd.pos,
+            realResultingEvent);
       }
       return updates;
     }
@@ -110,7 +114,7 @@ class Grid {
   uint32_t currentTick = 0;  // Current game tick (used by emitters)
 
   TileField tiles;
-  ankerl::unordered_dense::map<olc::vi2d, std::array<DeterministicPath, 2>,
+  ankerl::unordered_dense::map<olc::vi2d, std::vector<UpdateEvent>,
                                PositionHash, PositionEqual>
       deterministicPaths;  // Maps start positions to their paths
   std::vector<std::weak_ptr<GridTile>> emitters;
@@ -123,7 +127,7 @@ class Grid {
   float renderScale;
   olc::vf2d renderOffset = {0.0f, 0.0f};  // Offset for rendering
 
-  DeterministicPath ChartDeterministicPath(const UpdateEvent& updateEvent);
+  std::vector<UpdateEvent> ChartDeterministicPath(const UpdateEvent& updateEvent);
   void ProcessUpdateEvent(const UpdateEvent& updateEvent);
   static olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir);
 

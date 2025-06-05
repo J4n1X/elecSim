@@ -753,8 +753,23 @@ class Game : public olc::PixelGameEngine {
       grid.Clear();
       ConsoleOut() << "Grid cleared" << std::endl;
     } else if (command == "help") {
-      ConsoleOut() << "Available commands: exit, pause, reset, clear, new, help"
+      ConsoleOut() << "Available commands: exit, pause, reset, clear, new, help, gettile, toggleconsole"
                    << std::endl;
+    } else if (command.starts_with("gettile")) {
+      // cut down into two args
+      auto args = command.substr(8);
+      auto pos = args.find(' ');
+      if (pos == std::string::npos) {
+        ConsoleOut() << "Usage: gettile <x> <y>" << std::endl;
+        return true;
+      }
+      int x = std::stoi(args.substr(0, pos));
+      int y = std::stoi(args.substr(pos + 1));
+      auto tileOpt = grid.GetTile(olc::vi2d(x, y));
+      if(tileOpt.has_value()){
+        ConsoleOut() << tileOpt.value()->GetTileInformation() << std::endl;
+      }
+
     } else {
       ConsoleOut() << "Unknown command: " << command << std::endl;
     }

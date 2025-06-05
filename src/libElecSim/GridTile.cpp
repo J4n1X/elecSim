@@ -114,6 +114,13 @@ std::string GridTile::GetTileInformation() const {
          << "Position: (" << pos.x << ", " << pos.y << "), "
          << "Facing: " << static_cast<int>(facing) << ", "
          << "Size: " << size << ", "
+         << "Activated Sides: [";
+  for (const auto& dir : AllDirections) {
+    if (inputStates[dir]) {
+      stream << DirectionToString(dir) << " ";
+    }
+  }
+  stream << "], "
          << "Activated: " << activated;
   return stream.str();
 }

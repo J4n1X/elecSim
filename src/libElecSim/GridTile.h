@@ -41,9 +41,15 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
                     float screenSize, int alpha = 255);
 
+  // For tiles that need it, this provides interaction logic.
   virtual std::vector<SignalEvent> Init() { return {}; };
+  // This has severe side effects. That's fine for actual simulations, but
+  // not for preprocessing. 
   virtual std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) = 0;
+  // This is called when the user interacts with the tile, e.g. by clicking on it.
   virtual std::vector<SignalEvent> Interact() { return {}; }
+  // This has zero side effects, and is used for preprocessing.
+  virtual std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) = 0;
 
   void SetPos(olc::vi2d newPos) { pos = newPos; }
   void SetRefNum(size_t newRefNum) { refNum = newRefNum; }
