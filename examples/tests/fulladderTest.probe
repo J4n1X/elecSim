@@ -1,0 +1,101 @@
+#-This test tests complex component interaction & deterministic path resolving
+#-Base state: Check that the outputs are off and inverters are on
+#---Expect Inverters to be turned on (outputting) 
+r  9 0 1
+r  9 2 1
+r 12 1 1
+r 12 3 1 
+
+#---Expect Outputs (at 13/0 and 14/0) to be off
+r 13 0 0
+r 14 0 0
+
+#-Test for all three inputs to yield output 1 to be on
+i 0 0
+s
+r 13 0 1
+r 14 0 0
+i 0 0
+s
+
+i 0 1
+s
+r 13 0 1
+r 14 0 0
+i 0 1
+s
+
+i 0 2
+s
+r 13 0 1
+r 14 0 0
+i 0 2
+s
+
+r 1 0 0
+r 1 1 0
+r 1 2 0
+s
+
+#-Test what happens if two inputs are on (Should set output 2 and not output 1)
+i 0 0
+s
+i 0 1
+s
+r 13 0 0
+r 14 0 1
+i 0 0
+s
+i 0 1
+s
+
+i 0 0
+s
+i 0 2
+s
+r 13 0 0
+r 14 0 1
+i 0 0
+s
+i 0 2
+s
+
+i 0 1
+s
+i 0 2
+s
+r 13 0 0
+r 14 0 1
+i 0 1
+s
+i 0 2
+s
+
+#-Test what happens when all inputs are on (should set output 1 and 2)
+i 0 0
+s
+i 0 1
+s
+i 0 2
+s
+r 13 0 1
+r 14 0 1
+i 0 0
+s
+i 0 1
+s
+i 0 2
+s
+
+#-All simple zero to state things have passed. These are a bit more weird.
+#---Set Input 1, then input two, then only turn off input two. Output 1 should be on
+i 0 0
+s
+i 0 1
+s
+i 0 0
+s
+r 13 0 1
+r 14 0 0
+i 0 0
+s

@@ -3,6 +3,8 @@ project("elecSim")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(SIM_CACHING "Enable caching for simulation results" ON)
+
 
 include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -49,4 +51,6 @@ message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 enable_testing()
-add_test(NAME prober COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prober -f ${TESTS_DIR}/componentTest.grid -t ${TESTS_DIR}/componentTest.probe -v)
+add_test(NAME component_test COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prober -f ${TESTS_DIR}/componentTest.grid -t ${TESTS_DIR}/componentTest.probe -v)
+add_test(NAME fulladder_test COMMAND ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/prober -f ${TESTS_DIR}/fulladderTest.grid -t ${TESTS_DIR}/fulladderTest.probe -v)
+# run all tests

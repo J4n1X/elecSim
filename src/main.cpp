@@ -35,6 +35,13 @@ class Game : public olc::PixelGameEngine {
     ConsoleOut() << "UpdateEvent: " << sizeof(UpdateEvent) << " bytes\n";
     ConsoleOut() << "============================\n\n";
   }
+  bool SetStartFile(const std::filesystem::path& path) {
+    if (std::filesystem::exists(path)) {
+      curFilename = path;
+      return true;
+    }
+    return false;
+  }
 
  private:
   // --- Constants ---
@@ -66,7 +73,7 @@ class Game : public olc::PixelGameEngine {
   bool selectionActive = false;
   bool unsavedChanges = false;
   int updatesPerTick = 0;
-  std::string curFilename = "";
+  std::filesystem::path curFilename = "";
 
   // --- Highlight colors ---
   olc::Pixel highlightColor = olc::RED;
@@ -85,8 +92,6 @@ class Game : public olc::PixelGameEngine {
   bool OnUserCreate() override {
     // Print class sizes
     PrintClassSizes();
-    curFilename =
-        std::filesystem::current_path().append("default.grid").string();
 
     gameLayer = CreateLayer();  // initialized as a black screen
 
@@ -103,6 +108,14 @@ class Game : public olc::PixelGameEngine {
     unsavedChangesGui = new MessageBoxGui(
         this, "There are unsaved changes. Do you wish to save?",
         defaultRenderScale * 5.0f, false);
+
+    if (curFilename.empty()) {
+      curFilename =
+          std::filesystem::current_path().append("default.grid").string();
+    } else {
+      grid.Load(curFilename.string());
+    }
+
     paused = true;
     engineRunning = true;
     CreateBrushTile();  // Initialize tile buffer with default brush tile
@@ -247,7 +260,7 @@ class Game : public olc::PixelGameEngine {
   }
 
   // --- User input processing (delegates to helpers) ---
-  void ProcessUserInput(olc::vi2d& alignedWorldPos) {
+  void ProcessUserInput(olc::vi2d& alignedWorldPos, float deltaTime) {
     // 1. Mouse position and highlight
     auto selTileXIndex = GetMouseX();
     auto selTileYIndex = GetMouseY();
@@ -256,9 +269,10 @@ class Game : public olc::PixelGameEngine {
     alignedWorldPos = grid.AlignToGrid(hoverWorldPos);
 
     if (!engineRunning) return;
+    if(IsConsoleShowing()) return;
 
     HandlePauseAndSpeed();
-    HandleCameraAndZoom(selTileXIndex, selTileYIndex, hoverWorldPos);
+    HandleCameraAndZoom(deltaTime);
     HandleTileInteractions(alignedWorldPos);
     HandleSaveLoad();
 
@@ -277,19 +291,31 @@ class Game : public olc::PixelGameEngine {
     if (GetKey(olc::Key::ESCAPE).bPressed) engineRunning = false;
   }
 
+
+  olc::vf2d panBeginPos = {0.0f, 0.0f};
   // --- Camera movement and zoom ---
-  void HandleCameraAndZoom(int selTileXIndex, int selTileYIndex,
-                           const olc::vf2d& hoverWorldPos) {
+  void HandleCameraAndZoom(float deltaTime) {
+    olc::vi2d hoverWorldPos = grid.ScreenToWorld(static_cast<olc::vi2d>(GetMousePos()));
     auto renderScale = grid.GetRenderScale();
-    auto curOffset = grid.GetRenderOffset();
+    float velocity = 30.f * renderScale * deltaTime;
+
+    // Handle panning when holding the middle mouse button
+    if(GetMouse(2).bPressed){
+      panBeginPos = GetMousePos();
+    }
+    if (GetMouse(2).bHeld) {
+      auto panDelta = GetMousePos() - panBeginPos;
+      grid.SetRenderOffset((grid.GetRenderOffset() - panDelta / renderScale));
+    }
+
     if (GetKey(olc::Key::UP).bHeld)
-      grid.SetRenderOffset(curOffset + olc::vf2d(0.0f, 0.25f * renderScale));
+      grid.SetRenderOffset(grid.GetRenderOffset() + olc::vf2d(0.0f, velocity));
     if (GetKey(olc::Key::LEFT).bHeld)
-      grid.SetRenderOffset(curOffset + olc::vf2d(0.25f * renderScale, 0.0f));
+      grid.SetRenderOffset(grid.GetRenderOffset() + olc::vf2d(velocity, 0.0f));
     if (GetKey(olc::Key::DOWN).bHeld)
-      grid.SetRenderOffset(curOffset - olc::vf2d(0.0f, 0.25f * renderScale));
+      grid.SetRenderOffset(grid.GetRenderOffset() - olc::vf2d(0.0f, velocity));
     if (GetKey(olc::Key::RIGHT).bHeld)
-      grid.SetRenderOffset(curOffset - olc::vf2d(0.25f * renderScale, 0.0f));
+      grid.SetRenderOffset(grid.GetRenderOffset() - olc::vf2d(velocity, 0.0f));
     if (GetKey(olc::Key::J).bHeld || GetKey(olc::Key::K).bHeld) {
       float newScale = std::clamp(
           renderScale +
@@ -297,10 +323,10 @@ class Game : public olc::PixelGameEngine {
           minRenderScale, maxRenderScale);
       grid.SetRenderScale(newScale);
       auto afterZoomPos =
-          grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
+          grid.ScreenToWorld(static_cast<olc::vi2d>(GetMousePos()));
       // So, now we have the before and after in world space.
       // We want to keep the same world position in screen space.
-      auto newOffset = curOffset + (afterZoomPos - hoverWorldPos) * newScale;
+      auto newOffset = grid.GetRenderOffset() + (afterZoomPos - hoverWorldPos) * newScale;
       grid.SetRenderOffset(newOffset);
     }
   }
@@ -341,7 +367,7 @@ class Game : public olc::PixelGameEngine {
       curFilename = dialogResult.value();
       grid.Save(curFilename);
       unsavedChanges = false;
-      sAppName = std::format(appNameBaseFmt, curFilename);
+      sAppName = std::format(appNameBaseFmt, curFilename.filename().string());
       return true;
     }
     return false;
@@ -351,9 +377,9 @@ class Game : public olc::PixelGameEngine {
     auto dialogResult = OpenLoadDialog();
     if (dialogResult.has_value()) {
       curFilename = dialogResult.value();
-      grid.Load(curFilename);
+      grid.Load(curFilename.string());
       unsavedChanges = false;
-      sAppName = std::format(appNameBaseFmt, curFilename);
+      sAppName = std::format(appNameBaseFmt, curFilename.filename().string());
       return true;
     }
     return false;
@@ -448,6 +474,8 @@ class Game : public olc::PixelGameEngine {
                      startIndex.x, startIndex.y, endIndex.x, endIndex.y)
               << std::endl;
   }
+  // TODO: Put removing things on right click, and make the middle mouse button
+  // pan the camera. 
   // --- Tile placement, removal, and interaction ---
   void HandleTileInteractions(const olc::vi2d& alignedWorldPos) {
     // Building mode controls
@@ -515,23 +543,15 @@ class Game : public olc::PixelGameEngine {
           }
         }
       }
-      // Toggle default activation (right click)
-      if (GetMouse(1).bPressed) {
-        auto gridTileOpt = grid.GetTile(alignedWorldPos);
-        if (gridTileOpt.has_value()) {
-          auto& gridTile = gridTileOpt.value();
-          gridTile->SetDefaultActivation(!gridTile->GetDefaultActivation());
-          gridTile->ResetActivation();
-        }
-      }
+      
       // Remove tile (middle click)
-      if (GetMouse(2).bHeld) {
+      if (GetMouse(1).bHeld) {
         grid.EraseTile(alignedWorldPos);
         if (!isReset) Reset();
       }
     } else {
-      // Right click: interact
-      if (GetMouse(1).bPressed) {
+      // Left click: interact
+      if (GetMouse(0).bPressed && tileBuffer.empty()) {
         auto gridTileOpt = grid.GetTile(alignedWorldPos);
         if (gridTileOpt.has_value()) {
           auto& gridTile = gridTileOpt.value();
@@ -660,6 +680,7 @@ class Game : public olc::PixelGameEngine {
     // Simulation step
     accumulatedTime += fElapsedTime;
     if (accumulatedTime > updateInterval && !paused) {
+      tileBuffer.clear();
       isReset = false;
       try {
         auto simStartTime = std::chrono::high_resolution_clock::now();
@@ -680,10 +701,9 @@ class Game : public olc::PixelGameEngine {
 
     // User input
     olc::vi2d highlightWorldPos = {0, 0};
-    if (!unsavedChangesGui->IsEnabled()) ProcessUserInput(highlightWorldPos);
+    if (!unsavedChangesGui->IsEnabled()) ProcessUserInput(highlightWorldPos, fElapsedTime);
     auto guiResult = unsavedChangesGui->Update();
 
-    if (paused) updatesPerTick = 0;
 
     // Draw grid and UI
 
@@ -753,7 +773,8 @@ class Game : public olc::PixelGameEngine {
       grid.Clear();
       ConsoleOut() << "Grid cleared" << std::endl;
     } else if (command == "help") {
-      ConsoleOut() << "Available commands: exit, pause, reset, clear, new, help, gettile, toggleconsole"
+      ConsoleOut() << "Available commands: exit, pause, reset, clear, new, "
+                      "help, gettile, toggleconsole"
                    << std::endl;
     } else if (command.starts_with("gettile")) {
       // cut down into two args
@@ -766,7 +787,7 @@ class Game : public olc::PixelGameEngine {
       int x = std::stoi(args.substr(0, pos));
       int y = std::stoi(args.substr(pos + 1));
       auto tileOpt = grid.GetTile(olc::vi2d(x, y));
-      if(tileOpt.has_value()){
+      if (tileOpt.has_value()) {
         ConsoleOut() << tileOpt.value()->GetTileInformation() << std::endl;
       }
 
@@ -796,16 +817,27 @@ const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
 // --- Main entry point ---
 int main(int argc, char** argv) {
   (void)argc;
+  std::filesystem::path argPath;
   if (argv[1] != nullptr) {
     std::string arg = argv[1];
-    if (arg == "dry") {
-      std::cout << "Dry run mode enabled. No GUI will be created." << std::endl;
-      return 0;
+    try {
+      argPath = std::filesystem::canonical(arg);
+    } catch (const std::filesystem::filesystem_error& e) {
+      std::cerr << "Error: " << e.what() << std::endl;
+      return 1;  // Exit with error code
     }
   }
 
   Game game;
   if (game.Construct(640 * 2, 480 * 2, 1, 1, false, true, false)) {
+    if (argPath.extension() == ".grid" && std::filesystem::exists(argPath)) {
+      if (game.SetStartFile(argPath)) {
+        std::cout << "Starting with file: " << argPath.string() << std::endl;
+      } else {
+        std::cout << "File does not exist: " << argPath.string()
+                  << ", starting with default." << std::endl;
+      }
+    }
     game.Start();
   }
   return 0;

@@ -112,7 +112,7 @@ std::string GridTile::GetTileInformation() const {
   // All in one line
   stream << "Tile Type: " << TileTypeName() << ", "
          << "Position: (" << pos.x << ", " << pos.y << "), "
-         << "Facing: " << static_cast<int>(facing) << ", "
+         << "Facing: " << DirectionToString(facing) << ", "
          << "Size: " << size << ", "
          << "Activated Sides: [";
   for (const auto& dir : AllDirections) {

@@ -18,6 +18,8 @@ The project itself can be compiled using cmake. On a command line, navigate into
 
 ```cmake . ```
 
+If you'd like to use the the old way of processing tile updates, pass along ```-DSIM_CACHING=OFF```
+
 To generate the required configuration for your system. To compile the project, all you must do after this is issue the following command: 
 
 ```cmake --build . --config <Debug|Release>```

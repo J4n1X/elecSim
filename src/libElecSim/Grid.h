@@ -36,72 +36,57 @@ class Grid {
     bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
   };
 
+#ifdef SIM_CACHING
   struct DeterministicPath {
-   private:
-   // This could probably be another shared_ptr to a non-deterministic tile.
+   public:
     struct PathEnd {
       olc::vi2d pos;
       size_t index;
       // This is what needs to be sent to the end. If not set, nothing happens.
-      std::optional<SignalEvent> resultingEvent; 
+      std::optional<SignalEvent> resultingEvent;
     };
 
-   public:
+   private:
     olc::vi2d pathStart;            // Location of first determininistic tile
     std::vector<PathEnd> pathEnds;  // Location of last deterministic tile
-    std::vector<std::shared_ptr<GridTile>> path;
-    // If the value needs to be flipped when applying, it's true on this list.
-    std::vector<bool> flippedStateList;
+    ankerl::unordered_dense::map<std::shared_ptr<GridTile>, bool> path;
+    TileSideStates inputStates;
 
+    DeterministicPath(
+        olc::vi2d startPos, std::vector<PathEnd> ends,
+        ankerl::unordered_dense::map<std::shared_ptr<GridTile>, bool> path)
+        : pathStart(startPos),
+          pathEnds(std::move(ends)),
+          path(std::move(path)),
+          inputStates({}) {}
+
+   public:
     static DeterministicPath Begin(olc::vi2d startPos) {
-      return DeterministicPath{startPos, {}, {}, {}};
+      return DeterministicPath(startPos, {}, {});
     }
-
-    void AddTile(std::shared_ptr<GridTile> tile) {
-      flippedStateList.push_back(tile->GetActivation());
-      path.push_back(std::move(tile));
+    void AddTile(std::shared_ptr<GridTile> tile, bool flipState) {
+      path.emplace(std::move(tile), flipState);
     }
-
     // Take the position of the tile right outside the path and the
     // Direction from which it is to be activated.
     void AddPathEnd(olc::vi2d endPos, std::optional<SignalEvent> endEvent) {
       pathEnds.push_back({endPos, path.size() - 1, endEvent});
     }
-
-    std::vector<std::pair<olc::vi2d, SignalEvent>> Apply(bool enable) {
-      using UpdatesContainer = std::vector<std::pair<olc::vi2d, SignalEvent>>;
-      UpdatesContainer updates;
-      for (size_t i = 0; i < path.size(); ++i) {
-        path[i]->SetActivation(
-            enable ? flippedStateList[i] : !flippedStateList[i]);
-      }
-      for (auto& pathEnd : pathEnds) {
-        if(!pathEnd.resultingEvent.has_value()) continue;
-        auto realResultingEvent = pathEnd.resultingEvent.value();
-        realResultingEvent.isActive = enable ? realResultingEvent.isActive
-                                             : !realResultingEvent.isActive;
-        updates.emplace_back(
-            pathEnd.pos,
-            realResultingEvent);
-      }
-      return updates;
+    bool Contains(const std::shared_ptr<GridTile>& tile) const {
+      return path.contains(tile);
     }
-
-    std::string GetPathInformation() const {
-      std::stringstream ss;
-      ss << std::format("Path Start: ({}, {})\n", pathStart.x, pathStart.y)
-         << "Path Ends:\n";
-      for (const auto& end : pathEnds) {
-        ss << std::format("  - ({}, {})\n", end.pos.x, end.pos.y);
-      }
-      ss << "Path Tiles:\n";
-      for (const auto& tile : path) {
-        ss << tile->GetTileInformation() + "\n";
-      }
-      return ss.str();
-    }
+    olc::vi2d GetPathStart() const { return pathStart; }
+    const std::vector<PathEnd>& GetPathEnds() const { return pathEnds; }
+    const TileSideStates& GetInputStates() const { return inputStates; }
+    const std::string GetPathInformation() const;
+    const std::vector<std::pair<olc::vi2d, SignalEvent>> Apply(
+        SignalEvent inputSignal);
   };
-
+  ankerl::unordered_dense::map<olc::vi2d, DeterministicPath, PositionHash,
+                               PositionEqual>
+      deterministicPaths;  // Maps start positions to their paths
+  DeterministicPath& ChartDeterministicPath(const UpdateEvent& updateEvent);
+#endif // SIM_CACHING
   using TileField =
       ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
                                    PositionHash, PositionEqual>;
@@ -114,9 +99,6 @@ class Grid {
   uint32_t currentTick = 0;  // Current game tick (used by emitters)
 
   TileField tiles;
-  ankerl::unordered_dense::map<olc::vi2d, std::vector<UpdateEvent>,
-                               PositionHash, PositionEqual>
-      deterministicPaths;  // Maps start positions to their paths
   std::vector<std::weak_ptr<GridTile>> emitters;
 
   // Using a segmented set here because we are inserting a lot of things
@@ -127,7 +109,6 @@ class Grid {
   float renderScale;
   olc::vf2d renderOffset = {0.0f, 0.0f};  // Offset for rendering
 
-  std::vector<UpdateEvent> ChartDeterministicPath(const UpdateEvent& updateEvent);
   void ProcessUpdateEvent(const UpdateEvent& updateEvent);
   static olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir);
 

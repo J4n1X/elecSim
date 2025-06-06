@@ -67,48 +67,6 @@ olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) {
   }
 }
 
-std::vector<UpdateEvent> Grid::ChartDeterministicPath(
-    const UpdateEvent& updateEvent) {
-  std::queue<UpdateEvent> pathQueue;
-  std::vector<UpdateEvent> updateCache;
-  if (!updateEvent.tile->IsDeterministic()) {
-    throw std::runtime_error(
-        "ChartDeterministicPath called on non-deterministic tile");
-  }
-  pathQueue.push(updateEvent);
-  while (!pathQueue.empty()) {
-    auto update = pathQueue.front();
-    pathQueue.pop();
-    // We cache these updates so we can apply them in sequence later.
-    updateCache.push_back(update);
-
-    auto newSignals = update.tile->ProcessSignal(update.event);
-
-    for (const auto& signal : newSignals) {
-      auto targetPos = TranslatePosition(signal.sourcePos,
-                                         FlipDirection(signal.fromDirection));
-
-      auto targetTileIt = tiles.find(targetPos);
-      if (targetTileIt == tiles.end()) {
-        // path.AddPathEnd(targetPos, std::nullopt);
-        continue;
-      }
-
-      auto& targetTile = targetTileIt->second;
-      if (targetTile->CanReceiveFrom(signal.fromDirection)) {
-        if (targetTile->IsDeterministic()) {
-          // If the target tile is deterministic, we can chart the path
-          pathQueue.push(UpdateEvent(targetTile, signal, currentTick));
-        } else {
-          // If not, we just add the signal end
-          // path.AddPathEnd(targetPos, signal);
-        }
-      }
-    }
-  }
-  return updateCache;
-}
-
 void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
   auto newSignals = updateEvent.tile->ProcessSignal(updateEvent.event);
   // Queue up new signals
@@ -120,7 +78,7 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
     SignalEdge edge{signal.sourcePos, targetPos};
 
     // Check if this edge has been traversed in this tick
-    if (currentTickVisitedEdges.contains(edge)) {
+    if (false && currentTickVisitedEdges.contains(edge)) {
       // This would create a cycle - throw an exception
       // If we didn't, and just skipped, it would result in false behavior.
       throw std::runtime_error(std::format(
@@ -190,7 +148,35 @@ int Grid::Simulate() {
     auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
+
+#ifdef SIM_CACHING
+    // Check if this is a deterministic tile and chart its path
+    if (update.tile->IsDeterministic()) {
+      auto deterministicPathIt = deterministicPaths.find(update.tile->GetPos());
+      if (deterministicPathIt == deterministicPaths.end()) {
+        try {
+          ChartDeterministicPath(update);
+          deterministicPathIt = deterministicPaths.find(update.tile->GetPos());
+        } catch (const std::exception& e) {
+          std::cout << std::format(
+              "Failed to chart deterministic path from tile at ({},{}): {}\n",
+              update.tile->GetPos().x, update.tile->GetPos().y, e.what());
+          throw std::runtime_error(
+              std::format("Failed to chart deterministic path: {}", e.what()));
+        }
+      }
+      DeterministicPath& deterministicPath = deterministicPathIt->second;
+      auto resultingEvents = deterministicPath.Apply(update.event);
+      for (const auto& [pos, event] : resultingEvents) {
+        QueueUpdate(tiles.at(pos), event);
+      }
+      updatesProcessed++;  // This is only a single update in our eyes.
+    } else {
+      ProcessUpdateEvent(update);
+    }
+#else
     ProcessUpdateEvent(update);
+#endif
     updatesProcessed++;
   }
   return updatesProcessed;
@@ -204,7 +190,9 @@ void Grid::ResetSimulation() {
     updateQueue = std::queue<UpdateEvent>();
   }
   currentTickVisitedEdges.clear();
+#ifdef SIM_CACHING
   deterministicPaths.clear();
+#endif
 
   // Reset all tiles
   for (auto& [pos, tile] : tiles) {
@@ -368,5 +356,113 @@ void Grid::Load(const std::string& filename) {
             << std::endl;
   ResetSimulation();
 }
+
+#ifdef SIM_CACHING
+
+Grid::DeterministicPath& Grid::ChartDeterministicPath(
+    const UpdateEvent& updateEvent) {
+  std::queue<UpdateEvent> pathQueue;
+  DeterministicPath path = DeterministicPath::Begin(updateEvent.tile->GetPos());
+  if (!updateEvent.tile->IsDeterministic()) {
+    throw std::runtime_error(
+        "ChartDeterministicPath called on non-deterministic tile");
+  }
+  if(deterministicPaths.contains(updateEvent.tile->GetPos())) {
+    // If we already have a path for this tile, return it.
+    return deterministicPaths.at(updateEvent.tile->GetPos());
+  }
+
+  pathQueue.push(updateEvent);
+  
+  // Track which tiles we've visited in this path to avoid infinite loops
+  ankerl::unordered_dense::set<olc::vi2d, PositionHash, PositionEqual> visitedInThisPath;
+  
+  while (!pathQueue.empty()) {
+    auto update = pathQueue.front();
+    pathQueue.pop();
+
+    // Skip if we've already visited this tile in this path
+    if (visitedInThisPath.contains(update.tile->GetPos())) {
+      continue;
+    }
+    
+    visitedInThisPath.insert(update.tile->GetPos());
+
+    // We are a deterministic tile, add to path
+    path.AddTile(update.tile, update.event.isActive);
+
+    // Use PreprocessSignal instead of ProcessSignal to avoid side effects
+    auto newSignals = update.tile->PreprocessSignal(update.event);
+
+    for (const auto& signal : newSignals) {
+      auto targetPos = TranslatePosition(signal.sourcePos,
+                                         FlipDirection(signal.fromDirection));
+
+      auto targetTileIt = tiles.find(targetPos);
+      if (targetTileIt == tiles.end()) {
+        path.AddPathEnd(targetPos, std::nullopt);
+        continue;
+      }
+
+      auto& targetTile = targetTileIt->second;
+      if (targetTile->CanReceiveFrom(signal.fromDirection)) {
+        if (targetTile->IsDeterministic() && !visitedInThisPath.contains(targetPos)) {
+          // If the target tile is deterministic and not yet visited, continue the path
+          pathQueue.push(UpdateEvent(targetTile, SignalEvent(targetPos, FlipDirection(signal.fromDirection), signal.isActive), currentTick));
+        } else {
+          // If not, we just add the signal end
+          path.AddPathEnd(targetPos, signal);
+        }
+      }
+    }
+  }
+  std::cout << "New deterministic path charted: "
+            << path.GetPathInformation() << std::endl;
+  
+  deterministicPaths.emplace(path.GetPathStart(), std::move(path));
+  return deterministicPaths.at(path.GetPathStart());
+}
+
+const std::vector<std::pair<olc::vi2d, SignalEvent>>
+Grid::DeterministicPath::Apply(SignalEvent inputSignal) {
+  using UpdatesContainer = std::vector<std::pair<olc::vi2d, SignalEvent>>;
+  UpdatesContainer updates;
+  
+  // Apply activation to each tile based on whether ANY path affecting it has active inputs
+  for (const auto& [tile, originalFlipState] : path) {
+    olc::vi2d tilePos = tile->GetPos();
+    
+    // Apply the tile activation based on global state coordination
+    // If tileShouldBeActive, use the original flipState from when the path was charted
+    // If not active, use the inverse of the flipState
+    tile->SetActivation(
+        originalFlipState ? inputSignal.isActive : !inputSignal.isActive);
+  }
+  
+  // Generate output signals for path ends
+  for (const PathEnd& pathEnd : pathEnds) {
+    if (!pathEnd.resultingEvent.has_value()) continue;
+    PathEnd realPathEnd = pathEnd;
+    
+    realPathEnd.resultingEvent->isActive = inputSignal.isActive;
+    updates.emplace_back(realPathEnd.pos, realPathEnd.resultingEvent.value());
+  }
+  return updates;
+}
+
+const std::string Grid::DeterministicPath::GetPathInformation() const {
+  std::stringstream ss;
+  ss << std::format("Path Start: ({}, {})\n", pathStart.x, pathStart.y)
+     << "Path Ends:\n";
+  for (const auto& end : pathEnds) {
+    ss << std::format("  - ({}, {})\n", end.pos.x, end.pos.y);
+  }
+  ss << "Path Tiles:\n";
+  for (const auto& tile : path | std::views::keys) {
+    ss << tile->GetTileInformation() + "\n";
+  }
+  return ss.str();
+}
+#endif // SIM_CACHING
 
 }  // namespace ElecSim

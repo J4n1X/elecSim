@@ -3,6 +3,11 @@ add_library(libElecSim STATIC ${CXXFILES})
 target_include_directories(libElecSim PUBLIC 
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+if(SIM_CACHING)
+  target_compile_definitions(libElecSim PUBLIC SIM_CACHING)
+endif()
+
 set_property(TARGET libElecSim PROPERTY CXX_STANDARD 20)
 set_property(TARGET libElecSim PROPERTY CXX_STANDARD_REQUIRED ON)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

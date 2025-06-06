@@ -8,7 +8,7 @@ namespace ElecSim {
 // --- WireGridTile Implementation ---
 
 WireGridTile::WireGridTile(olc::vi2d pos, Direction facing, float size)
-    : GridTile(pos, facing, size, false, olc::WHITE, olc::DARK_YELLOW) {
+    : DeterministicTile(pos, facing, size, false, olc::WHITE, olc::DARK_YELLOW) {
   // Can receive from all directions except facing direction
   for (auto& dir : AllDirections) {
     canReceive[dir] = (dir != facing);
@@ -39,20 +39,14 @@ std::vector<SignalEvent> WireGridTile::ProcessSignal(
   return {};
 }
 
-std::vector<SignalEvent> WireGridTile::PreprocessSignal(
-    const std::vector<SignalEvent> incomingSignals) {
-  for (auto& signal : incomingSignals) {
-    if (signal.isActive) {
-      return {SignalEvent(pos, facing, true)};
-    }
-  }
-  return {SignalEvent(pos, facing, false)};
+std::vector<SignalEvent> WireGridTile::PreprocessSignal(const SignalEvent incomingSignal){
+    return {SignalEvent(pos, facing, incomingSignal.isActive)};
 }
 
 // --- JunctionGridTile Implementation ---
 
 JunctionGridTile::JunctionGridTile(olc::vi2d pos, Direction facing, float size)
-    : GridTile(pos, facing, size, false, olc::GREY, olc::YELLOW) {
+    : DeterministicTile(pos, facing, size, false, olc::GREY, olc::YELLOW) {
   auto inputDir = FlipDirection(facing);
   // Can receive from one direction and output to all others
   std::fill(canOutput.begin(), canOutput.end(), true);
@@ -84,31 +78,20 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
   return events;
 }
 
-std::vector<SignalEvent> JunctionGridTile::PreprocessSignal(
-    const std::vector<SignalEvent> incomingSignals) {
-  std::vector<SignalEvent> events;
-  for (const auto& dir : AllDirections) {
-    if (canOutput[dir]) {
-      events.push_back(SignalEvent(pos, dir, false));
+std::vector<SignalEvent> JunctionGridTile::PreprocessSignal(const SignalEvent incomingSignal) {
+    std::vector<SignalEvent> events;
+    for (const auto& dir : AllDirections) {
+        if (canOutput[dir]) {
+            events.push_back(SignalEvent(pos, dir, incomingSignal.isActive));
+        }
     }
-  }
-
-  for (auto& signal : incomingSignals) {
-    Direction toDir = FlipDirection(facing);
-    if (signal.isActive && canReceive[toDir]) {
-      for (auto& signal : events) {
-        signal.isActive = true;
-      }
-      return events;
-    }
-  }
-  return events;
+    return events;
 }
 
 // --- EmitterGridTile Implementation ---
 
 EmitterGridTile::EmitterGridTile(olc::vi2d pos, Direction facing, float size)
-    : GridTile(pos, facing, size, false, olc::DARK_CYAN, olc::CYAN),
+    : LogicTile(pos, facing, size, false, olc::DARK_CYAN, olc::CYAN),
       enabled(true),
       lastEmitTick(-EMIT_INTERVAL) {
   canOutput[facing] = true;
@@ -121,13 +104,6 @@ EmitterGridTile::EmitterGridTile(olc::vi2d pos, Direction facing, float size)
 std::vector<SignalEvent> EmitterGridTile::ProcessSignal(
     [[maybe_unused]] const SignalEvent& signal) {
   return {SignalEvent(pos, facing, activated)};
-}
-
-std::vector<SignalEvent> EmitterGridTile::PreprocessSignal(
-    const std::vector<SignalEvent> incomingSignals) {
-  (void)incomingSignals;
-  throw std::runtime_error(
-      "Tried to preprocess an EmitterGridTile, which is not deterministic.");
 }
 
 std::vector<SignalEvent> EmitterGridTile::Interact() {
@@ -153,7 +129,7 @@ bool EmitterGridTile::ShouldEmit(int currentTick) const {
 
 SemiConductorGridTile::SemiConductorGridTile(olc::vi2d pos, Direction facing,
                                              float size)
-    : GridTile(pos, facing, size, false, olc::DARK_GREEN, olc::GREEN) {
+    : LogicTile(pos, facing, size, false, olc::DARK_GREEN, olc::GREEN) {
   // Only allow input from world directions that, relative to facing, are local
   // Left, Right, or Bottom
   canReceive.fill(true);
@@ -179,34 +155,19 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
     activated = false;
     return {SignalEvent(pos, facing, false)};
   }
-
   return {};
-}
-
-std::vector<SignalEvent> SemiConductorGridTile::PreprocessSignal(
-    const std::vector<SignalEvent> incomingSignals) {
-  (void)incomingSignals;
-  throw std::runtime_error(
-      "Tried to preprocess a SemiConductorGridTile, which is not deterministic.");
 }
 
 // --- ButtonGridTile Implementation ---
 
 ButtonGridTile::ButtonGridTile(olc::vi2d pos, Direction facing, float size)
-    : GridTile(pos, facing, size, false, olc::DARK_RED, olc::RED) {
+    : LogicTile(pos, facing, size, false, olc::DARK_RED, olc::RED) {
   canOutput[facing] = true;
 }
 
 std::vector<SignalEvent> ButtonGridTile::ProcessSignal(
     [[maybe_unused]] const SignalEvent& signal) {
   return {SignalEvent(pos, facing, activated)};
-}
-
-std::vector<SignalEvent> ButtonGridTile::PreprocessSignal(
-    const std::vector<SignalEvent> incomingSignals) {
-  (void)incomingSignals;
-  throw std::runtime_error(
-      "Tried to preprocess a ButtonGridTile, which is not deterministic.");
 }
 
 std::vector<SignalEvent> ButtonGridTile::Interact() {
@@ -241,20 +202,17 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   }
   return {};
 }
-std::vector<SignalEvent> InverterGridTile::PreprocessSignal(
-    const std::vector<SignalEvent> incomingSignals) {
-  for(const auto& signal : incomingSignals){
-    if(signal.isActive && canReceive[facing]) {
-      // If any incoming signal is active, we output the inverted state
-      return {SignalEvent(pos, facing, !activated)};
+std::vector<SignalEvent> InverterGridTile::PreprocessSignal(const SignalEvent incomingSignal) {
+    if (incomingSignal.isActive && canReceive[facing]) {
+        return {SignalEvent(pos, facing, !activated)};
     }
-  }
+    return {SignalEvent(pos, facing, activated)};
 }
 
 // --- CrossingGridTile Implementation ---
 
 CrossingGridTile::CrossingGridTile(olc::vi2d pos, Direction facing, float size)
-    : GridTile(pos, facing, size, false, olc::DARK_BLUE, olc::BLUE) {
+    : LogicTile(pos, facing, size, false, olc::DARK_BLUE, olc::BLUE) {
   // Allow receiving and outputting from all directions
   for (auto& dir : AllDirections) {
     canReceive[dir] = true;
@@ -273,7 +231,7 @@ void CrossingGridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
 
   // Draw the base square
   renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
-                          activated ? activeColor : inactiveColor);
+                          inactiveColor);
 
   // Draw crossing lines that touch the edges
   float lineThickness = screenSize / 10.0f;  // Adjust thickness as needed
@@ -282,13 +240,13 @@ void CrossingGridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
   renderer->FillRectDecal(
       olc::vf2d(screenPos.x, screenPos.y + (screenSize - lineThickness) / 2),
       olc::vf2d(screenSize, lineThickness),
-      activated ? inactiveColor : activeColor);
+      activeColor);
 
   // Vertical line - top to bottom
   renderer->FillRectDecal(
       olc::vf2d(screenPos.x + (screenSize - lineThickness) / 2, screenPos.y),
       olc::vf2d(lineThickness, screenSize),
-      activated ? inactiveColor : activeColor);
+      activeColor);
 }
 
 std::vector<SignalEvent> CrossingGridTile::ProcessSignal(
@@ -304,19 +262,9 @@ std::vector<SignalEvent> CrossingGridTile::ProcessSignal(
   return {SignalEvent(pos, outputDir, signal.isActive)};
 }
 
-std::vector<SignalEvent> CrossingGridTile::PreprocessSignal(
-    const std::vector<SignalEvent> incomingSignals) {
-  if(incomingSignals.size() > 2 ){
-    throw std::runtime_error(
-        "CrossingGridTile can only handle up to 2 incoming signals.");
-  }
-  std::vector<SignalEvent> events;
-  for(const auto& signal : incomingSignals) {
-    // For each incoming signal, we output it to the opposite direction
-    Direction outputDir = FlipDirection(signal.fromDirection);
-    events.push_back(SignalEvent(pos, outputDir, signal.isActive));
-  }
-  return events;
+std::vector<SignalEvent> CrossingGridTile::PreprocessSignal(const SignalEvent incomingSignal) {
+    Direction outputDir = FlipDirection(incomingSignal.fromDirection);
+    return {SignalEvent(pos, outputDir, incomingSignal.isActive)};
 }
 
 }  // namespace ElecSim

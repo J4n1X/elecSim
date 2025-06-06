@@ -44,18 +44,25 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   // For tiles that need it, this provides interaction logic.
   virtual std::vector<SignalEvent> Init() { return {}; };
   // This has severe side effects. That's fine for actual simulations, but
-  // not for preprocessing. 
+  // not for preprocessing.
   virtual std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) = 0;
-  // This is called when the user interacts with the tile, e.g. by clicking on it.
+  // This is called when the user interacts with the tile, e.g. by clicking on
+  // it.
   virtual std::vector<SignalEvent> Interact() { return {}; }
   // This has zero side effects, and is used for preprocessing.
-  virtual std::vector<SignalEvent> PreprocessSignal(const std::vector<SignalEvent> incomingSignals) = 0;
+  virtual std::vector<SignalEvent> PreprocessSignal(
+      const SignalEvent incomingSignal) = 0;
 
   void SetPos(olc::vi2d newPos) { pos = newPos; }
+  void SetActivation(bool newActivated) { activated = newActivated; }
   void SetRefNum(size_t newRefNum) { refNum = newRefNum; }
   void SetFacing(Direction newFacing);
-  void SetActivation(bool newActivation) { activated = newActivation; }
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
+  void ToggleInputState(Direction dir) {
+    if (canReceive[dir]) {
+      inputStates[dir] = !inputStates[dir];
+    }
+  }
   virtual void
   ResetActivation();  // Changed from inline to virtual with implementation
 
@@ -88,4 +95,40 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
                                                     int screenSize,
                                                     Direction facing);
 };
+
+// This is a mere overlay of GridTile, and just implements the functions typical
+// for a deterministic tile. It is used to mark tiles that are deterministic
+// and can be used in deterministic simulations.
+class DeterministicTile : public GridTile {
+ public:
+  DeterministicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
+                    Direction facing = Direction::Top, float size = 1.0f,
+                    bool defaultActivation = false,
+                    olc::Pixel inactiveColor = olc::BLACK,
+                    olc::Pixel activeColor = olc::BLACK)
+      : GridTile(pos, facing, size, defaultActivation, inactiveColor,
+                 activeColor) {}
+
+  bool IsDeterministic() const override { return true; }
+  bool IsEmitter() const override { return false; }
+};
+
+class LogicTile : public GridTile {
+ public:
+  LogicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
+            Direction facing = Direction::Top, float size = 1.0f,
+            bool defaultActivation = false,
+            olc::Pixel inactiveColor = olc::BLACK,
+            olc::Pixel activeColor = olc::BLACK)
+      : GridTile(pos, facing, size, defaultActivation, inactiveColor,
+                 activeColor) {}
+  bool IsDeterministic() const override { return false; }
+  std::vector<SignalEvent> PreprocessSignal(
+      [[maybe_unused]] const SignalEvent incomingSignal) override {
+    throw std::runtime_error(std::format(
+        "Preprocessing is not supported for a Logic Tile of type {}",
+        TileTypeName()));
+  }
+};
+
 }  // namespace ElecSim
