@@ -13,80 +13,116 @@
 #include "olcPixelGameEngine.h"
 
 namespace ElecSim {
-// TODO: Solve the tile lookup speed problem or find a way around it.
-class Grid {
- private:
-  struct SignalEdge {
-    olc::vi2d sourcePos;
-    olc::vi2d targetPos;
-    bool operator==(const SignalEdge& other) const;
-  };
-  struct SignalEdgeHash {
-    using is_avalanching = void;
-    std::size_t operator()(const SignalEdge& edge) const;
-  };
-  // Hash functor for olc::vi2d to use in unordered sets/maps
-  struct PositionHash {
-    using is_avalanching = void;
-    std::size_t operator()(const olc::vi2d& pos) const;
-  };
 
-  // Equals functor for olc::vi2d
-  struct PositionEqual {
-    bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
-  };
+struct SignalEdge {
+  olc::vi2d sourcePos;
+  olc::vi2d targetPos;
+  bool operator==(const SignalEdge& other) const;
+};
+struct SignalEdgeHash {
+  using is_avalanching = void;
+  std::size_t operator()(const SignalEdge& edge) const;
+};
+// Hash functor for olc::vi2d to use in unordered sets/maps
+struct PositionHash {
+  using is_avalanching = void;
+  std::size_t operator()(const olc::vi2d& pos) const;
+};
+
+// Equals functor for olc::vi2d
+struct PositionEqual {
+  bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
+};
 
 #ifdef SIM_CACHING
-  struct DeterministicPath {
+// This class (at least in the future) contains all tiles and tilegroups,
+// returning a shared pointer to a special SimObject that will only have one
+// available function - ProcessSignal.
+class TileGroupManager {
+ public:
+  class SimulationObject {
    public:
-    struct PathEnd {
-      olc::vi2d pos;
-      size_t index;
-      // This is what needs to be sent to the end. If not set, nothing happens.
-      std::optional<SignalEvent> resultingEvent;
+    virtual ~SimulationObject() = default;
+    // This function will be called when the simulation is running.
+    // It should return a vector of new signal events to be processed.
+    virtual std::vector<SignalEvent> ProcessSignal(
+        const SignalEvent& signal) = 0;
+    virtual std::string GetObjectInfo() const = 0;
+  };
+ private:
+  class SimulationTile : public SimulationObject {
+   public:
+    std::shared_ptr<GridTile> tile;
+
+    SimulationTile(std::shared_ptr<GridTile> t) : tile(std::move(t)) {}
+    std::string GetObjectInfo() const {
+      std::string info = "SimulationTile:\n  ";
+      info += tile->GetTileInformation();
+      return info;
+    }
+    std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override {
+      // Process the signal using the tile's ProcessSignal method
+      auto newSignals = tile->ProcessSignal(signal);
+      return newSignals;
+    }
+  };
+
+  class SimulationGroup : public SimulationObject {
+   public:
+    struct OutputTile {
+      std::shared_ptr<GridTile> tile;
+      std::shared_ptr<GridTile> inputterTile;
     };
 
    private:
-    olc::vi2d pathStart;            // Location of first determininistic tile
-    std::vector<PathEnd> pathEnds;  // Location of last deterministic tile
-    ankerl::unordered_dense::map<std::shared_ptr<GridTile>, bool> path;
-    TileSideStates inputStates;
-
-    DeterministicPath(
-        olc::vi2d startPos, std::vector<PathEnd> ends,
-        ankerl::unordered_dense::map<std::shared_ptr<GridTile>, bool> path)
-        : pathStart(startPos),
-          pathEnds(std::move(ends)),
-          path(std::move(path)),
-          inputStates({}) {}
+    std::shared_ptr<GridTile> inputTile;
+    std::vector<std::shared_ptr<GridTile>> inbetweenTiles;
+    std::vector<OutputTile> outputTiles;
 
    public:
-    static DeterministicPath Begin(olc::vi2d startPos) {
-      return DeterministicPath(startPos, {}, {});
-    }
-    void AddTile(std::shared_ptr<GridTile> tile, bool flipState) {
-      path.emplace(std::move(tile), flipState);
-    }
-    // Take the position of the tile right outside the path and the
-    // Direction from which it is to be activated.
-    void AddPathEnd(olc::vi2d endPos, std::optional<SignalEvent> endEvent) {
-      pathEnds.push_back({endPos, path.size() - 1, endEvent});
-    }
-    bool Contains(const std::shared_ptr<GridTile>& tile) const {
-      return path.contains(tile);
-    }
-    olc::vi2d GetPathStart() const { return pathStart; }
-    const std::vector<PathEnd>& GetPathEnds() const { return pathEnds; }
-    const TileSideStates& GetInputStates() const { return inputStates; }
-    const std::string GetPathInformation() const;
-    const std::vector<std::pair<olc::vi2d, SignalEvent>> Apply(
-        SignalEvent inputSignal);
+    SimulationGroup(std::shared_ptr<GridTile> input,
+                    std::vector<std::shared_ptr<GridTile>> inbetween,
+                    std::vector<OutputTile> output)
+        : inputTile(std::move(input)),
+          inbetweenTiles(std::move(inbetween)),
+          outputTiles(std::move(output)) {}
+    std::string GetObjectInfo() const override;
+    std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   };
-  ankerl::unordered_dense::map<olc::vi2d, DeterministicPath, PositionHash,
-                               PositionEqual>
-      deterministicPaths;  // Maps start positions to their paths
-  DeterministicPath& ChartDeterministicPath(const UpdateEvent& updateEvent);
-#endif // SIM_CACHING
+
+  // This is a map of all tiles, keyed by their position.
+  // The value is a shared pointer to the tile.
+  using TileMap =
+      ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
+                                   PositionHash, PositionEqual>;
+  using SimObjMap =
+      ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<SimulationObject>,
+                                   PositionHash, PositionEqual>;
+  SimObjMap simulationObjects;
+
+ public:
+  TileGroupManager() = default;
+  void Clear() {
+    simulationObjects.clear();
+  }
+  void PreprocessTiles(const TileMap& tiles);  // This will preprocess all tiles
+                                               // and create simulation objects.
+  std::optional<std::shared_ptr<SimulationObject>> const GetSimulationObject(
+      const olc::vi2d& pos) {
+    auto it = simulationObjects.find(pos);
+    if (it != simulationObjects.end()) {
+      return it->second;
+    }
+    return std::nullopt;  // No simulation object found for this position
+  }
+  ~TileGroupManager() = default;
+};
+
+#endif  // SIM_CACHING
+
+// TODO: Solve the tile lookup speed problem or find a way around it.
+class Grid {
+ private:
   using TileField =
       ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
                                    PositionHash, PositionEqual>;
@@ -99,6 +135,9 @@ class Grid {
   uint32_t currentTick = 0;  // Current game tick (used by emitters)
 
   TileField tiles;
+  #ifdef SIM_CACHING
+  TileGroupManager tileManager;  // Tile manager for simulation caching
+  #endif
   std::vector<std::weak_ptr<GridTile>> emitters;
 
   // Using a segmented set here because we are inserting a lot of things
@@ -110,7 +149,6 @@ class Grid {
   olc::vf2d renderOffset = {0.0f, 0.0f};  // Offset for rendering
 
   void ProcessUpdateEvent(const UpdateEvent& updateEvent);
-  static olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir);
 
  public:
   Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset, int uiLayer,

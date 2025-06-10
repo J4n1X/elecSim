@@ -144,7 +144,6 @@ class InverterGridTile : public LogicTile {
   }
   std::vector<SignalEvent> Init() override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
-  std::vector<SignalEvent> PreprocessSignal(const SignalEvent incomingSignal) override;
   std::string_view TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
   int GetTileTypeId() const override { return 5; }
@@ -166,7 +165,6 @@ class CrossingGridTile : public LogicTile {
   void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
             float screenSize, int alpha = 255) override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
-  std::vector<SignalEvent> PreprocessSignal(const SignalEvent incomingSignal) override;
   
   std::string_view TileTypeName() const override { return "Crossing"; }
   bool IsEmitter() const override { return false; }

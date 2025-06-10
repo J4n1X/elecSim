@@ -67,4 +67,7 @@ struct UpdateEvent {
   
   bool operator<(const UpdateEvent& other) const;
 };
+
+olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir);
+Direction DirectionFromVectors(olc::vi2d from, olc::vi2d to);
 }  // namespace ElecSim

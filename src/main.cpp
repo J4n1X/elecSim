@@ -114,6 +114,7 @@ class Game : public olc::PixelGameEngine {
           std::filesystem::current_path().append("default.grid").string();
     } else {
       grid.Load(curFilename.string());
+      sAppName = std::format(appNameBaseFmt, curFilename.filename().string());
     }
 
     paused = true;
@@ -690,8 +691,14 @@ class Game : public olc::PixelGameEngine {
         simTimeMicros = std::chrono::duration_cast<std::chrono::microseconds>(
                             simEndTime - simStartTime)
                             .count();
-      } catch (const std::exception& e) {
-        std::cout << "Simulation error: " << e.what() << std::endl;
+      } catch (const std::runtime_error& e) {
+        std::cout << "Simulation runtime error: " << e.what() << std::endl;
+        paused = true;
+        Reset();
+        updatesPerTick = 0;  // Reset updates per tick on error
+      } catch (const std::invalid_argument& e) {
+        std::cout << "Simulation invalid argument error: " << e.what()
+                  << std::endl;
         paused = true;
         Reset();
         updatesPerTick = 0;  // Reset updates per tick on error

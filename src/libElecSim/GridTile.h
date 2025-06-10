@@ -75,6 +75,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   size_t GetRefNum() const { return refNum; }
 
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
+  bool CanOutputTo(Direction dir) const { return canOutput[dir]; }
 
   virtual std::string_view TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;

@@ -202,12 +202,7 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   }
   return {};
 }
-std::vector<SignalEvent> InverterGridTile::PreprocessSignal(const SignalEvent incomingSignal) {
-    if (incomingSignal.isActive && canReceive[facing]) {
-        return {SignalEvent(pos, facing, !activated)};
-    }
-    return {SignalEvent(pos, facing, activated)};
-}
+
 
 // --- CrossingGridTile Implementation ---
 
@@ -262,9 +257,5 @@ std::vector<SignalEvent> CrossingGridTile::ProcessSignal(
   return {SignalEvent(pos, outputDir, signal.isActive)};
 }
 
-std::vector<SignalEvent> CrossingGridTile::PreprocessSignal(const SignalEvent incomingSignal) {
-    Direction outputDir = FlipDirection(incomingSignal.fromDirection);
-    return {SignalEvent(pos, outputDir, incomingSignal.isActive)};
-}
 
 }  // namespace ElecSim
