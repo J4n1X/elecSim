@@ -366,7 +366,7 @@ class Game : public olc::PixelGameEngine {
     auto dialogResult = OpenSaveDialog();
     if (dialogResult.has_value()) {
       curFilename = dialogResult.value();
-      grid.Save(curFilename);
+      grid.Save(curFilename.string());
       unsavedChanges = false;
       sAppName = std::format(appNameBaseFmt, curFilename.filename().string());
       return true;
