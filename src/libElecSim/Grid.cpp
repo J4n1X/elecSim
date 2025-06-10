@@ -137,11 +137,13 @@ int Grid::Simulate() {
 #ifdef SIM_CACHING
     auto simObjMaybe = tileManager.GetSimulationObject(update.tile->GetPos());
     if (simObjMaybe.has_value()) {
-      // std::cout << std::format(
-      //     "Processing update for tile at ({},{}): {}",
-      //     update.tile->GetPos().x, update.tile->GetPos().y,
-      //     update.event.isActive ? "Active" : "Inactive") << std::endl;
-      //  If we have a simulation object, use it to process the update
+#ifdef DEBUG
+      std::cout << std::format(
+          "Processing update for event coming from ({},{}): {}",
+          update.event.sourcePos.x, update.event.sourcePos.y,
+          update.event.isActive ? "Active" : "Inactive") << std::endl;
+#endif
+      
       auto simObj = simObjMaybe.value();
       auto newSignals = simObj->ProcessSignal(update.event);
       for (const auto& newSignal : newSignals) {
@@ -161,6 +163,11 @@ int Grid::Simulate() {
       }
     } else {
       // It's just a single object (probably a logic tile, but not necessarily)
+      std::cout << std::format(
+          "Warning: Processing update for unprocessed tile: ({}, {})->{}",
+          update.tile->GetPos().x, update.tile->GetPos().y,
+          update.event.isActive ? "Active" : "Inactive")
+                << std::endl;
       ProcessUpdateEvent(update);
     }
 
@@ -366,11 +373,6 @@ std::vector<SignalEvent> TileGroupManager::SimulationGroup::ProcessSignal(
 
   // Cycle the activation state of all inbetween tiles
   for (const auto& tile : inbetweenTiles) {
-    // if (shouldFlip) {
-    //   std::cout << "Flipping tile at "
-    //             << tile->GetPos().x << "," << tile->GetPos().y << std::endl;
-    //   tile->SetActivation(!tile->GetActivation());
-    // }
     tile->SetActivation(!tile->GetActivation());
   }
 
@@ -382,6 +384,7 @@ std::vector<SignalEvent> TileGroupManager::SimulationGroup::ProcessSignal(
     auto signalEvent = SignalEvent(output.inputterTile->GetPos(), outputDir,
                                    output.inputterTile->GetActivation());
     auto tileSignals = output.tile->ProcessSignal(signalEvent);
+
     for (const auto& tileSignal : tileSignals) {
       outputSignals.push_back(tileSignal);
     }
@@ -399,77 +402,248 @@ std::string TileGroupManager::SimulationGroup::GetObjectInfo() const {
   info += "  Output Tiles:\n";
   for (const auto& output : outputTiles) {
     info += "    " + output.tile->GetTileInformation() + '\n';
-  }
-  // cut last newline
+  }  // cut last newline
   if (!info.empty() && info.back() == '\n') {
     info.pop_back();
   }
   return info;
 }
 
-// Horribly ugly preprocessing function that builds paths like this:
-// 1. Start with a tile that is deterministic and has no inputs, and has at
-//    least one output.
-// 2. Follow the deterministic path until we reach a tile that is not 
-//    deterministic or until we reach a tile that has no outputs.
-// 3. If the resulting group only contains one tile, we skip. 
-// TODO: This is not just ugly, but it also does not work completely perfectly.
-//       it does most the things correctly, but sometimes aborts 1-2 tiles too 
-//       early. Honestly, I think this function has to be rewritten already.
-//       We have the proof it works this way, now it needs to be done proper.
-void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
-  // First pass: identify potential start tiles (tiles with outputs but no deterministic inputs)
-  auto isValidStartTile = [&](const auto& pair) {
-    const auto& [pos, tile] = pair;
-    
-    // Must have at least one output connection
-    bool hasOutput =
-        std::ranges::any_of(AllDirections, [&](const Direction& dir) {
-          auto neighborPos = TranslatePosition(pos, dir);
-          auto neighborIt = tiles.find(neighborPos);
-          if (neighborIt == tiles.end()) return false;
-          return neighborIt->second->CanReceiveFrom(FlipDirection(dir)) &&
-                 tile->CanOutputTo(dir);
-        });
-    
-    if (!hasOutput) return false;
-    
-    // Check if this tile has no deterministic inputs (valid start point)
-    bool hasNoValidInput =
-        std::ranges::none_of(AllDirections, [&](const Direction& dir) {
-          auto neighborPos = TranslatePosition(pos, dir);
-          auto neighborIt = tiles.find(neighborPos);
-          if (neighborIt == tiles.end()) return false;
-          
-          // Only consider connections where neighbor can output to this tile
-          if (!neighborIt->second->CanOutputTo(FlipDirection(dir)) ||
-              !tile->CanReceiveFrom(dir)) {
-            return false;
-          }
-          
-          // For start tile detection, only deterministic tiles matter
-          return neighborIt->second->IsDeterministic();
-        });
-    
-    // Don't reprocess already-handled tiles
-    bool alreadyExists = simulationObjects.contains(tile->GetPos());
-    return hasNoValidInput && !alreadyExists;
-  };
+// Helper functions for tile preprocessing
+bool TileGroupManager::HasOutputConnection(const std::shared_ptr<GridTile>& tile, const TileMap& tiles) const {
+  return std::ranges::any_of(AllDirections, [&](const Direction& dir) {
+    auto neighborPos = TranslatePosition(tile->GetPos(), dir);
+    auto neighborIt = tiles.find(neighborPos);
+    if (neighborIt == tiles.end()) return false;
+    return neighborIt->second->CanReceiveFrom(FlipDirection(dir)) &&
+           tile->CanOutputTo(dir);
+  });
+}
 
-  std::vector<std::shared_ptr<GridTile>> initialStartTiles;
-  for (const auto& pair : tiles) {
-    if (isValidStartTile(pair)) {
-      initialStartTiles.push_back(pair.second);
+bool TileGroupManager::HasDeterministicInputs(const std::shared_ptr<GridTile>& tile, const TileMap& tiles) const {
+  return std::ranges::any_of(AllDirections, [&](const Direction& dir) {
+    auto neighborPos = TranslatePosition(tile->GetPos(), dir);
+    auto neighborIt = tiles.find(neighborPos);
+    if (neighborIt == tiles.end()) return false;
+    
+    // Only consider connections where neighbor can output to this tile
+    if (!neighborIt->second->CanOutputTo(FlipDirection(dir)) ||
+        !tile->CanReceiveFrom(dir)) {
+      return false;
+    }
+    
+    // For start tile detection, only deterministic tiles matter
+    return neighborIt->second->IsDeterministic();
+  });
+}
+
+bool TileGroupManager::IsValidStartTile(const std::shared_ptr<GridTile>& tile, const TileMap& tiles) const {
+  // Must have at least one output connection
+  if (!HasOutputConnection(tile, tiles)) {
+    return false;
+  }
+  
+  // Check if this tile has no deterministic inputs (valid start point)
+  bool hasNoValidInput = !HasDeterministicInputs(tile, tiles);
+  
+  // Don't reprocess already-handled tiles
+  bool alreadyExists = simulationObjects.contains(tile->GetPos());
+  return hasNoValidInput && !alreadyExists;
+}
+
+std::vector<std::shared_ptr<GridTile>> TileGroupManager::FindInitialStartTiles(const TileMap& tiles) const {
+  std::vector<std::shared_ptr<GridTile>> startTiles;
+  for (const auto& [pos, tile] : tiles) {
+    if (IsValidStartTile(tile, tiles)) {
+      startTiles.push_back(tile);
     }
   }
+  return startTiles;
+}
 
-  std::cout << "Initial start tiles to be processed: " << initialStartTiles.size()
-            << std::endl;
+int TileGroupManager::CountInputsToTile(const std::shared_ptr<GridTile>& neighbor, const TileMap& tiles) const {
+  return std::ranges::count_if(AllDirections, [&](const Direction& inDir) {
+    auto sourcePos = TranslatePosition(neighbor->GetPos(), inDir);
+    auto sourceIt = tiles.find(sourcePos);
+    if (sourceIt == tiles.end()) return false;
+    return sourceIt->second->CanOutputTo(FlipDirection(inDir)) &&
+           neighbor->CanReceiveFrom(inDir);
+  });
+}
+
+std::shared_ptr<GridTile> TileGroupManager::FindInputterTile(
+    const std::shared_ptr<GridTile>& tile,
+    const TileMap& tiles,
+    const ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>& pathVisited) const {
+  for (const auto& dir : AllDirections) {
+    if (!tile->CanReceiveFrom(dir)) continue;
+    
+    auto sourcePos = TranslatePosition(tile->GetPos(), dir);
+    auto sourceIt = tiles.find(sourcePos);
+    if (sourceIt == tiles.end()) continue;
+    
+    auto& sourceTile = sourceIt->second;
+    if (sourceTile->CanOutputTo(FlipDirection(dir)) && 
+        pathVisited.contains(sourceTile)) {
+      return sourceTile;
+    }
+  }
+  return nullptr;
+}
+
+void TileGroupManager::QueueNeighborsAsStartTiles(
+    const std::shared_ptr<GridTile>& tile,
+    const TileMap& tiles,
+    std::queue<std::shared_ptr<GridTile>>& pendingStartTiles,
+    const ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>& globalVisited) const {
+  for (const auto& dir : AllDirections) {
+    if (!tile->CanOutputTo(dir)) continue;
+    
+    auto neighborPos = TranslatePosition(tile->GetPos(), dir);
+    auto neighborIt = tiles.find(neighborPos);
+    if (neighborIt != tiles.end() &&
+        neighborIt->second->CanReceiveFrom(FlipDirection(dir)) &&
+        !globalVisited.contains(neighborIt->second)) {
+      pendingStartTiles.push(neighborIt->second);
+    }
+  }
+}
+
+void TileGroupManager::ProcessDeterministicTileNeighbors(
+    const std::shared_ptr<GridTile>& current,
+    const TileMap& tiles,
+    std::queue<std::shared_ptr<GridTile>>& pathQueue,
+    std::vector<SimulationGroup::OutputTile>& outputTiles,
+    std::queue<std::shared_ptr<GridTile>>& pendingStartTiles,
+    const ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>& globalVisited) const {
+  for (const auto& dir : AllDirections) {
+    if (!current->CanOutputTo(dir)) continue;
+    
+    auto neighborPos = TranslatePosition(current->GetPos(), dir);
+    auto neighborIt = tiles.find(neighborPos);
+    if (neighborIt == tiles.end()) continue;
+    
+    auto& neighbor = neighborIt->second;
+    if (!neighbor->CanReceiveFrom(FlipDirection(dir))) continue;
+    
+    int inputCount = CountInputsToTile(neighbor, tiles);
+    
+    if (inputCount > 1) {
+      // Multiple inputs - treat as output tile and potential new start point
+      outputTiles.emplace_back(neighbor, current);
+      if (!globalVisited.contains(neighbor)) {
+        pendingStartTiles.push(neighbor);
+      }
+    } else if (neighbor->IsDeterministic()) {
+      // Single input deterministic tile - continue path
+      pathQueue.push(neighbor);
+    } else {
+      // Single input non-deterministic tile - end path here
+      outputTiles.emplace_back(neighbor, current);
+      if (!globalVisited.contains(neighbor)) {
+        pendingStartTiles.push(neighbor);
+      }
+    }
+  }
+}
+
+TileGroupManager::PathTraceResult TileGroupManager::TraceDeterministicPath(
+    const std::shared_ptr<GridTile>& inputTile,
+    const TileMap& tiles,
+    std::queue<std::shared_ptr<GridTile>>& pendingStartTiles,
+    const ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>& globalVisited) const {
+  PathTraceResult result;
+  std::queue<std::shared_ptr<GridTile>> pathQueue;
+  pathQueue.push(inputTile);
+  
+  while (!pathQueue.empty()) {
+    auto current = pathQueue.front();
+    pathQueue.pop();
+    
+    if (result.pathVisited.contains(current)) continue;
+    result.pathVisited.insert(current);
+    
+    // If this is not a deterministic tile, handle it as a path endpoint
+    if (!current->IsDeterministic()) {
+      if (current != inputTile) {
+        // This is an endpoint of our deterministic path
+        auto inputterTile = FindInputterTile(current, tiles, result.pathVisited);
+        if (inputterTile) {
+          result.outputTiles.emplace_back(current, inputterTile);
+        }
+      }
+      
+      // Queue up neighbors as potential new start tiles
+      QueueNeighborsAsStartTiles(current, tiles, pendingStartTiles, globalVisited);
+      continue;
+    }
+    
+    // This is a deterministic tile - add to path
+    if (current != inputTile) {
+      result.pathTiles.push_back(current);
+    }
+    
+    // Process neighbors
+    ProcessDeterministicTileNeighbors(current, tiles, pathQueue, result.outputTiles, 
+                                     pendingStartTiles, globalVisited);
+  }
+  
+  return result;
+}
+
+void TileGroupManager::CreateSimulationObject(
+    const std::shared_ptr<GridTile>& inputTile,
+    std::vector<std::shared_ptr<GridTile>> pathTiles,
+    std::vector<SimulationGroup::OutputTile> outputTiles) {
+  if (pathTiles.empty() && outputTiles.empty()) {
+    // Single tile with no deterministic path - create a SimulationTile
+    simulationObjects.emplace(inputTile->GetPos(),
+                              std::make_unique<SimulationTile>(inputTile));
+#ifdef DEBUG
+    std::cout << std::format(
+        "Tile at ({},{}) has no deterministic path, creating single tile simulation.",
+        inputTile->GetPos().x, inputTile->GetPos().y) << std::endl;
+#endif
+  } else {
+    // Create simulation group
+    auto simGroup = std::make_unique<SimulationGroup>(
+        inputTile, std::move(pathTiles), std::move(outputTiles));
+    
+    auto [_, inserted] = simulationObjects.emplace(
+        inputTile->GetPos(), std::move(simGroup));
+    
+    if (!inserted) {
+#ifdef DEBUG
+      std::cerr << "Warning: Tile Group starting at ("
+                << inputTile->GetPos().x << ", " << inputTile->GetPos().y
+                << ") already exists in simulationObjects, skipping."
+                << std::endl;
+#endif
+    }
+  }
+}
+
+void TileGroupManager::CoverRemainingTiles(const TileMap& tiles, 
+                        ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>& globalVisited) {
+  for (const auto& [pos, tile] : tiles) {
+    if (!globalVisited.contains(tile) && !simulationObjects.contains(pos)) {
+      // This tile wasn't processed in any group - create a single tile simulation object
+      simulationObjects.emplace(pos, std::make_unique<SimulationTile>(tile));
+      globalVisited.insert(tile);
+    }
+  }
+}
+
+// Main preprocessing function - now much cleaner and easier to follow
+void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
+  // Find all potential start tiles
+  auto initialStartTiles = FindInitialStartTiles(tiles);
+  std::cout << "Initial start tiles to be processed: " << initialStartTiles.size() << std::endl;
 
   ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>> globalVisited;
   std::queue<std::shared_ptr<GridTile>> pendingStartTiles;
   
-  // Add initial start tiles to queue
+  // Add initial start tiles to processing queue
   for (auto& tile : initialStartTiles) {
     pendingStartTiles.push(tile);
   }
@@ -485,146 +659,20 @@ void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
     }
     
     // Trace the deterministic path from this start tile
-    std::vector<std::shared_ptr<GridTile>> pathTiles;
-    std::vector<SimulationGroup::OutputTile> outputTiles;
-    ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>> pathVisited;
-    
-    std::queue<std::shared_ptr<GridTile>> pathQueue;
-    pathQueue.push(inputTile);
-    
-    while (!pathQueue.empty()) {
-      auto current = pathQueue.front();
-      pathQueue.pop();
-      
-      if (pathVisited.contains(current)) continue;
-      pathVisited.insert(current);
-      
-      // If this is not a deterministic tile, handle it as a path endpoint
-      if (!current->IsDeterministic()) {
-        if (current != inputTile) {
-          // This is an endpoint of our deterministic path
-          // Find which tile fed into it
-          std::shared_ptr<GridTile> inputterTile = nullptr;
-          for (const auto& dir : AllDirections) {
-            if (!current->CanReceiveFrom(dir)) continue;
-            
-            auto sourcePos = TranslatePosition(current->GetPos(), dir);
-            auto sourceIt = tiles.find(sourcePos);
-            if (sourceIt == tiles.end()) continue;
-            
-            auto& sourceTile = sourceIt->second;
-            if (sourceTile->CanOutputTo(FlipDirection(dir)) && 
-                pathVisited.contains(sourceTile)) {
-              inputterTile = sourceTile;
-              break;
-            }
-          }
-          
-          if (inputterTile) {
-            outputTiles.emplace_back(current, inputterTile);
-          }
-        }
-        
-        // Queue up neighbors as potential new start tiles
-        for (const auto& dir : AllDirections) {
-          if (!current->CanOutputTo(dir)) continue;
-          
-          auto neighborPos = TranslatePosition(current->GetPos(), dir);
-          auto neighborIt = tiles.find(neighborPos);
-          if (neighborIt != tiles.end() &&
-              neighborIt->second->CanReceiveFrom(FlipDirection(dir)) &&
-              !globalVisited.contains(neighborIt->second)) {
-            pendingStartTiles.push(neighborIt->second);
-          }
-        }
-        continue;
-      }
-      
-      // This is a deterministic tile - add to path
-      if (current != inputTile) {
-        pathTiles.push_back(current);
-      }
-      
-      // Find all valid neighbors
-      for (const auto& dir : AllDirections) {
-        if (!current->CanOutputTo(dir)) continue;
-        
-        auto neighborPos = TranslatePosition(current->GetPos(), dir);
-        auto neighborIt = tiles.find(neighborPos);
-        if (neighborIt == tiles.end()) continue;
-        
-        auto& neighbor = neighborIt->second;
-        if (!neighbor->CanReceiveFrom(FlipDirection(dir))) continue;
-        
-        // Count how many tiles can output to this neighbor
-        int inputCount = std::ranges::count_if(AllDirections, [&](const Direction& inDir) {
-          auto sourcePos = TranslatePosition(neighbor->GetPos(), inDir);
-          auto sourceIt = tiles.find(sourcePos);
-          if (sourceIt == tiles.end()) return false;
-          return sourceIt->second->CanOutputTo(FlipDirection(inDir)) &&
-                 neighbor->CanReceiveFrom(inDir);
-        });
-        
-        if (inputCount > 1) {
-          // Multiple inputs - treat as output tile and potential new start point
-          outputTiles.emplace_back(neighbor, current);
-          if (!globalVisited.contains(neighbor)) {
-            pendingStartTiles.push(neighbor);
-          }
-        } else if (neighbor->IsDeterministic()) {
-          // Single input deterministic tile - continue path
-          pathQueue.push(neighbor);
-        } else {
-          // Single input non-deterministic tile - end path here
-          outputTiles.emplace_back(neighbor, current);
-          if (!globalVisited.contains(neighbor)) {
-            pendingStartTiles.push(neighbor);
-          }
-        }
-      }
-    }
+    auto pathResult = TraceDeterministicPath(inputTile, tiles, pendingStartTiles, globalVisited);
     
     // Mark all tiles in this path as visited
     globalVisited.insert(inputTile);
-    for (auto& tile : pathTiles) {
+    for (auto& tile : pathResult.pathTiles) {
       globalVisited.insert(tile);
     }
     
-    // Create simulation object
-    if (pathTiles.empty() && outputTiles.empty()) {
-      // Single tile with no deterministic path - Drop!
-#ifdef DEBUG
-        std::cout << std::format(
-            "Tile at ({},{}) has no deterministic path, skipping.",
-            inputTile->GetPos().x, inputTile->GetPos().y) << std::endl;
-#endif
-    } else {
-      // Create simulation group
-      auto simGroup = std::make_unique<SimulationGroup>(
-          inputTile, std::move(pathTiles), std::move(outputTiles));
-      
-      auto [_, inserted] = simulationObjects.emplace(
-          inputTile->GetPos(), std::move(simGroup));
-      
-      if (!inserted) {
-#ifdef DEBUG
-        std::cerr << "Warning: Tile Group starting at ("
-                  << inputTile->GetPos().x << ", " << inputTile->GetPos().y
-                  << ") already exists in simulationObjects, skipping."
-                  << std::endl;
-#endif
-      }
-    }
+    // Create appropriate simulation object
+    CreateSimulationObject(inputTile, std::move(pathResult.pathTiles), std::move(pathResult.outputTiles));
   }
   
-  // Second pass: ensure all remaining tiles are covered
-  for (const auto& [pos, tile] : tiles) {
-    if (!globalVisited.contains(tile) && !simulationObjects.contains(pos)) {
-      // This tile wasn't processed in any group - create a single tile simulation object
-      simulationObjects.emplace(pos, std::make_unique<SimulationTile>(tile));
-      globalVisited.insert(tile);
-    }
-  }
+  // Ensure all remaining tiles are covered
+  CoverRemainingTiles(tiles, globalVisited);
 
 #ifdef DEBUG
   for (const auto& [pos, obj] : simulationObjects) {
