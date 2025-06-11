@@ -9,7 +9,7 @@ Might have to add a couple tiles for that, inputs and outputs, and those things 
 ## Idea: "Just In Time" Simulation Processing
 This would hold a list of changes to be applied when a certain circuit state is reached. If this state has not been reached ever before, it'd be processed first, and then applied. This would require GridTiles to specify that their output signal is conditional (Needs more than one signal to trigger or is able to be interacted with). When a conditional tile is hit, then the JIT processor would be called, and it would process all the updates until another conditional tile is hit, at which point, it would just stop.
 
-### Additional idea: JIT preprocessing
+### Additional idea: JIT preprocessing (Implemented!)
 Why not preprocess every possible conditional tile's changes? That will take a lot of time when starting the simulation, but it would make the simulation much, much faster. It would also reduce the amount of updates that need to be processed from thousands to just a few. Of course, applying a large amount of tile state changes at once is still a big undertaking, but in all actuality, the only thing we'll have to change at that point is the tile's active property, so that it renders differently. That means we reduce runtime so much that the simulation will probably be able to process a very large field of tiles in a very short time.
 
 #### For the record, here's which tiles would have to be conditional:

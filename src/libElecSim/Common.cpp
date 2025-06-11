@@ -1,6 +1,19 @@
 #include "Common.h"
+#include "ankerl/unordered_dense.h"
 
 namespace ElecSim {
+// Implementation of PositionHash::operator()
+std::size_t PositionHash::operator()(const olc::vi2d& pos) const {
+  using ankerl::unordered_dense::detail::wyhash::hash;
+  return hash(&pos, sizeof(olc::vi2d));
+}
+
+// Implementation of PositionEqual::operator()
+bool PositionEqual::operator()(const olc::vi2d& lhs,
+                               const olc::vi2d& rhs) const {
+  return lhs == rhs;
+}
+
 
 std::string_view DirectionToString(Direction dir) {
   switch (dir) {

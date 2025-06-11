@@ -90,10 +90,9 @@ class TestParser {
   }
 
   std::string GetCommandString(const Command& command) const {
-    return std::format("{} {} {} {}", 
+    return std::format("{} {} {}", 
                       GetCommandTypeString(command.type), 
-                      command.x, 
-                      command.y, 
+                      olc::vi2d(command.x, command.y), 
                       command.value);
   }
 
@@ -208,8 +207,8 @@ int main(int argc, char** argv) {
         grid.Simulate();
         break;
       case TestParser::CommandType::Read:
-        std::cout << std::format("Tile at ({}, {}):\n  Expected: {}\n  Actual: ",
-                               command.x, command.y, 
+        std::cout << std::format("Tile at {}:\n  Expected: {}\n  Actual: ",
+                               olc::vi2d(command.x, command.y), 
                                (command.value ? "active" : "inactive"));
         if (tileMaybe.has_value()) {
           auto tile = tileMaybe.value();

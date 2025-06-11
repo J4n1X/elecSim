@@ -40,9 +40,10 @@ The controls are as follows:
   - Period: Slow down the update rate
   - R: Change the facing of the tile you are about to place
   - Space: Pause the simulation
-  - Left Click (while the simulation is paused): Place a tile
-  - Middle click (while the simulation is paused): Erase a tile
-  - Right click (while the simulation is running): Interact with certain tiles (Button, Semiconductor and Emitter)
+  - Left Mouse Button (while the simulation is paused): Place a tile
+  - Left Mouse Button (while the simulation is running): Interact with certain tiles (Button, Semiconductor and Emitter)
+  - Right Mouse Button (while the simulation is paused): Erase a tile
+  - Middle Mouse Button: Pan the camera around.
   - Escape: Close the game
 
 When you pause the simulation, the state is kept until you place a new tile or you remove one. Upon either of these events, the simulation is entirely reset.
@@ -74,7 +75,7 @@ tests.grid: Contains different small circuits which demonstrate the function of 
 Sorted in order of how important I deem them to the proper function of the game.
   - Add editing tools: Area selection, copy, cut, paste, move around (DONE!)
   - Add a crossing tile to allow for more flexible building. (DONE!)
-  - Implement Signal Path Preprocessing
+  - Implement Signal Path Preprocessing (Almost done!)
   - Write more tests
   - Draw Sprites for the tiles instead of just drawing them out of primitives
   - Dispatch game logic to another thread so there's more time to render for more tiles

@@ -285,7 +285,13 @@ class Game : public olc::PixelGameEngine {
 
   // --- Pause, speed, and quit controls ---
   void HandlePauseAndSpeed() {
-    if (GetKey(olc::Key::SPACE).bPressed) paused = !paused;
+    if (GetKey(olc::Key::SPACE).bPressed) {
+      if(paused){
+        // We need to preprocess again.
+        grid.ResetSimulation();
+      }
+      paused = !paused;
+    }
     if (GetKey(olc::Key::PERIOD).bPressed) updateInterval += 0.025f;
     if (GetKey(olc::Key::COMMA).bPressed)
       updateInterval = std::max(0.0f, updateInterval - 0.025f);
@@ -424,8 +430,8 @@ class Game : public olc::PixelGameEngine {
     // Log selection information to console
     std::cout << std::format(
                      "Copied tiles from selection: "
-                     "Start: ({},{}), End: ({},{})",
-                     startIndex.x, startIndex.y, endIndex.x, endIndex.y)
+                     "Start: {}, End: {}",
+                     startIndex, endIndex)
               << std::endl;
   }
 
@@ -615,7 +621,7 @@ class Game : public olc::PixelGameEngine {
   void DrawStatusString(olc::vi2d highlightWorldPos, int drawnTilesCount) {
     // Status string
     std::stringstream ss;
-    ss << '(' << highlightWorldPos.x << ", " << highlightWorldPos.y << ")"
+    ss << highlightWorldPos << "; "
        << " Buffer: ";
 
     if (tileBuffer.empty()) {

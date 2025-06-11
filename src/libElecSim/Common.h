@@ -1,13 +1,63 @@
 #pragma once
 
-#include <memory>
 #include <array>
-#include <tuple>
 #include <initializer_list>
+#include <memory>
+#include <tuple>
+
 #include "olcPixelGameEngine.h"
 
+// Formatter for olc::v_2d
+template <typename T>
+struct std::formatter<olc::v_2d<T>, char> {
+  int decimals = 0;  // Number of decimal places to format
+
+  constexpr std::format_parse_context::iterator parse(
+      std::format_parse_context& ctx) {
+    auto it = ctx.begin();
+    auto end = ctx.end();
+    // Check for an opening brace for format specifiers
+    if (it != end && *it == ':') {
+      ++it;  // Consume the ':'
+      // If we have a number here, that's the number of decimals
+      while (it != end && std::isdigit(*it)) {
+        decimals = decimals * 10 + (*it - '0');
+        ++it;
+      }
+      // Loop until a '}' or end of string, consuming characters
+      while (it != end && *it != '}') {
+        ++it;
+      }
+    }
+
+    // Return the iterator to the end of the format specifier.
+    return it;
+  }
+  std::format_context::iterator format(const olc::v_2d<T>& vec,
+                                       std::format_context& ctx) const {
+    if constexpr (std::is_floating_point_v<T>) {
+      if (decimals >= 0) {
+        return std::format_to(ctx.out(), "({:.{}f}, {:.{}f})", vec.x, decimals,
+                              vec.y, decimals);
+      }
+    } else {
+      return std::format_to(ctx.out(), "({}, {})", vec.x, vec.y);
+    }
+  }
+};
+
 namespace ElecSim {
-using vi2d = olc::vi2d;
+
+// Hash functor for olc::vi2d to use in unordered sets/maps
+struct PositionHash {
+  using is_avalanching = void;
+  std::size_t operator()(const olc::vi2d& pos) const;
+};
+
+// Equals functor for olc::vi2d
+struct PositionEqual {
+  bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
+};
 
 // Forward declaration to avoid circular includes
 class GridTile;
@@ -57,14 +107,15 @@ struct SignalEvent {
 };
 
 // Event for the update queue with priority ordering
-// TODO: Now that we pass by refnum, we can just pass that instead of handing over a pointer.
+// TODO: Now that we pass by refnum, we can just pass that instead of handing
+// over a pointer.
 struct UpdateEvent {
   std::shared_ptr<GridTile> tile;
   SignalEvent event;
   uint32_t updateCycleId;
 
   UpdateEvent(std::shared_ptr<GridTile> t, const SignalEvent& e, int id);
-  
+
   bool operator<(const UpdateEvent& other) const;
 };
 
