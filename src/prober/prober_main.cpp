@@ -1,3 +1,4 @@
+#include <format>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -89,10 +90,10 @@ class TestParser {
   }
 
   std::string GetCommandString(const Command& command) const {
-    std::ostringstream oss;
-    oss << GetCommandTypeString(command.type) << " " << command.x << " "
-        << command.y << " " << command.value;
-    return oss.str();
+    return std::format("{} {} {}", 
+                      GetCommandTypeString(command.type), 
+                      olc::vi2d(command.x, command.y), 
+                      command.value);
   }
 
   void Parse(const std::string& testFile) {
@@ -144,17 +145,13 @@ class TestParser {
         continue;
       }
     unknown_read:
-      throw std::runtime_error("Unknown command '" + std::string(1, cmd) +
-                               "' at line " + std::to_string(lineNum));
+      throw std::runtime_error(std::format("Unknown command '{}' at line {}", cmd, lineNum));
     malformed_write:
-      throw std::runtime_error("Malformed write command at line " +
-                               std::to_string(lineNum));
+      throw std::runtime_error(std::format("Malformed write command at line {}", lineNum));
     malformed_interact:
-      throw std::runtime_error("Malformed interact command at line " +
-                               std::to_string(lineNum));
+      throw std::runtime_error(std::format("Malformed interact command at line {}", lineNum));
     malformed_read:
-      throw std::runtime_error("Malformed read command at line " +
-                               std::to_string(lineNum));
+      throw std::runtime_error(std::format("Malformed read command at line {}", lineNum));
     }
   }
   const std::vector<Command>& GetCommands() const { return commands; }
@@ -210,9 +207,9 @@ int main(int argc, char** argv) {
         grid.Simulate();
         break;
       case TestParser::CommandType::Read:
-        std::cout << "Tile at (" << command.x << ", " << command.y
-                  << "):\n  Expected: "
-                  << (command.value ? "active" : "inactive") << "\n  Actual: ";
+        std::cout << std::format("Tile at {}:\n  Expected: {}\n  Actual: ",
+                               olc::vi2d(command.x, command.y), 
+                               (command.value ? "active" : "inactive"));
         if (tileMaybe.has_value()) {
           auto tile = tileMaybe.value();
           std::cout << (tile->GetActivation() ? "active" : "inactive");

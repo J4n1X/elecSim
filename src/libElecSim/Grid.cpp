@@ -1,11 +1,25 @@
 #include "Grid.h"
 
 #include <cmath>
+#include <format>
 #include <fstream>
 #include <iostream>
 #include <ranges>
+#include <stdexcept>
+#include <type_traits>
 
 namespace ElecSim {
+
+// Implementation of SignalEdge::operator==
+bool SignalEdge::operator==(const SignalEdge& other) const {
+  return sourcePos == other.sourcePos && targetPos == other.targetPos;
+}
+
+// Implementation of SignalEdgeHash::operator()
+std::size_t SignalEdgeHash::operator()(const SignalEdge& edge) const {
+  using ankerl::unordered_dense::detail::wyhash::hash;
+  return hash(&edge, sizeof(SignalEdge));
+}
 
 Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
            int uiLayer, int gameLayer)
@@ -14,59 +28,53 @@ Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
       gameLayer(gameLayer),
       renderScale(renderScale),
       renderOffset(renderOffset) {
-  std::cout << "Grid initialized with size: " << size.x << "x" << size.y
-            << ", renderScale: " << renderScale
-            << ", renderOffset: " << renderOffset.x << ", " << renderOffset.y
+  std::cout << std::format(
+                   "Grid initialized with size: {}x{}, renderScale: {}, "
+                   "renderOffset: {}",
+                   size.x, size.y, renderScale, renderOffset)
             << std::endl;
 }
 
-void Grid::QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event,
-                       int priority) {
-  updateQueue.push(UpdateEvent(tile, event, priority));
+void Grid::QueueUpdate(std::shared_ptr<GridTile> tile,
+                       const SignalEvent& event) {
+  updateQueue.push(UpdateEvent(tile, event, currentTick));
 }
 
-olc::vi2d Grid::TranslatePosition(olc::vi2d pos, Direction dir) const {
-  switch (dir) {
-    case Direction::Top:
-      return pos + olc::vi2d(0, -1);
-    case Direction::Right:
-      return pos + olc::vi2d(1, 0);
-    case Direction::Bottom:
-      return pos + olc::vi2d(0, 1);
-    case Direction::Left:
-      return pos + olc::vi2d(-1, 0);
-    default:
-      return pos;
-  }
-}
-
-void Grid::ProcessSignalEvent(const SignalEvent& event) {
-  auto tileIt = tiles.find(event.sourcePos);
-  if (tileIt == tiles.end()) return;
-
-  auto& tile = tileIt->second;
-  auto newSignals = tile->ProcessSignal(event);
-
+void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
+  auto newSignals = updateEvent.tile->ProcessSignal(updateEvent.event);
   // Queue up new signals
   for (const auto& signal : newSignals) {
     auto targetPos = TranslatePosition(signal.sourcePos,
                                        FlipDirection(signal.fromDirection));
+
+    // Create signal edge
+    SignalEdge edge{signal.sourcePos, targetPos};
+
+    // Check if this edge has been traversed in this tick
+    if (false && currentTickVisitedEdges.contains(edge)) {
+      // This would create a cycle - throw an exception
+      // If we didn't, and just skipped, it would result in false behavior.
+      throw std::runtime_error(std::format(
+          "Cycle detected in signal processing: edge from {} to "
+          "{}. "
+          "Offending signal side: {}; Total processed edges this tick: {}",
+          edge.sourcePos, edge.targetPos,
+          DirectionToString(signal.fromDirection),
+          currentTickVisitedEdges.size()));
+    }
+
+    // Record this edge as visited
+
     auto targetTileIt = tiles.find(targetPos);
     if (targetTileIt == tiles.end()) continue;
 
     auto& targetTile = targetTileIt->second;
     if (targetTile->CanReceiveFrom(signal.fromDirection)) {
-      if (targetTile->GetActivation() == signal.isActive) {
-        // We are pushing an active signal into an already active tile.
-        // This is needed for some logic, like when a wire is connected to two
-        // sides which both give it an input signal. You don't want to turn it
-        // off if one of the signals is turned off. However, this enables
-        // infinite energy loops... Hold on, just got a great idea, I gotta test
-        // it.
-      }
-
-      QueueUpdate(targetTile, SignalEvent(targetPos, signal.fromDirection,
-                                          signal.isActive));
+      currentTickVisitedEdges.insert(edge);
+      // Create a simpler signal event (no visited positions)
+      QueueUpdate(targetTile,
+                  SignalEvent(targetPos, FlipDirection(signal.fromDirection),
+                              signal.isActive));
     }
   }
 }
@@ -74,6 +82,9 @@ void Grid::ProcessSignalEvent(const SignalEvent& event) {
 int Grid::Simulate() {
   int updatesProcessed = 0;
   currentTick++;  // Increment the tick counter
+
+  // Clear edge tracking for this simulation tick
+  currentTickVisitedEdges.clear();
 
   // Queue updates from emitters first
   for (auto it = emitters.begin(); it != emitters.end();) {
@@ -85,47 +96,93 @@ int Grid::Simulate() {
     auto tile = std::dynamic_pointer_cast<EmitterGridTile>(it->lock());
     if (tile && tile->ShouldEmit(currentTick)) {
       tile->SetActivation(!tile->GetActivation());  // Toggle emitter state
-      QueueUpdate(
-          tile,
-          SignalEvent(tile->GetPos(), tile->GetFacing(), tile->GetActivation()),
-          1);
+      // Now using the simpler SignalEvent constructor
+      QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
+                                    tile->GetActivation()));
     }
     ++it;
   }
 
-  // Process all queued updates
+  // We're now using signal chain tracking with visited positions to detect
+  // circular updates. Each signal keeps track of all positions it has
+  // visited, and we throw a runtime_error when we detect a cycle. However,
+  // we'll still keep a reasonable upper limit as a safety measure:
+  constexpr int MAX_UPDATES = 100000;
   while (!updateQueue.empty()) {
-    auto update = updateQueue.top();
+    // Safety check - prevent extremely long update chains
+    if (updatesProcessed > MAX_UPDATES) {
+      std::cerr << "Warning: Maximum update limit reached (" << MAX_UPDATES
+                << " updates). This may indicate a complex circuit or "
+                   "potential issue."
+                << std::endl;
+      break;
+    }
+
+    auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
-    ProcessSignalEvent(update.event);
+
+#ifdef SIM_CACHING
+    auto simObjMaybe = tileManager.GetSimulationObject(update.tile->GetPos());
+    if (simObjMaybe.has_value()) {
+      auto simObj = simObjMaybe.value();
+      auto newSignals = simObj->ProcessSignal(update.event);
+      for (const auto& newSignal : newSignals) {
+        // Queue the new signal events
+        auto targetPos = TranslatePosition(
+            newSignal.sourcePos, FlipDirection(newSignal.fromDirection));
+        auto targetTileIt = tiles.find(targetPos);
+        if (targetTileIt != tiles.end()) {
+          auto& targetTile = targetTileIt->second;
+          if (targetTile->CanReceiveFrom(newSignal.fromDirection)) {
+            QueueUpdate(
+                targetTile,
+                SignalEvent(newSignal.sourcePos, FlipDirection(newSignal.fromDirection),
+                            newSignal.isActive));
+          }
+        }
+      }
+    } else {
+      // It's just a single object (probably a logic tile, but not necessarily)
+      std::cout
+          << std::format(
+                 "Warning: Processing update for unprocessed tile: {}->{}",
+                 update.tile->GetPos(),
+                 update.event.isActive ? "Active" : "Inactive")
+          << std::endl;
+      ProcessUpdateEvent(update);
+    }
+
+#else
+    ProcessUpdateEvent(update);
+#endif
     updatesProcessed++;
   }
   return updatesProcessed;
 }
 
 void Grid::ResetSimulation() {
-  // Clear the update queue
-  while (!updateQueue.empty()) {
-    updateQueue.pop();
-  }
-
   // Reset tick counter
   currentTick = 0;
+  // Clear the update queue
+  if (!updateQueue.empty()) {
+    updateQueue = std::queue<UpdateEvent>();
+  }
+  currentTickVisitedEdges.clear();
 
   // Reset all tiles
   for (auto& [pos, tile] : tiles) {
     tile->ResetActivation();
-
-    // Queue "off" signals from all directions with highest priority (100)
-    // This ensures all inputs to each tile are properly initialized
-    for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-      Direction dir = static_cast<Direction>(i);
-      if (tile->CanReceiveFrom(dir)) {
-        QueueUpdate(tile, SignalEvent(pos, dir, false), 100);
-      }
+    auto initState = tile->Init();
+    if (initState.empty()) continue;  // No initial state to process
+    for (const auto& event : initState) {
+      QueueUpdate(tile, event);
     }
   }
+#ifdef SIM_CACHING
+  tileManager.Clear();
+  tileManager.PreprocessTiles(tiles);
+#endif
 }
 
 int Grid::Draw(olc::PixelGameEngine* renderer) {
@@ -138,9 +195,9 @@ int Grid::Draw(olc::PixelGameEngine* renderer) {
   // Tiles exclusively render as decals.
 
   // Draw tiles
-  // This spriteSize causes overdraw all the time, but without it, we get pixel
-  // gaps
-  // Update: Now that we use decals, this is a non-issue.
+  // This spriteSize causes overdraw all the time, but without it, we get
+  // pixel gaps Update: Now that we use decals, this is a non-issue.
+
   auto spriteSize = std::ceil(renderScale);
   int drawnTiles = 0;
   for (const auto& [pos, tile] : tiles) {
@@ -167,6 +224,10 @@ void Grid::SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile,
   if (emitter) {
     emitters.push_back(tiles.at(pos));
   }
+  auto initSignals = tiles.at(pos)->Init();
+  for (const auto& signal : initSignals) {
+    QueueUpdate(tiles.at(pos), signal);
+  }
 }
 
 void Grid::SetSelection(olc::vi2d startPos, olc::vi2d endPos) {
@@ -192,7 +253,8 @@ olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
 }
 
 olc::vi2d Grid::AlignToGrid(const olc::vf2d& pos) {
-  return olc::vf2d(static_cast<int>(std::floor(pos.x)), static_cast<int>(std::floor(pos.y)));
+  return olc::vf2d(static_cast<int>(std::floor(pos.x)),
+                   static_cast<int>(std::floor(pos.y)));
 }
 
 olc::vf2d Grid::CenterOfSquare(const olc::vf2d& pos) {
@@ -232,13 +294,16 @@ void Grid::Save(const std::string& filename) {
     return;
   }
 
+  size_t dataSize = 0;
   for (const auto& [pos, tile] : tiles) {
     auto data = tile->Serialize();
+    dataSize += data.size();
     file.write(data.data(), data.size());
   }
 
-  std::cout << "Saved grid to " << filename << std::endl;
-  std::cout << "Total tiles: " << tiles.size() << std::endl;
+  std::cout << std::format("Saved {} bytes to {}, total tiles: {}", dataSize,
+                           filename, tiles.size())
+            << std::endl;
   file.close();
 }
 
@@ -250,10 +315,11 @@ void Grid::Load(const std::string& filename) {
   }
 
   Clear();
-
+  size_t dataSize = 0;
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
+    dataSize += file.gcount();
     if (file.gcount() == 0) break;
 
     std::shared_ptr<GridTile> tile = std::move(GridTile::Deserialize(data));
@@ -265,8 +331,9 @@ void Grid::Load(const std::string& filename) {
 
   file.close();
 
-  std::cout << "Loaded grid from " << filename << std::endl;
-  std::cout << "Total tiles: " << tiles.size() << std::endl;
+  std::cout << std::format("Loaded {} bytes from {}, total {} tiles", dataSize,
+                           filename, tiles.size())
+            << std::endl;
   ResetSimulation();
 }
 

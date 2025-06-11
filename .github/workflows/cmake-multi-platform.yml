@@ -50,13 +50,9 @@ jobs:
         echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
     - name: Install Dependencies (Linux)
       if: runner.os == 'Linux'
-      run: sudo apt install libgtk-3-dev -y
-    
-    - name: Fetch Dependencies
       run: |
-        git clone https://github.com/J4n1X/hope.git include/hope
-        git clone https://github.com/OneLoneCoder/olcPixelGameEngine include/olcPixelGameEngine
-        git clone https://github.com/btzy/nativefiledialog-extended include/nativefiledialog-extended
+        sudo apt update
+        sudo apt install libgtk-3-dev -y
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.

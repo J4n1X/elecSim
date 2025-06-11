@@ -1,65 +1,20 @@
 #pragma once
 
 #include <array>
-#include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
+#include "Common.h"
 #include "olcPixelGameEngine.h"
 
 namespace ElecSim {
-
-constexpr int GRIDTILE_BYTESIZE =
-    sizeof(int) * 4;  // TileId + Facing + PosX + PosY
-
-enum class Direction { Top = 0, Right = 1, Bottom = 2, Left = 3, Count = 4 };
-
-// Direction utility functions
-inline Direction FlipDirection(Direction dir) {
-  switch (dir) {
-    case Direction::Top:
-      return Direction::Bottom;
-    case Direction::Bottom:
-      return Direction::Top;
-    case Direction::Left:
-      return Direction::Right;
-    case Direction::Right:
-      return Direction::Left;
-    default:
-      return dir;
-  }
-}
-
-struct SignalEvent {
-  olc::vi2d sourcePos;
-  Direction fromDirection;
-  bool isActive;
-
-  SignalEvent(olc::vi2d pos, Direction toDirection, bool active)
-      : sourcePos(pos),
-        fromDirection(FlipDirection(toDirection)),
-        isActive(active) {}
-};
-
-// Forward declare GridTile for UpdateEvent
-class GridTile;
-
-// Event for the update queue with priority ordering
-struct UpdateEvent {
-  std::shared_ptr<GridTile> tile;
-  SignalEvent event;
-  int priority;
-
-  UpdateEvent(std::shared_ptr<GridTile> t, const SignalEvent& e, int p = 0)
-      : tile(t), event(e), priority(p) {}
-
-  bool operator<(const UpdateEvent& other) const {
-    return priority < other.priority;
-  }
-};
-
 // Base tile class
+// TODO: I want to add a Construct() function that creates a new tile of any
+// type, maybe with templates? A factory?
+// TODO: Maybe we should not store refNum in here, but this is the easiest way
+// right now.
 class GridTile : public std::enable_shared_from_this<GridTile> {
  protected:
   olc::vi2d pos;
@@ -69,10 +24,10 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   bool defaultActivation;
   olc::Pixel inactiveColor;
   olc::Pixel activeColor;
-  bool canReceive[static_cast<int>(Direction::Count)];
-  bool canOutput[static_cast<int>(Direction::Count)];
-  bool inputStates[static_cast<int>(
-      Direction::Count)];  // Track state from each input direction
+  TileSideStates canReceive;
+  TileSideStates canOutput;
+  TileSideStates inputStates;
+  size_t refNum;
 
  public:
   GridTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
@@ -84,35 +39,49 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual ~GridTile() {};
 
   virtual void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
-            float screenSize, int alpha = 255);
+                    float screenSize, int alpha = 255);
+
+  // For tiles that need it, this provides interaction logic.
+  virtual std::vector<SignalEvent> Init() { return {}; };
+  // This has severe side effects. That's fine for actual simulations, but
+  // not for preprocessing.
   virtual std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) = 0;
+  // This is called when the user interacts with the tile, e.g. by clicking on
+  // it.
   virtual std::vector<SignalEvent> Interact() { return {}; }
+  // This has zero side effects, and is used for preprocessing.
+  virtual std::vector<SignalEvent> PreprocessSignal(
+      const SignalEvent incomingSignal) = 0;
 
   void SetPos(olc::vi2d newPos) { pos = newPos; }
+  void SetActivation(bool newActivated) { activated = newActivated; }
+  void SetRefNum(size_t newRefNum) { refNum = newRefNum; }
   void SetFacing(Direction newFacing);
-  void SetActivation(bool newActivation) { activated = newActivation; }
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
+  void ToggleInputState(Direction dir) {
+    if (canReceive[dir]) {
+      inputStates[dir] = !inputStates[dir];
+    }
+  }
   virtual void
   ResetActivation();  // Changed from inline to virtual with implementation
 
   bool GetActivation() const { return activated; }
   bool GetDefaultActivation() const { return defaultActivation; }
-  olc::vi2d GetPos() const { return pos; }
+  const olc::vi2d& GetPos() const { return pos; }
   float GetSize() const { return size; }
-  Direction GetFacing() const { return facing; }
+  const Direction& GetFacing() const { return facing; }
   std::string GetTileInformation() const;
+  size_t GetRefNum() const { return refNum; }
 
-  bool CanReceiveFrom(Direction dir) const {
-    return canReceive[static_cast<int>(dir)];
-  }
-  bool CanSendTo(Direction dir) const {
-    return canOutput[static_cast<int>(dir)];
-  }
+  bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
+  bool CanOutputTo(Direction dir) const { return canOutput[dir]; }
 
   virtual std::string_view TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
-  virtual int GetTileId() const = 0;
-  
+  virtual bool IsDeterministic() const = 0;
+  virtual int GetTileTypeId() const = 0;
+
   // Virtual clone method for copying tiles
   virtual std::unique_ptr<GridTile> Clone() const = 0;
 
@@ -126,6 +95,41 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   static std::array<olc::vf2d, 3> GetTrianglePoints(olc::vf2d screenPos,
                                                     int screenSize,
                                                     Direction facing);
+};
+
+// This is a mere overlay of GridTile, and just implements the functions typical
+// for a deterministic tile. It is used to mark tiles that are deterministic
+// and can be used in deterministic simulations.
+class DeterministicTile : public GridTile {
+ public:
+  DeterministicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
+                    Direction facing = Direction::Top, float size = 1.0f,
+                    bool defaultActivation = false,
+                    olc::Pixel inactiveColor = olc::BLACK,
+                    olc::Pixel activeColor = olc::BLACK)
+      : GridTile(pos, facing, size, defaultActivation, inactiveColor,
+                 activeColor) {}
+
+  bool IsDeterministic() const override { return true; }
+  bool IsEmitter() const override { return false; }
+};
+
+class LogicTile : public GridTile {
+ public:
+  LogicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
+            Direction facing = Direction::Top, float size = 1.0f,
+            bool defaultActivation = false,
+            olc::Pixel inactiveColor = olc::BLACK,
+            olc::Pixel activeColor = olc::BLACK)
+      : GridTile(pos, facing, size, defaultActivation, inactiveColor,
+                 activeColor) {}
+  bool IsDeterministic() const override { return false; }
+  std::vector<SignalEvent> PreprocessSignal(
+      [[maybe_unused]] const SignalEvent incomingSignal) override {
+    throw std::runtime_error(std::format(
+        "Preprocessing is not supported for a Logic Tile of type {}",
+        TileTypeName()));
+  }
 };
 
 }  // namespace ElecSim

@@ -5,33 +5,57 @@
 #include <optional>
 #include <queue>
 #include <string>
+#include <type_traits>
 #include <vector>
 
+#include "GridTileTypes.h"  // Include this for derived tile types
+#include "ankerl/unordered_dense.h"
 #include "olcPixelGameEngine.h"
-#include "GridTileTypes.h" // Include this for derived tile types
+#ifdef SIM_CACHING
+#include "TileGroupManager.h"
+#endif
 
 namespace ElecSim {
 
+struct SignalEdge {
+  olc::vi2d sourcePos;
+  olc::vi2d targetPos;
+  bool operator==(const SignalEdge& other) const;
+};
+struct SignalEdgeHash {
+  using is_avalanching = void;
+  std::size_t operator()(const SignalEdge& edge) const;
+};
+
+// TODO: Solve the tile lookup speed problem or find a way around it.
 class Grid {
  private:
-  using TileField = std::map<olc::vi2d, std::shared_ptr<GridTile>>;
+  using TileField =
+      ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
+                                   PositionHash, PositionEqual>;
 
   olc::Pixel backgroundColor = olc::BLUE;
   olc::vi2d renderWindow;
 
   int uiLayer;
   int gameLayer;
-  int currentTick = 0;  // Current game tick (used by emitters)
+  uint32_t currentTick = 0;  // Current game tick (used by emitters)
 
   TileField tiles;
+  #ifdef SIM_CACHING
+  TileGroupManager tileManager;  // Tile manager for simulation caching
+  #endif
   std::vector<std::weak_ptr<GridTile>> emitters;
-  std::priority_queue<UpdateEvent> updateQueue;
+
+  // Using a segmented set here because we are inserting a lot of things
+  ankerl::unordered_dense::segmented_set<SignalEdge, SignalEdgeHash>
+      currentTickVisitedEdges;
+  std::queue<UpdateEvent> updateQueue;
 
   float renderScale;
   olc::vf2d renderOffset = {0.0f, 0.0f};  // Offset for rendering
 
-  void ProcessSignalEvent(const SignalEvent& event);
-  olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir) const;
+  void ProcessUpdateEvent(const UpdateEvent& updateEvent);
 
  public:
   Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset, int uiLayer,
@@ -44,19 +68,17 @@ class Grid {
   ~Grid() = default;
 
   // Core simulation functions
-  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event,
-                   int priority = 0);
+  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event);
   int Simulate();
   void ResetSimulation();
 
   // Rendering
   int Draw(olc::PixelGameEngine* renderer);  // returns amount of tiles drawn
 
-
   // Grid manipulation
   void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
   void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
-  
+
   void SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile, bool emitter);
   void SetSelection(olc::vi2d startPos, olc::vi2d endPos);
 
@@ -75,7 +97,8 @@ class Grid {
   std::optional<std::shared_ptr<GridTile> const> GetTile(int x, int y) {
     return GetTile(olc::vi2d(x, y));
   }
-  std::vector<std::weak_ptr<GridTile>> GetSelection(olc::vi2d startPos, olc::vi2d endPos);
+  std::vector<std::weak_ptr<GridTile>> GetSelection(olc::vi2d startPos,
+                                                    olc::vi2d endPos);
   std::size_t GetTileCount() { return tiles.size(); }
 
   // Configuration

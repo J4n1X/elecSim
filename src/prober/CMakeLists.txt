@@ -6,3 +6,9 @@ target_include_directories(prober PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
 )
+# Warnings
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(elecSim PRIVATE -Wall -Wextra -Wpedantic)
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+  target_compile_options(elecSim PRIVATE /W3)
+endif()

@@ -93,18 +93,17 @@ void GridTile::SetFacing(Direction newFacing) {
   facing = newFacing;
 
   // Store old directions
-  bool oldReceive[static_cast<int>(Direction::Count)];
-  bool oldOutput[static_cast<int>(Direction::Count)];
+  TileSideStates oldReceive;
+  TileSideStates oldOutput;
   std::copy(std::begin(canReceive), std::end(canReceive),
             std::begin(oldReceive));
   std::copy(std::begin(canOutput), std::end(canOutput), std::begin(oldOutput));
 
   // Rotate permissions by the difference amount
-  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-    int newIndex =
-        static_cast<int>(RotateDirection(static_cast<Direction>(i), facing));
-    canReceive[newIndex] = oldReceive[i];
-    canOutput[newIndex] = oldOutput[i];
+  for (auto& dir : AllDirections) {
+    Direction newIndex = RotateDirection(dir, facing);
+    canReceive[newIndex] = oldReceive[dir];
+    canOutput[newIndex] = oldOutput[dir];
   }
 }
 
@@ -113,8 +112,15 @@ std::string GridTile::GetTileInformation() const {
   // All in one line
   stream << "Tile Type: " << TileTypeName() << ", "
          << "Position: (" << pos.x << ", " << pos.y << "), "
-         << "Facing: " << static_cast<int>(facing) << ", "
+         << "Facing: " << DirectionToString(facing) << ", "
          << "Size: " << size << ", "
+         << "Activated Sides: [";
+  for (const auto& dir : AllDirections) {
+    if (inputStates[dir]) {
+      stream << DirectionToString(dir) << " ";
+    }
+  }
+  stream << "], "
          << "Activated: " << activated;
   return stream.str();
 }
@@ -144,7 +150,7 @@ std::string_view GridTile::DirectionToString(Direction dir) {
 
 std::array<char, GRIDTILE_BYTESIZE> GridTile::Serialize() {
   std::array<char, GRIDTILE_BYTESIZE> data{};
-  *reinterpret_cast<int*>(data.data()) = GetTileId();
+  *reinterpret_cast<int*>(data.data()) = GetTileTypeId();
   *reinterpret_cast<Direction*>(data.data() + sizeof(int)) = facing;
   *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing)) = pos.x;
   *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing) +
@@ -192,8 +198,8 @@ std::unique_ptr<GridTile> GridTile::Deserialize(
 void GridTile::ResetActivation() {
   activated = defaultActivation;
   // Reset all input states
-  for (int i = 0; i < static_cast<int>(Direction::Count); i++) {
-    inputStates[i] = false;
+  for (const auto& dir : AllDirections) {
+    inputStates[dir] = false;
   }
 }
 
