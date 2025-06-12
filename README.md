@@ -45,14 +45,16 @@ The controls are as follows:
   - Comma: Speed up the update rate
   - Period: Slow down the update rate
   - R: Change the facing of the tile you are about to place
-  - Space: Pause the simulation
+  - Space: Toggle between build and simulation mode
   - Left Mouse Button (while the simulation is paused): Place a tile
   - Left Mouse Button (while the simulation is running): Interact with certain tiles (Button, Semiconductor and Emitter)
   - Right Mouse Button (while the simulation is paused): Erase a tile
   - Middle Mouse Button: Pan the camera around.
+  - Ctrl (hold): Start a selection
+  - Ctrl+C: Copy the tiles within the selection into the buffer
+  - Ctrl+X: Cut the tiles within the selection into the buffer
+  - Ctrl+V: Paste the tiles in the buffer onto the grid
   - Escape: Close the game
-
-When you pause the simulation, the state is kept until you place a new tile or you remove one. Upon either of these events, the simulation is entirely reset.
 
 ### Tile behavior
 
