@@ -7,6 +7,7 @@ option(SIM_CACHING "Enable caching for simulation results" ON)
 
 
 include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
+#This has to be here for some reason, doesn't work in deps.cmake
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_link_libraries(olcPixelGameEngine PUBLIC X11 GL pthread png stdc++fs)
 endif()
