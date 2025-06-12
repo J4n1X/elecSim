@@ -850,7 +850,7 @@ int main(int argc, char** argv) {
   }
 
   Game game;
-  if (game.Construct(640 * 2, 480 * 2, 1, 1, false, true, false)) {
+  if (game.Construct(640 * 2, 480 * 2, 1, 1, false, true, true, true)) {
     if (argPath.extension() == ".grid" && std::filesystem::exists(argPath)) {
       if (game.SetStartFile(argPath)) {
         std::cout << "Starting with file: " << argPath.string() << std::endl;
