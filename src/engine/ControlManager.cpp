@@ -121,7 +121,7 @@ void ControlManager::CheckBuildModeInputs() {
   if (pge->GetKey(olc::Key::CTRL).bHeld && pge->GetKey(olc::Key::C).bPressed) {
     eventBuffer.push_back(GameStates::Event::BuildModeCopy);
   }
-  
+
   // Paste with Ctrl+V or by pressing the left mouse button.
   if ((pge->GetKey(olc::Key::CTRL).bHeld && pge->GetKey(olc::Key::V).bPressed) || pge->GetMouse(0).bHeld) {
     eventBuffer.push_back(GameStates::Event::BuildModePaste);
@@ -133,7 +133,7 @@ void ControlManager::CheckBuildModeInputs() {
   }
 
   // Delete with right mouse button
-  if (pge->GetMouse(1).bPressed) {
+  if (pge->GetMouse(1).bHeld) {
     eventBuffer.push_back(GameStates::Event::BuildModeDelete);
   }
   

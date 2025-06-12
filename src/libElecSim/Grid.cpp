@@ -28,11 +28,13 @@ Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
       gameLayer(gameLayer),
       renderScale(renderScale),
       renderOffset(renderOffset) {
+#ifdef DEBUG
   std::cout << std::format(
                    "Grid initialized with size: {}x{}, renderScale: {}, "
                    "renderOffset: {}",
                    size.x, size.y, renderScale, renderOffset)
             << std::endl;
+#endif
 }
 
 void Grid::QueueUpdate(std::shared_ptr<GridTile> tile,
@@ -135,21 +137,23 @@ int Grid::Simulate() {
         if (targetTileIt != tiles.end()) {
           auto& targetTile = targetTileIt->second;
           if (targetTile->CanReceiveFrom(newSignal.fromDirection)) {
-            QueueUpdate(
-                targetTile,
-                SignalEvent(newSignal.sourcePos, FlipDirection(newSignal.fromDirection),
-                            newSignal.isActive));
+            QueueUpdate(targetTile,
+                        SignalEvent(newSignal.sourcePos,
+                                    FlipDirection(newSignal.fromDirection),
+                                    newSignal.isActive));
           }
         }
       }
     } else {
-      // It's just a single object (probably a logic tile, but not necessarily)
+// It's just a single object (probably a logic tile, but not necessarily)
+#ifdef DEBUG
       std::cout
           << std::format(
                  "Warning: Processing update for unprocessed tile: {}->{}",
                  update.tile->GetPos(),
                  update.event.isActive ? "Active" : "Inactive")
           << std::endl;
+#endif
       ProcessUpdateEvent(update);
     }
 
@@ -180,8 +184,7 @@ void Grid::ResetSimulation() {
     }
   }
 #ifdef SIM_CACHING
-  if(fieldIsDirty) {
-    std::cout << "Preprocessing tiles for simulation caching..." << std::endl;
+  if (fieldIsDirty) {
     tileManager.Clear();
     tileManager.PreprocessTiles(tiles);
     fieldIsDirty = false;
@@ -297,7 +300,9 @@ std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(olc::vi2d startPos,
 void Grid::Save(const std::string& filename) {
   std::ofstream file(filename, std::ios::binary);
   if (!file) {
+#ifdef DEBUG
     std::cerr << "Error opening file for writing: " << filename << std::endl;
+#endif
     return;
   }
 
@@ -307,17 +312,20 @@ void Grid::Save(const std::string& filename) {
     dataSize += data.size();
     file.write(data.data(), data.size());
   }
-
+#ifdef DEBUG
   std::cout << std::format("Saved {} bytes to {}, total tiles: {}", dataSize,
                            filename, tiles.size())
             << std::endl;
+#endif
   file.close();
 }
 
 void Grid::Load(const std::string& filename) {
   std::ifstream file(filename, std::ios::binary);
   if (!file) {
+#ifdef DEBUG
     std::cerr << "Error opening file for reading: " << filename << std::endl;
+#endif
     return;
   }
 
@@ -337,12 +345,13 @@ void Grid::Load(const std::string& filename) {
   }
 
   file.close();
-
+#ifdef DEBUG
   std::cout << std::format("Loaded {} bytes from {}, total {} tiles", dataSize,
                            filename, tiles.size())
             << std::endl;
+#endif
   fieldIsDirty = true;  // Mark the field as modified
-  ResetSimulation(); // So that this preprocesses the tiles
+  ResetSimulation();    // So that this preprocesses the tiles
 }
 
 }  // namespace ElecSim
