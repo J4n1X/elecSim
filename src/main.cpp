@@ -222,19 +222,18 @@ class Game : public olc::PixelGameEngine {
   // | 1 0 |
   // | 0 1 |
   // | 1 0 |
-  // So the coords are
-  // (1, 0) -> (1, 1)
+  // So the coords are  // (1, 0) -> (1, 1)
   // (0, 1) -> (0, 0)
   // (2, 1) -> (0, 2)
   // But a rotation matrix does not support non-square matrices.
   // Thus, we expand into a square matrix, and then, in the end, justify.
+
   void RotateBufferTiles() {
     olc::vi2d maxPos = {INT_MIN, INT_MIN};
 
     // Rotate all tiles in the buffer to the next facing direction
     Direction newFacing =
-        static_cast<Direction>((static_cast<int>(selectedBrushFacing) + 1) %
-                               static_cast<int>(Direction::Count));
+        DirectionRotate(selectedBrushFacing, Direction::Right);
 
     if (selectedBrushFacing == newFacing) {
       throw std::runtime_error(
@@ -258,11 +257,10 @@ class Game : public olc::PixelGameEngine {
       olc::vi2d relPos = tile->GetPos();
       newY = relPos.x;
       newX = farOffset - relPos.y;
-      rotatedRelPos = olc::vi2d(newX, newY);
-      rotatedRelPos.x = std::abs(rotatedRelPos.x);
-      rotatedRelPos.y = std::abs(rotatedRelPos.y);
+      rotatedRelPos.x = std::abs(newX);
+      rotatedRelPos.y = std::abs(newY);
       tile->SetPos(rotatedRelPos);
-      tile->SetFacing(selectedBrushFacing);
+      tile->SetFacing(DirectionRotate(tile->GetFacing(), Direction::Right));
     }
 
     JustifyBufferTiles();
@@ -334,7 +332,7 @@ class Game : public olc::PixelGameEngine {
         grid.SetRenderOffset(defaultRenderOffset);
         grid.SetRenderScale(defaultRenderScale);
         break;
-        
+
       case Engine::GameStates::Event::CameraPan: {
         auto panDelta =
             controlManager.GetMousePosition() - controlManager.GetPanStartPos();
@@ -401,7 +399,7 @@ class Game : public olc::PixelGameEngine {
 
       // Simulation mode events
       case Engine::GameStates::Event::SimModeTileInteract:
-        if (!paused && tileBuffer.empty()) {
+        if (!paused) {
           auto gridTileOpt = grid.GetTile(highlightWorldPos);
           if (gridTileOpt.has_value()) {
             auto& gridTile = gridTileOpt.value();
@@ -439,11 +437,6 @@ class Game : public olc::PixelGameEngine {
 
     olc::vf2d afterZoomPos = grid.ScreenToWorld(
         static_cast<olc::vi2d>(controlManager.GetMousePosition()));
-
-    std::cout << "Hover world pos: "
-              << hoverWorldPos.x << ", " << hoverWorldPos.y
-              << " | After zoom pos: " << afterZoomPos.x << ", "
-              << afterZoomPos.y << std::endl;
     olc::vf2d newOffset =
         grid.GetRenderOffset() + (afterZoomPos - hoverWorldPos) * newScale;
     grid.SetRenderOffset(newOffset);
@@ -523,7 +516,6 @@ class Game : public olc::PixelGameEngine {
         tileBuffer.push_back(std::move(retTile));
       }
     }
-
     JustifyBufferTiles();
     CalculateTileBufferBoxSize();
   }
@@ -687,7 +679,6 @@ class Game : public olc::PixelGameEngine {
                    << std::endl;
     } else if (command == "reset") {
       Reset();
-      // std::cout << "Simulation reset" << std::endl;
     } else if (command == "clear") {
       ConsoleClear();
     } else if (command == "new") {
@@ -762,14 +753,11 @@ class Game : public olc::PixelGameEngine {
       accumulatedTime = 0;
     }
 
-    // User input
-    olc::vi2d highlightWorldPos = {0, 0};
-
     // Calculate mouse position and highlight (always needed for drawing)
     auto [selTileXIndex, selTileYIndex] = controlManager.GetMousePosition();
     olc::vf2d hoverWorldPos =
         grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
-    highlightWorldPos = grid.AlignToGrid(hoverWorldPos);
+    olc::vi2d highlightWorldPos = grid.AlignToGrid(hoverWorldPos);
 
     if (!unsavedChangesGui.IsEnabled()) {
       const auto& events = controlManager.ProcessInput();
@@ -788,7 +776,7 @@ class Game : public olc::PixelGameEngine {
     unsavedChangesGui.Draw();
     if (!unsavedChangesGui.IsEnabled()) {
       // Draw the other GUI elements
-      if(paused){
+      if (paused) {
         DrawHighlight(highlightWorldPos);
         DrawTilePreviews(highlightWorldPos);
       }
@@ -813,8 +801,7 @@ class Game : public olc::PixelGameEngine {
           }
           break;
         case MessageBoxGui::Result::Cancel:
-          if (!engineRunning)  // Recover if this was a quit attempt
-            engineRunning = true;
+          engineRunning = true;
           break;
         case MessageBoxGui::Result::Nothing:
           throw std::runtime_error("Unreachable");
@@ -850,7 +837,7 @@ int main(int argc, char** argv) {
   (void)argc;
   std::filesystem::path argPath;
   if (argv[1] != nullptr) {
-    std::string arg = argv[1];
+    std::string arg = std::string(argv[1]);
     try {
       argPath = std::filesystem::canonical(arg);
     } catch (const std::filesystem::filesystem_error& e) {

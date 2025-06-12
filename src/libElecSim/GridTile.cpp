@@ -76,8 +76,6 @@ GridTile::GridTile(olc::vi2d pos, Direction facing, float size,
 void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
                     float screenSize, int alpha) {
   // Get colors based on activation state and alpha
-  olc::Pixel activeColor = this->activeColor;
-  olc::Pixel inactiveColor = this->inactiveColor;
   activeColor.a = alpha;
   inactiveColor.a = alpha;
 
@@ -93,6 +91,8 @@ void GridTile::SetFacing(Direction newFacing) {
   facing = newFacing;
 
   // Store old directions
+  // Exclude the input states. They are facing independent.
+  // Why? Because a tile can never be rotated while the simulation is running.
   TileSideStates oldReceive;
   TileSideStates oldOutput;
   std::copy(std::begin(canReceive), std::end(canReceive),
@@ -101,13 +101,18 @@ void GridTile::SetFacing(Direction newFacing) {
 
   // Rotate permissions by the difference amount
   for (auto& dir : AllDirections) {
-    Direction newIndex = RotateDirection(dir, facing);
+    Direction newIndex = WorldToTileDirection(dir);
     canReceive[newIndex] = oldReceive[dir];
     canOutput[newIndex] = oldOutput[dir];
   }
 }
 
-std::string GridTile::GetTileInformation() const {
+std::string GridTile::GetTileInformation()
+    const {  // FIXED: Removed the "janky" logic that was needed due to
+             // coordinate system confusion.
+  // The inputStates array is indexed by world coordinates, but for display we
+  // want tile-relative coordinates. Now using proper WorldToTileDirection
+  // conversion.
   std::stringstream stream;
   // All in one line
   stream << "Tile Type: " << TileTypeName() << ", "
@@ -117,35 +122,27 @@ std::string GridTile::GetTileInformation() const {
          << "Activated Sides: [";
   for (const auto& dir : AllDirections) {
     if (inputStates[dir]) {
-      stream << DirectionToString(dir) << " ";
+      // Convert world direction to tile-relative direction for display
+      Direction tileRelativeDir = WorldToTileDirection(dir);
+      stream << DirectionToString(tileRelativeDir) << " ";
     }
   }
-  stream << "], "
-         << "Activated: " << activated;
-  return stream.str();
-}
-
-Direction GridTile::RotateDirection(Direction dir, Direction facing) {
-  int baseDir = static_cast<int>(dir);
-  int rotationAmount = static_cast<int>(facing);
-  int rotatedDir =
-      (baseDir + rotationAmount) % static_cast<int>(Direction::Count);
-  return static_cast<Direction>(rotatedDir);
-}
-
-std::string_view GridTile::DirectionToString(Direction dir) {
-  switch (dir) {
-    case Direction::Top:
-      return "Top";
-    case Direction::Bottom:
-      return "Bottom";
-    case Direction::Left:
-      return "Left";
-    case Direction::Right:
-      return "Right";
-    default:
-      return "Unknown";
+  // Remove trailing space
+  if (stream.str().back() == ' ') {
+    stream.seekp(-1, std::ios_base::end);
   }
+  stream << "], "
+         << "Activated: " << activated;  return stream.str();
+}
+
+Direction GridTile::WorldToTileDirection(Direction worldDir) const {
+  // Convert world direction to tile-relative by rotating backwards by facing amount
+  return DirectionRotate(worldDir, -static_cast<int>(facing));
+}
+
+Direction GridTile::TileToWorldDirection(Direction tileDir) const {
+  // Convert tile-relative direction to world direction by rotating by facing amount
+  return DirectionRotate(tileDir, facing);
 }
 
 std::array<char, GRIDTILE_BYTESIZE> GridTile::Serialize() {

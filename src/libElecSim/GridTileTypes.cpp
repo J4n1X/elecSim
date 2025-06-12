@@ -10,7 +10,7 @@ namespace ElecSim {
 WireGridTile::WireGridTile(olc::vi2d pos, Direction facing, float size)
     : DeterministicTile(pos, facing, size, false, olc::WHITE, olc::DARK_YELLOW) {
   // Can receive from all directions except facing direction
-  for (auto& dir : AllDirections) {
+  for (const auto& dir : AllDirections) {
     canReceive[dir] = (dir != facing);
     canOutput[dir] = (dir == facing);
     inputStates[dir] = false;
@@ -22,13 +22,9 @@ std::vector<SignalEvent> WireGridTile::ProcessSignal(
   inputStates[signal.fromDirection] = signal.isActive;
 
   // Check if any input is active (from a direction we can receive from)
-  bool shouldBeActive = false;
-  for (auto& dir : AllDirections) {
-    if (canReceive[dir] && inputStates[dir]) {
-      shouldBeActive = true;
-      break;
-    }
-  }
+  bool shouldBeActive = std::ranges::any_of(AllDirections, [this](Direction dir) {
+    return canReceive[dir] && inputStates[dir];
+  });
 
   // Only propagate state change if our activation state changes
   if (shouldBeActive != activated) {
@@ -60,7 +56,7 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
   if (!signal.isActive) {
     activated = false;
     std::vector<SignalEvent> events;
-    for (auto& dir : AllDirections) {
+    for (const auto& dir : AllDirections) {
       if (canOutput[dir]) {
         events.push_back(SignalEvent(pos, dir, false));
       }
@@ -135,17 +131,22 @@ SemiConductorGridTile::SemiConductorGridTile(olc::vi2d pos, Direction facing,
   canReceive.fill(true);
   canOutput[facing] = true;
   canReceive[facing] = false;
+  inputStates.fill(false);
 }
 
 std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
     const SignalEvent& signal) {
-  // Restore previous logic: flip direction for inputStates update
+  // Update input states (indexed by world coordinates)
   inputStates[signal.fromDirection] = signal.isActive;
 
   // Check if both side (left or right) and bottom are active
-  bool sideActive = inputStates[RotateDirection(Direction::Left, facing)] ||
-                    inputStates[RotateDirection(Direction::Right, facing)];
-  bool bottomActive = inputStates[RotateDirection(Direction::Bottom, facing)];
+  // Convert tile-relative directions to world coordinates to check inputStates
+  Direction worldLeft = TileToWorldDirection(Direction::Left);
+  Direction worldRight = TileToWorldDirection(Direction::Right);
+  Direction worldBottom = TileToWorldDirection(Direction::Bottom);
+  
+  bool sideActive = inputStates[worldLeft] || inputStates[worldRight];
+  bool bottomActive = inputStates[worldBottom];
 
   if (sideActive && bottomActive) {
     if (activated) return {};  // Prevent feedback loops
@@ -186,13 +187,9 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   inputStates[signal.fromDirection] = signal.isActive;
 
   // Check if any input is active
-  bool shouldBeActive = false;
-  for (auto& dir : AllDirections) {
-    if (canReceive[dir] && inputStates[dir]) {
-      shouldBeActive = true;
-      break;
-    }
-  }
+  bool shouldBeActive = std::ranges::any_of(AllDirections, [&](Direction dir) {
+    return canReceive[dir] && inputStates[dir];
+  });
 
   // Invert the logic for output
   bool inverted = !shouldBeActive;
@@ -209,7 +206,7 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
 CrossingGridTile::CrossingGridTile(olc::vi2d pos, Direction facing, float size)
     : LogicTile(pos, facing, size, false, olc::DARK_BLUE, olc::BLUE) {
   // Allow receiving and outputting from all directions
-  for (auto& dir : AllDirections) {
+  for (const auto& dir : AllDirections) {
     canReceive[dir] = true;
     canOutput[dir] = true;
     inputStates[dir] = false;

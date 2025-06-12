@@ -267,10 +267,6 @@ olc::vi2d Grid::AlignToGrid(const olc::vf2d& pos) {
                    static_cast<int>(std::floor(pos.y)));
 }
 
-olc::vf2d Grid::CenterOfSquare(const olc::vf2d& pos) {
-  return olc::vf2d(std::floor(pos.x) + 0.5f, std::floor(pos.y) + 0.5f);
-}
-
 std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(olc::vi2d pos) {
   auto tileIt = tiles.find(pos);
   return tileIt != tiles.end() ? std::optional{tileIt->second} : std::nullopt;

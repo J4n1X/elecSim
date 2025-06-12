@@ -16,3 +16,4 @@ cmake_install.cmake
 /include/olcPixelGameEngine
 /include/nativefiledialog-extended
 /_deps
+/elecSim-cppcheck-build-dir

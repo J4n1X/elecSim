@@ -20,7 +20,7 @@ namespace Engine {
       mutable std::vector<GameStates::Event> eventBuffer;
       
     public:
-      ControlManager(olc::PixelGameEngine* pge) : pge(pge) {}
+      explicit ControlManager(olc::PixelGameEngine* pge) : pge(pge) {}
       ~ControlManager() = default;
 
       bool IsConsoleActive() const;

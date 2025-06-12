@@ -9,7 +9,7 @@ namespace ElecSim {
 // Wire: Basic signal conductor, propagates signals in one direction
 class WireGridTile : public DeterministicTile {
  public:
-  WireGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+  explicit WireGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
@@ -29,7 +29,7 @@ class WireGridTile : public DeterministicTile {
 // Junction: Multi-directional signal splitter
 class JunctionGridTile : public DeterministicTile {
  public:
-  JunctionGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+  explicit JunctionGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                    Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
@@ -54,7 +54,7 @@ class EmitterGridTile : public LogicTile {
   int lastEmitTick;                        // Last tick when signal was emitted
 
  public:
-  EmitterGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+  explicit EmitterGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                   Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
@@ -86,7 +86,7 @@ class SemiConductorGridTile : public LogicTile {
   int internalState;  // bit 0: side inputs, bit 1: bottom input
 
  public:
-  SemiConductorGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+  explicit SemiConductorGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                         Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
@@ -111,7 +111,7 @@ class SemiConductorGridTile : public LogicTile {
 // Button: Momentary signal source
 class ButtonGridTile : public LogicTile {
  public:
-  ButtonGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+  explicit ButtonGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                  Direction facing = Direction::Top, float size = 1.0f);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
@@ -133,10 +133,10 @@ class ButtonGridTile : public LogicTile {
 
 class InverterGridTile : public LogicTile {
  public:
-  InverterGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+  explicit InverterGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                    Direction facing = Direction::Top, float size = .10f)
       : LogicTile(pos, facing, size, false, olc::DARK_MAGENTA, olc::MAGENTA) {
-    for (auto& dir : AllDirections) {
+    for (const auto& dir : AllDirections) {
       canReceive[dir] = (dir != facing);
       canOutput[dir] = (dir == facing);
       inputStates[dir] = false;
@@ -159,7 +159,7 @@ class InverterGridTile : public LogicTile {
 // Crossing: Allows signals to cross without interference
 class CrossingGridTile : public LogicTile {
  public:
-  CrossingGridTile(olc::vi2d pos = olc::vi2d(0, 0),
+  explicit CrossingGridTile(olc::vi2d pos = olc::vi2d(0, 0),
                   Direction facing = Direction::Top, float size = 1.0f);
 
   void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
@@ -176,7 +176,7 @@ class CrossingGridTile : public LogicTile {
     clone->SetDefaultActivation(GetDefaultActivation());
     
     // Copy the input states
-    for (auto& dir : AllDirections) {
+    for (const auto& dir : AllDirections) {
       clone->inputStates[dir] = this->inputStates[dir];
     }
     

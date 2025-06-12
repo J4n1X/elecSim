@@ -66,7 +66,7 @@ class Grid {
        int uiLayer, int gameLayer)
       : Grid(olc::vi2d(size_x, size_y), renderScale, renderOffset, uiLayer,
              gameLayer) {}
-  Grid() = default;
+  Grid(): Grid(olc::vi2d(0, 0), 1.0f, olc::vf2d(0.0f, 0.0f), -1, -1) {};
   ~Grid() = default;
 
   // Core simulation functions
@@ -89,7 +89,6 @@ class Grid {
   olc::vi2d WorldToScreen(const olc::vf2d& pos);
   olc::vf2d ScreenToWorld(const olc::vi2d& pos);
   olc::vi2d AlignToGrid(const olc::vf2d& pos);
-  olc::vf2d CenterOfSquare(const olc::vf2d& pos);
 
   // Getters
   olc::vi2d const& GetRenderWindow() { return renderWindow; }

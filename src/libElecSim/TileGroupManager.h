@@ -32,7 +32,7 @@ class TileGroupManager {
    public:
     std::shared_ptr<GridTile> tile;
 
-    SimulationTile(std::shared_ptr<GridTile> t) : tile(std::move(t)) {}
+    explicit SimulationTile(std::shared_ptr<GridTile> t) : tile(std::move(t)) {}
     std::string GetObjectInfo() const {
       std::string info = "SimulationTile:\n  ";
       info += tile->GetTileInformation();
@@ -58,7 +58,7 @@ class TileGroupManager {
     std::vector<OutputTile> outputTiles;
 
    public:
-    SimulationGroup(std::shared_ptr<GridTile> input,
+    explicit SimulationGroup(std::shared_ptr<GridTile> input,
                     std::vector<std::shared_ptr<GridTile>> inbetween,
                     std::vector<OutputTile> output)
                 : inputTile(std::move(input)),

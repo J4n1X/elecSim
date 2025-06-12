@@ -316,7 +316,7 @@ void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
   std::queue<std::shared_ptr<GridTile>> pendingStartTiles;
 
   // Add initial start tiles to processing queue
-  for (auto& tile : initialStartTiles) {
+  for (const auto& tile : initialStartTiles) {
     pendingStartTiles.push(tile);
   }
 

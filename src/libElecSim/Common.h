@@ -72,6 +72,18 @@ static constexpr std::array<Direction, static_cast<int>(Direction::Count)>
     AllDirections = {Direction::Top, Direction::Right, Direction::Bottom,
                      Direction::Left};
 
+// General rotation function - rotates a direction by a specified amount
+inline constexpr const Direction DirectionRotate(Direction dir, Direction amount) {
+  return static_cast<Direction>((static_cast<int>(dir) + static_cast<int>(amount)) %
+                                static_cast<int>(Direction::Count));
+}
+
+// Convenience functions using the general rotation
+inline constexpr const Direction DirectionRotate(Direction dir, int steps) {
+  return DirectionRotate(dir, static_cast<Direction>(steps));
+}
+
+
 // This is used only to inform if an update happened or not
 struct TileSideStates
     : private std::array<bool, static_cast<int>(Direction::Count)> {

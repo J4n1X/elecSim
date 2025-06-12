@@ -27,7 +27,6 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   TileSideStates canReceive;
   TileSideStates canOutput;
   TileSideStates inputStates;
-  size_t refNum;
 
  public:
   GridTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
@@ -55,7 +54,6 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 
   void SetPos(olc::vi2d newPos) { pos = newPos; }
   void SetActivation(bool newActivated) { activated = newActivated; }
-  void SetRefNum(size_t newRefNum) { refNum = newRefNum; }
   void SetFacing(Direction newFacing);
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
   void ToggleInputState(Direction dir) {
@@ -72,7 +70,6 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   float GetSize() const { return size; }
   const Direction& GetFacing() const { return facing; }
   std::string GetTileInformation() const;
-  size_t GetRefNum() const { return refNum; }
 
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
   bool CanOutputTo(Direction dir) const { return canOutput[dir]; }
@@ -83,18 +80,20 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual int GetTileTypeId() const = 0;
 
   // Virtual clone method for copying tiles
-  virtual std::unique_ptr<GridTile> Clone() const = 0;
-
-  std::array<char, GRIDTILE_BYTESIZE> Serialize();
+  virtual std::unique_ptr<GridTile> Clone() const = 0;  std::array<char, GRIDTILE_BYTESIZE> Serialize();
   static std::unique_ptr<GridTile> Deserialize(
       std::array<char, GRIDTILE_BYTESIZE> data);
-
-  static Direction RotateDirection(Direction dir, Direction facing);
-  static std::string_view DirectionToString(Direction dir);
   // Helper function to get the triangle points
   static std::array<olc::vf2d, 3> GetTrianglePoints(olc::vf2d screenPos,
                                                     int screenSize,
                                                     Direction facing);
+
+ protected:
+  // Convert between world and tile-relative coordinate systems
+  Direction WorldToTileDirection(Direction worldDir) const;
+  Direction TileToWorldDirection(Direction tileDir) const;
+
+ private:
 };
 
 // This is a mere overlay of GridTile, and just implements the functions typical
@@ -102,7 +101,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 // and can be used in deterministic simulations.
 class DeterministicTile : public GridTile {
  public:
-  DeterministicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
+  explicit DeterministicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
                     Direction facing = Direction::Top, float size = 1.0f,
                     bool defaultActivation = false,
                     olc::Pixel inactiveColor = olc::BLACK,
@@ -116,7 +115,7 @@ class DeterministicTile : public GridTile {
 
 class LogicTile : public GridTile {
  public:
-  LogicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
+  explicit LogicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
             Direction facing = Direction::Top, float size = 1.0f,
             bool defaultActivation = false,
             olc::Pixel inactiveColor = olc::BLACK,
