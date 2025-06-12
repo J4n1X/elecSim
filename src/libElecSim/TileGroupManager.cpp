@@ -311,9 +311,6 @@ void TileGroupManager::CoverRemainingTiles(
 void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
   // Find all potential start tiles
   auto initialStartTiles = FindInitialStartTiles(tiles);
-  std::cout << "Initial start tiles to be processed: "
-            << initialStartTiles.size() << std::endl;
-
   ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>
       globalVisited;
   std::queue<std::shared_ptr<GridTile>> pendingStartTiles;
@@ -357,9 +354,9 @@ void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
     std::cout << obj->GetObjectInfo() << '\n';
   }
   std::cout << std::flush;
-#endif
   std::cout << "Preprocessing complete, total simulation objects: "
             << simulationObjects.size() << std::endl;
+#endif
 }
 
 #endif  // SIM_CACHING
