@@ -17,8 +17,7 @@ enum class Event : unsigned char {
   // Camera events
   CameraZoomIn,
   CameraZoomOut,
-  CameraPanStart,
-  CameraPanEnd,
+  CameraPan,
   CameraMoveUp,
   CameraMoveRight,
   CameraMoveDown,

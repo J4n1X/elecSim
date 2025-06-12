@@ -66,12 +66,15 @@ void ControlManager::CheckCameraInputs() {
   if (pge->GetMouse(2).bPressed) {
     isPanning = true;
     panStartPos = pge->GetMousePos();
-    eventBuffer.push_back(GameStates::Event::CameraPanStart);
+    eventBuffer.push_back(GameStates::Event::CameraPan);
   }
   
+  if (pge->GetMouse(2).bHeld) {
+    eventBuffer.push_back(GameStates::Event::CameraPan);
+  }
+
   if (pge->GetMouse(2).bReleased) {
     isPanning = false;
-    eventBuffer.push_back(GameStates::Event::CameraPanEnd);
   }
   
   // Camera movement with arrow keys - can have multiple directions simultaneously

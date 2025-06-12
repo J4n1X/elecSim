@@ -18,10 +18,8 @@ constexpr const char* EventToString(Event event) {
       return "CameraZoomIn";
     case Event::CameraZoomOut:
       return "CameraZoomOut";
-    case Event::CameraPanStart:
-      return "CameraPanStart";
-    case Event::CameraPanEnd:
-      return "CameraPanEnd";
+    case Event::CameraPan:
+      return "CameraPan";
     case Event::CameraMoveUp:
       return "CameraMoveUp";
     case Event::CameraMoveRight:

@@ -303,11 +303,7 @@ class Game : public olc::PixelGameEngine {
                                                                           : -1);
         break;
 
-      case Engine::GameStates::Event::CameraPanStart:
-        // We have to do nothing here, but better to have one event too many
-        // than one event too little.
-        break;
-      case Engine::GameStates::Event::CameraPanEnd: {
+      case Engine::GameStates::Event::CameraPan: {
         auto panDelta =
             controlManager.GetMousePosition() - controlManager.GetPanStartPos();
         grid.SetRenderOffset(
