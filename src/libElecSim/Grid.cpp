@@ -180,8 +180,12 @@ void Grid::ResetSimulation() {
     }
   }
 #ifdef SIM_CACHING
-  tileManager.Clear();
-  tileManager.PreprocessTiles(tiles);
+  if(fieldIsDirty) {
+    std::cout << "Preprocessing tiles for simulation caching..." << std::endl;
+    tileManager.Clear();
+    tileManager.PreprocessTiles(tiles);
+    fieldIsDirty = false;
+  }
 #endif
 }
 
@@ -228,12 +232,15 @@ void Grid::SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile,
   for (const auto& signal : initSignals) {
     QueueUpdate(tiles.at(pos), signal);
   }
+
+  fieldIsDirty = true;  // Mark the field as modified
 }
 
 void Grid::SetSelection(olc::vi2d startPos, olc::vi2d endPos) {
   // TODO: Implement this function instead of repeatedly calling SetTile
   (void)startPos;  // Avoid unused variable warning
   (void)endPos;    // Avoid unused variable warning
+  throw std::runtime_error("SetSelection is not implemented yet");
 }
 
 olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
@@ -334,7 +341,8 @@ void Grid::Load(const std::string& filename) {
   std::cout << std::format("Loaded {} bytes from {}, total {} tiles", dataSize,
                            filename, tiles.size())
             << std::endl;
-  ResetSimulation();
+  fieldIsDirty = true;  // Mark the field as modified
+  ResetSimulation(); // So that this preprocesses the tiles
 }
 
 }  // namespace ElecSim

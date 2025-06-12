@@ -106,9 +106,7 @@ struct SignalEvent {
   SignalEvent& operator=(const SignalEvent& other);
 };
 
-// Event for the update queue with priority ordering
-// TODO: Now that we pass by refnum, we can just pass that instead of handing
-// over a pointer.
+// Event for the update queue with priority ordering.
 struct UpdateEvent {
   std::shared_ptr<GridTile> tile;
   SignalEvent event;

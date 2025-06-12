@@ -40,11 +40,13 @@ class Grid {
   int uiLayer;
   int gameLayer;
   uint32_t currentTick = 0;  // Current game tick (used by emitters)
+  bool fieldIsDirty =
+      false;  // Flag to indicate if the field has been modified
 
   TileField tiles;
-  #ifdef SIM_CACHING
+#ifdef SIM_CACHING
   TileGroupManager tileManager;  // Tile manager for simulation caching
-  #endif
+#endif
   std::vector<std::weak_ptr<GridTile>> emitters;
 
   // Using a segmented set here because we are inserting a lot of things
@@ -76,7 +78,7 @@ class Grid {
   int Draw(olc::PixelGameEngine* renderer);  // returns amount of tiles drawn
 
   // Grid manipulation
-  void EraseTile(olc::vi2d pos) { tiles.erase(pos); }
+  void EraseTile(olc::vi2d pos) { tiles.erase(pos); fieldIsDirty = true; }
   void EraseTile(int x, int y) { EraseTile(olc::vi2d(x, y)); }
 
   void SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile, bool emitter);

@@ -64,7 +64,6 @@ class Game : public olc::PixelGameEngine {
 
   // --- Game state ---
   bool paused = true;          // Simulation is paused, renderer is not
-  bool isReset = true;         // If true, the Grid is in the default state.
   bool engineRunning = false;  // If this is false, the game quits
   bool consoleLogging =
       false;  // If this is true, stdout is redirected to the console
@@ -241,7 +240,6 @@ class Game : public olc::PixelGameEngine {
 
   void Reset() {
     grid.ResetSimulation();
-    isReset = true;
   }
 
   // --- Event handling method for ControlManager ---
@@ -270,11 +268,11 @@ class Game : public olc::PixelGameEngine {
         break;
 
       case Engine::GameStates::Event::BuildModeToggle:
+      // Reset Simulation to provide consistent behavior
+        Reset();
         if (paused) {
           if (!tileBuffer.empty()) {
             tileBuffer.clear();
-            std::cout << "Cleared tile buffer when entering simulation mode"
-                      << std::endl;
           }
         }
         paused = !paused;
@@ -515,7 +513,6 @@ class Game : public olc::PixelGameEngine {
       grid.SetTile(newPos, std::move(newTile), isEmitter);
     }
 
-    if (!isReset) Reset();
   }
 
   void CutTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
@@ -535,7 +532,6 @@ class Game : public olc::PixelGameEngine {
       }
     }
 
-    if (!isReset) Reset();
     std::cout << std::format(
                      "Cut tiles from selection: Start: ({},{}), End: ({},{})",
                      startIndex.x, startIndex.y, endIndex.x, endIndex.y)
@@ -564,7 +560,6 @@ class Game : public olc::PixelGameEngine {
     // Handle continuous tile removal (right mouse)
     if (controlManager.IsRightMouseHeld()) {
       grid.EraseTile(alignedWorldPos);
-      if (!isReset) Reset();
       unsavedChanges = true;
     }
   }
@@ -731,7 +726,6 @@ class Game : public olc::PixelGameEngine {
     accumulatedTime += fElapsedTime;
     if (accumulatedTime > updateInterval && !paused) {
       tileBuffer.clear();
-      isReset = false;
       try {
         auto simStartTime = std::chrono::high_resolution_clock::now();
         updatesPerTick = grid.Simulate();
