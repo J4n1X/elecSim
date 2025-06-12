@@ -78,29 +78,33 @@ void ControlManager::CheckCameraInputs() {
   }
   
   // Camera movement with arrow keys - can have multiple directions simultaneously
-  if (pge->GetKey(olc::Key::UP).bHeld) {
+  if (pge->GetKey(olc::Key::UP).bHeld || pge->GetKey(olc::Key::W).bHeld) {
     eventBuffer.push_back(GameStates::Event::CameraMoveUp);
   }
   
-  if (pge->GetKey(olc::Key::DOWN).bHeld) {
+  if (pge->GetKey(olc::Key::DOWN).bHeld || pge->GetKey(olc::Key::S).bHeld) {
     eventBuffer.push_back(GameStates::Event::CameraMoveDown);
   }
-  
-  if (pge->GetKey(olc::Key::LEFT).bHeld) {
+
+  if (pge->GetKey(olc::Key::LEFT).bHeld || pge->GetKey(olc::Key::A).bHeld) {
     eventBuffer.push_back(GameStates::Event::CameraMoveLeft);
   }
-  
-  if (pge->GetKey(olc::Key::RIGHT).bHeld) {
+
+  if (pge->GetKey(olc::Key::RIGHT).bHeld || pge->GetKey(olc::Key::D).bHeld) {
     eventBuffer.push_back(GameStates::Event::CameraMoveRight);
   }
   
   // Zoom with J/K keys (based on main.cpp pattern)
-  if (pge->GetKey(olc::Key::J).bHeld) {
-    eventBuffer.push_back(GameStates::Event::CameraZoomOut);
+  if (int zoomDelta = pge->GetMouseWheel(); zoomDelta != 0) {
+    if (zoomDelta > 0) {
+        eventBuffer.push_back(GameStates::Event::CameraZoomIn);
+    } else {
+        eventBuffer.push_back(GameStates::Event::CameraZoomOut);
+    }
   }
-  
-  if (pge->GetKey(olc::Key::K).bHeld) {
-    eventBuffer.push_back(GameStates::Event::CameraZoomIn);
+
+  if(pge->GetKey(olc::Key::C).bPressed){
+    eventBuffer.push_back(GameStates::Event::CameraReset);
   }
 }
 

@@ -36,15 +36,17 @@ The compiled binaries can be found in the newly created "bin" directory.
 
 The controls are as follows: 
   - 1-7: Select your tile. The order is: Wire, Junction, Emitter, Semiconductor, Button, Inverter, Crossing
-  - Up, Down, Left, Right: Move the camera
-  - J: Zoom in
-  - K: Zoom out
+  - Up, Down, Left, Right (Or WASD): Move the camera
+  - Mousewheel Up: Zoom in
+  - Mousewheel Down: Zoom out
+  - C: Reset the Camera to the default position and the default render scale
   - F1: Open the console (use "help" for a list of available commands)
   - F2: Save file to disk
   - F3: Load file from disk
   - Comma: Speed up the update rate
   - Period: Slow down the update rate
   - R: Change the facing of the tile you are about to place
+  - P: Clear the tile buffer
   - Space: Toggle between build and simulation mode
   - Left Mouse Button (while the simulation is paused): Place a tile
   - Left Mouse Button (while the simulation is running): Interact with certain tiles (Button, Semiconductor and Emitter)

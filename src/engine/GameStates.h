@@ -22,6 +22,7 @@ enum class Event : unsigned char {
   CameraMoveRight,
   CameraMoveDown,
   CameraMoveLeft,
+  CameraReset,
   
   // Build mode events
   BuildModeTileSelect,

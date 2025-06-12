@@ -28,6 +28,8 @@ constexpr const char* EventToString(Event event) {
       return "CameraMoveDown";
     case Event::CameraMoveLeft:
       return "CameraMoveLeft";
+    case Event::CameraReset:
+      return "CameraReset";
     case Event::BuildModeTileSelect:
       return "BuildModeTileSelect";
     case Event::BuildModeCopy:

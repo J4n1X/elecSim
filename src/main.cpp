@@ -44,7 +44,7 @@ class Game : public olc::PixelGameEngine {
   // --- Constants ---
   static constexpr float defaultRenderScale = 32.0f;
   static const olc::vf2d defaultRenderOffset;
-  static constexpr float minRenderScale = 2.0f;
+  static constexpr float minRenderScale = 12.0f;
   static constexpr float maxRenderScale = 256.0f;
   static constexpr std::string_view appNameBaseFmt =
       "Electricity Simulator - {}";
@@ -304,12 +304,6 @@ class Game : public olc::PixelGameEngine {
       case Engine::GameStates::Event::BuildModeToggle:
         // Reset Simulation to provide consistent behavior
         Reset();
-        if (paused) {
-          if (!tileBuffer.empty()) {
-            tileBuffer.clear();
-            CalculateTileBufferBoxSize();
-          }
-        }
         paused = !paused;
         break;
 
@@ -336,6 +330,11 @@ class Game : public olc::PixelGameEngine {
                                                                           : -1);
         break;
 
+      case Engine::GameStates::Event::CameraReset:
+        grid.SetRenderOffset(defaultRenderOffset);
+        grid.SetRenderScale(defaultRenderScale);
+        break;
+        
       case Engine::GameStates::Event::CameraPan: {
         auto panDelta =
             controlManager.GetMousePosition() - controlManager.GetPanStartPos();
@@ -430,17 +429,22 @@ class Game : public olc::PixelGameEngine {
   }
 
   void HandleCameraZoom(int direction) {
-    olc::vi2d hoverWorldPos = grid.ScreenToWorld(
+    olc::vf2d hoverWorldPos = grid.ScreenToWorld(
         static_cast<olc::vi2d>(controlManager.GetMousePosition()));
-    auto renderScale = grid.GetRenderScale();
+    float renderScale = grid.GetRenderScale();
 
     float newScale = std::clamp(renderScale + (direction * renderScale * 0.1f),
                                 minRenderScale, maxRenderScale);
     grid.SetRenderScale(newScale);
 
-    auto afterZoomPos = grid.ScreenToWorld(
+    olc::vf2d afterZoomPos = grid.ScreenToWorld(
         static_cast<olc::vi2d>(controlManager.GetMousePosition()));
-    auto newOffset =
+
+    std::cout << "Hover world pos: "
+              << hoverWorldPos.x << ", " << hoverWorldPos.y
+              << " | After zoom pos: " << afterZoomPos.x << ", "
+              << afterZoomPos.y << std::endl;
+    olc::vf2d newOffset =
         grid.GetRenderOffset() + (afterZoomPos - hoverWorldPos) * newScale;
     grid.SetRenderOffset(newOffset);
   }
@@ -543,6 +547,7 @@ class Game : public olc::PixelGameEngine {
       bool isEmitter = newTile->IsEmitter();
       grid.SetTile(newPos, std::move(newTile), isEmitter);
     }
+    unsavedChanges = true;
   }
 
   void CutTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
@@ -561,32 +566,7 @@ class Game : public olc::PixelGameEngine {
         grid.EraseTile(pos);
       }
     }
-  }
-  // --- Tile placement and removal (continuous actions) ---
-  void HandleTilePlacement(const olc::vi2d& alignedWorldPos) {
-    // Handle continuous tile placement from buffer (left mouse)
-    if (!tileBuffer.empty()) {
-      if (controlManager.IsLeftMousePressed()) isPlacing = true;
-      if (!controlManager.IsLeftMouseHeld() && isPlacing) isPlacing = false;
-
-      if (isPlacing && controlManager.IsLeftMouseHeld()) {
-        // If we hold, don't replace the tile at the same spot constantly.
-        // If we just press, you can do it.
-        if (controlManager.IsLeftMousePressed() ||
-            lastPlacedPos != alignedWorldPos) {
-          // Paste buffer
-          PasteTiles(alignedWorldPos);
-          lastPlacedPos = alignedWorldPos;
-          unsavedChanges = true;
-        }
-      }
-    }
-
-    // Handle continuous tile removal (right mouse)
-    if (controlManager.IsRightMouseHeld()) {
-      grid.EraseTile(alignedWorldPos);
-      unsavedChanges = true;
-    }
+    unsavedChanges = true;
   }
 
   // Draw the current buffer tiles half transparent (preview)
@@ -607,7 +587,7 @@ class Game : public olc::PixelGameEngine {
   }
 
   void DrawHighlight(olc::vi2d highlightWorldPos) {
-    if(tileBufferBoxSize == olc::vi2d(0, 0)) {
+    if (tileBufferBoxSize == olc::vi2d(0, 0)) {
       return;
     }
     if (selectionActive) {
@@ -631,8 +611,7 @@ class Game : public olc::PixelGameEngine {
     } else {
       SetDrawTarget(uiLayer);
       DrawRectDecal(grid.WorldToScreenFloating(highlightWorldPos),
-                    tileBufferBoxSize * grid.GetRenderScale(),
-                    highlightColor);
+                    tileBufferBoxSize * grid.GetRenderScale(), highlightColor);
     }
   }
 
@@ -756,7 +735,6 @@ class Game : public olc::PixelGameEngine {
     // Simulation step
     accumulatedTime += fElapsedTime;
     if (accumulatedTime > updateInterval && !paused) {
-      tileBuffer.clear();
       try {
         auto simStartTime = std::chrono::high_resolution_clock::now();
         updatesPerTick = grid.Simulate();
@@ -794,12 +772,6 @@ class Game : public olc::PixelGameEngine {
     highlightWorldPos = grid.AlignToGrid(hoverWorldPos);
 
     if (!unsavedChangesGui.IsEnabled()) {
-      // Handle tile placement/removal (continuous actions)
-      // if (paused) {
-      //  HandleTilePlacement(highlightWorldPos);
-      //}
-
-      // Process discrete events
       const auto& events = controlManager.ProcessInput();
       for (const auto& event : events) {
         HandleGameEvent(event, fElapsedTime, highlightWorldPos);
@@ -816,8 +788,10 @@ class Game : public olc::PixelGameEngine {
     unsavedChangesGui.Draw();
     if (!unsavedChangesGui.IsEnabled()) {
       // Draw the other GUI elements
-      DrawHighlight(highlightWorldPos);
-      DrawTilePreviews(highlightWorldPos);
+      if(paused){
+        DrawHighlight(highlightWorldPos);
+        DrawTilePreviews(highlightWorldPos);
+      }
       auto drawEndTime = std::chrono::high_resolution_clock::now();
       drawTimeMicros = std::chrono::duration_cast<std::chrono::microseconds>(
                            drawEndTime - drawStartTime)
@@ -869,7 +843,6 @@ class Game : public olc::PixelGameEngine {
 
 // --- Static member initialization ---
 const olc::vf2d Game::defaultRenderOffset = olc::vf2d(0, 0);
-
 
 // TODO: Make a global sink variable which should be pixelGameEngine's console.
 // --- Main entry point ---
