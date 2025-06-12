@@ -5,6 +5,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(SIM_CACHING "Enable caching for simulation results" ON)
 
+# Enable ccache if available for faster rebuilds
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ccache)
+    set(CMAKE_C_COMPILER_LAUNCHER ccache)
+    message(STATUS "ccache found and enabled")
+endif()
+
+# Enable unity builds for faster compilation (when available)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    set(CMAKE_UNITY_BUILD_BATCH_SIZE 8)
+    message(STATUS "Unity build support available")
+endif()
+
+# Check if we can do LTOs
+include(CheckIPOSupported)
+check_ipo_supported(RESULT lto_supported)
+if(lto_supported)
+  message(STATUS "Link Time Optimization (LTO) is supported")
+  if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    message(STATUS "Link Time Optimization (LTO) enabled for Release build")
+  else()
+    message(STATUS "Link Time Optimization (LTO) not enabled for non-Release builds")
+  endif()
+endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
 #This has to be here for some reason, doesn't work in deps.cmake
@@ -32,20 +58,6 @@ endif()
 # Debug and Release configuration options
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -UDEBUG")
-
-# Compiler-specific flags
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  # GCC/Clang options
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
-  
-  # Strip symbols from executables in Release mode (GCC/Clang only)
-  set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -s")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-  # MSVC options
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /Zi /Od")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /O2")
-endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 

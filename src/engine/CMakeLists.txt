@@ -4,6 +4,14 @@ target_include_directories(engine PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
+# Enable precompiled headers for faster compilation
+target_precompile_headers(engine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../pch.h)
+
+# Enable unity build for faster compilation
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.16")
+    set_target_properties(engine PROPERTIES UNITY_BUILD ON)
+endif()
+
 if(SIM_CACHING)
   target_compile_definitions(engine PUBLIC SIM_CACHING)
 endif()

@@ -1,10 +1,3 @@
-#include <algorithm>
-#include <chrono>
-#include <format>
-#include <numeric>
-#include <ranges>
-#include <string>
-
 #include "ControlManager.h"
 #include "Grid.h"
 #include "GridTileTypes.h"
@@ -667,8 +660,8 @@ class Game : public olc::PixelGameEngine {
        << " visible"
        << ")" << "; "
        << "Updates: " << updatesPerTick << " per tick\n"
-       << "Draw Time: " << std::format("{:.3f} ms\n", drawTimeMicros / 1000.f)
-       << "Sim Time: ";
+       << "CPU Draw Time: " << std::format("{:.3f} ms\n", drawTimeMicros / 1000.f)
+       << "CPU Sim Time: ";
     if (paused) {
       ss << "Paused\n";
     } else {
@@ -879,4 +872,4 @@ int main(int argc, char** argv) {
     game.Start();
   }
   return 0;
-}
+}// test comment
