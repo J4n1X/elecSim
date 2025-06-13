@@ -1,9 +1,12 @@
+#include <algorithm>
+
 #include "ControlManager.h"
 #include "Grid.h"
 #include "GridTileTypes.h"
 #include "MessageBox.h"
 #include "nfd.hpp"
 #include "olcPixelGameEngine.h"
+
 
 using namespace ElecSim;
 
@@ -76,7 +79,6 @@ class Game : public olc::PixelGameEngine {
   olc::Pixel highlightColor = olc::RED;
 
   // --- Placement logic ---
-  bool isPlacing = false;
   olc::vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
   olc::vi2d lastPlacedPos = {0, 0};        // Prevents overwriting same tile
   std::vector<std::unique_ptr<GridTile>>
@@ -103,7 +105,7 @@ class Game : public olc::PixelGameEngine {
     EnableLayer((uint8_t)gameLayer, true);
 
     grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
-                defaultRenderOffset, uiLayer, gameLayer);
+                defaultRenderOffset, gameLayer);
 
     if (curFilename.empty()) {
       curFilename =
@@ -124,41 +126,30 @@ class Game : public olc::PixelGameEngine {
     // Clear the current buffer
     tileBuffer.clear();
 
-    // Create a new tile based on the selected type
-    std::unique_ptr<GridTile> newTile = nullptr;
-    switch (selectedBrushIndex) {
-      case 1:
-        newTile = std::make_unique<WireGridTile>();
-        // std::cout << "Selected Wire tile" << std::endl;
-        break;
-      case 2:
-        newTile = std::make_unique<JunctionGridTile>();
-        // std::cout << "Selected Junction tile" << std::endl;
-        break;
-      case 3:
-        newTile = std::make_unique<EmitterGridTile>();
-        // std::cout << "Selected Emitter tile" << std::endl;
-        break;
-      case 4:
-        newTile = std::make_unique<SemiConductorGridTile>();
-        // std::cout << "Selected Semiconductor tile" << std::endl;
-        break;
-      case 5:
-        newTile = std::make_unique<ButtonGridTile>();
-        // std::cout << "Selected Button tile" << std::endl;
-        break;
-      case 6:
-        newTile = std::make_unique<InverterGridTile>();
-        // std::cout << "Selected Inverter tile" << std::endl;
-        break;
-      case 7:
-        newTile = std::make_unique<CrossingGridTile>();
-        // std::cout << "Selected Crossing tile" << std::endl;
-        break;
-      default:
-        // Leave tileBuffer empty if no valid selection
-        // std::cout << "No tile selected" << std::endl;
-        return;
+    auto createTile = [this]() -> std::unique_ptr<GridTile> {
+      switch (selectedBrushIndex) {
+        case 1:
+          return std::make_unique<WireGridTile>();
+        case 2:
+          return std::make_unique<JunctionGridTile>();
+        case 3:
+          return std::make_unique<EmitterGridTile>();
+        case 4:
+          return std::make_unique<SemiConductorGridTile>();
+        case 5:
+          return std::make_unique<ButtonGridTile>();
+        case 6:
+          return std::make_unique<InverterGridTile>();
+        case 7:
+          return std::make_unique<CrossingGridTile>();
+        default:
+          return nullptr;
+      }
+    };
+
+    auto newTile = createTile();
+    if (!newTile) {
+      return;  // No valid selection
     }
 
     // Set the facing direction
@@ -195,24 +186,17 @@ class Game : public olc::PixelGameEngine {
   }
 
   void JustifyBufferTiles() {
-    olc::vi2d minPos = {INT_MAX, INT_MAX};
-    for (const auto& tile : tileBuffer) {
-      olc::vi2d pos = tile->GetPos();
-      minPos.x = std::min(minPos.x, pos.x);
-      minPos.y = std::min(minPos.y, pos.y);
-    }
-    // Justify - get the minimum
-    olc::vi2d adjustVec = {0, 0};
-    if (minPos.x > 0) {
-      adjustVec.x = minPos.x;
-    }
-    if (minPos.y > 0) {
-      adjustVec.y = minPos.y;
-    }
+    olc::vi2d minPos = std::ranges::fold_right(
+        tileBuffer, olc::vi2d{INT_MAX, INT_MAX},
+        [](const auto& tile, const olc::vi2d& acc) {
+          return olc::vi2d{
+              std::min(acc.x, tile->GetPos().x),
+              std::min(acc.y, tile->GetPos().y)};
+        });
     for (auto& tile : tileBuffer) {
-      auto oldPos = tile->GetPos();
-      auto oldFacing = tile->GetFacing();
-      tile->SetPos(oldPos - adjustVec);
+      auto clampedMinPos = olc::vi2d{std::max(0, minPos.x), std::max(0, minPos.y)};
+      auto newPos = tile->GetPos() - clampedMinPos;
+      tile->SetPos(newPos);
     }
   }
 
@@ -227,7 +211,6 @@ class Game : public olc::PixelGameEngine {
   // (2, 1) -> (0, 2)
   // But a rotation matrix does not support non-square matrices.
   // Thus, we expand into a square matrix, and then, in the end, justify.
-
   void RotateBufferTiles() {
     olc::vi2d maxPos = {INT_MIN, INT_MIN};
 
@@ -277,17 +260,18 @@ class Game : public olc::PixelGameEngine {
   // --- Event handling method for ControlManager ---
   void HandleGameEvent(Engine::GameStates::Event event, float deltaTime,
                        olc::vi2d& highlightWorldPos) {
+    using enum Engine::GameStates::Event;
     switch (event) {
       // General events
-      case Engine::GameStates::Event::ConsoleToggle:
+      case ConsoleToggle:
         ConsoleShow(olc::Key::F1, false);
         break;
 
-      case Engine::GameStates::Event::Save:
+      case Save:
         SaveGrid();
         break;
 
-      case Engine::GameStates::Event::Load:
+      case Load:
         if (unsavedChanges) {
           unsavedChangesGui.Enable();
         } else {
@@ -295,45 +279,44 @@ class Game : public olc::PixelGameEngine {
         }
         break;
 
-      case Engine::GameStates::Event::Quit:
+      case Quit:
         engineRunning = false;
         break;
 
-      case Engine::GameStates::Event::BuildModeToggle:
+      case BuildModeToggle:
         // Reset Simulation to provide consistent behavior
         Reset();
         paused = !paused;
         break;
 
       // Camera events
-      case Engine::GameStates::Event::CameraMoveUp:
+      case CameraMoveUp:
         HandleCameraMove(0.0f, 30.f * grid.GetRenderScale() * deltaTime);
         break;
 
-      case Engine::GameStates::Event::CameraMoveDown:
+      case CameraMoveDown:
         HandleCameraMove(0.0f, -30.f * grid.GetRenderScale() * deltaTime);
         break;
 
-      case Engine::GameStates::Event::CameraMoveLeft:
+      case CameraMoveLeft:
         HandleCameraMove(30.f * grid.GetRenderScale() * deltaTime, 0.0f);
         break;
 
-      case Engine::GameStates::Event::CameraMoveRight:
+      case CameraMoveRight:
         HandleCameraMove(-30.f * grid.GetRenderScale() * deltaTime, 0.0f);
         break;
 
-      case Engine::GameStates::Event::CameraZoomIn:
-      case Engine::GameStates::Event::CameraZoomOut:
-        HandleCameraZoom(event == Engine::GameStates::Event::CameraZoomIn ? 1
-                                                                          : -1);
+      case CameraZoomIn:
+      case CameraZoomOut:
+        HandleCameraZoom(event == CameraZoomIn ? 1 : -1);
         break;
 
-      case Engine::GameStates::Event::CameraReset:
+      case CameraReset:
         grid.SetRenderOffset(defaultRenderOffset);
         grid.SetRenderScale(defaultRenderScale);
         break;
 
-      case Engine::GameStates::Event::CameraPan: {
+      case CameraPan: {
         auto panDelta =
             controlManager.GetMousePosition() - controlManager.GetPanStartPos();
         grid.SetRenderOffset(
@@ -342,37 +325,37 @@ class Game : public olc::PixelGameEngine {
       }
 
       // Build mode events
-      case Engine::GameStates::Event::BuildModeTileSelect:
+      case BuildModeTileSelect:
         if (paused) {
           selectedBrushIndex = controlManager.GetLastSelectedNumberKey();
           CreateBrushTile();
         }
         break;
 
-      case Engine::GameStates::Event::BuildModeRotate:
+      case BuildModeRotate:
         if (paused) {
           RotateBufferTiles();
         }
         break;
 
-      case Engine::GameStates::Event::BuildModeCopy:
+      case BuildModeCopy:
         if (paused && selectionActive) {
           CopyTiles(selectionStartIndex, highlightWorldPos);
         }
         break;
 
-      case Engine::GameStates::Event::BuildModePaste:
+      case BuildModePaste:
         if (paused) {
           PasteTiles(highlightWorldPos);
         }
         break;
-      case Engine::GameStates::Event::BuildModeCut:
+      case BuildModeCut:
         if (paused) {
           // Handle both cut selection and clear buffer
           CutTiles(selectionStartIndex, highlightWorldPos);
         }
         break;
-      case Engine::GameStates::Event::BuildModeDelete:
+      case BuildModeDelete:
         if (paused) {
           // Delete tiles in the selection area
           grid.EraseTile(highlightWorldPos);
@@ -380,7 +363,7 @@ class Game : public olc::PixelGameEngine {
         }
         break;
 
-      case Engine::GameStates::Event::BuildModeSelect:
+      case BuildModeSelect:
         if (paused) {
           // Toggle selection state - this is now a discrete event
           if (!selectionActive) {
@@ -391,14 +374,14 @@ class Game : public olc::PixelGameEngine {
           }
         }
         break;
-      case Engine::GameStates::Event::BuildModeClearBuffer:
+      case BuildModeClearBuffer:
         if (paused) {
           ClearBuffer();
         }
         break;
 
       // Simulation mode events
-      case Engine::GameStates::Event::SimModeTileInteract:
+      case SimModeTileInteract:
         if (!paused) {
           auto gridTileOpt = grid.GetTile(highlightWorldPos);
           if (gridTileOpt.has_value()) {
@@ -411,11 +394,11 @@ class Game : public olc::PixelGameEngine {
         }
         break;
 
-      case Engine::GameStates::Event::SimModeTickSpeedUp:
+      case SimModeTickSpeedUp:
         updateInterval += 0.025f;
         break;
 
-      case Engine::GameStates::Event::SimModeTickSpeedDown:
+      case SimModeTickSpeedDown:
         updateInterval = std::max(0.0f, updateInterval - 0.025f);
         break;
     }
@@ -521,24 +504,11 @@ class Game : public olc::PixelGameEngine {
   }
 
   void PasteTiles(const olc::vi2d& pastePosition) {
-    // Check if we have something to paste
-    if (tileBuffer.empty()) {
-      return;  // Early return if buffer is empty
-    }
+    auto uniqueTiles =
+        tileBuffer |
+        std::views::transform([&](const auto& tile) { return tile->Clone(); });
+    grid.SetSelection(pastePosition, uniqueTiles);
 
-    // Copy each tile in the selection
-    for (const auto& tile : tileBuffer) {
-      // Create a deep copy of the tile using Clone method
-      std::unique_ptr<GridTile> newTile = tile->Clone();
-
-      // Calculate new position relative to paste position
-      auto newPos = pastePosition + tile->GetPos();
-      newTile->SetPos(newPos);
-
-      // Add the new tile to the grid
-      bool isEmitter = newTile->IsEmitter();
-      grid.SetTile(newPos, std::move(newTile), isEmitter);
-    }
     unsavedChanges = true;
   }
 
@@ -570,7 +540,6 @@ class Game : public olc::PixelGameEngine {
       for (const auto& tile : tileBuffer) {
         // Calculate position for preview
         auto previewPos = tile->GetPos() + highlightWorldPos;
-
         // Draw with transparency
         tile->Draw(this, grid.WorldToScreen(previewPos), grid.GetRenderScale(),
                    128);
@@ -736,16 +705,13 @@ class Game : public olc::PixelGameEngine {
                             .count();
       } catch (const std::runtime_error& e) {
 #ifdef DEBUG
-        std::cout << "Simulation runtime error: " << e.what() << std::endl;
+        ConsoleOut() << std::format("Simulation runtime error: {}", e.what()) << std::endl;
 #endif
         paused = true;
         Reset();
         updatesPerTick = 0;  // Reset updates per tick on error
       } catch (const std::invalid_argument& e) {
-#ifdef DEBUG
-        std::cout << "Simulation invalid argument error: " << e.what()
-                  << std::endl;
-#endif
+        ConsoleOut() << std::format("Simulation invalid argument error: {}", e.what()) << std::endl;
         paused = true;
         Reset();
         updatesPerTick = 0;  // Reset updates per tick on error

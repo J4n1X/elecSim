@@ -75,44 +75,45 @@ GridTile::GridTile(olc::vi2d pos, Direction facing, float size,
 
 void GridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
                     float screenSize, int alpha) {
-  // Get colors based on activation state and alpha
-  activeColor.a = alpha;
-  inactiveColor.a = alpha;
+  // Create local copies of colors with the specified alpha
+  olc::Pixel drawActiveColor = activeColor;
+  olc::Pixel drawInactiveColor = inactiveColor;
+  drawActiveColor.a = alpha;
+  drawInactiveColor.a = alpha;
 
   renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
-                          activated ? activeColor : inactiveColor);
+                          activated ? drawActiveColor : drawInactiveColor);
   auto [p1, p2, p3] = GetTrianglePoints(screenPos, screenSize, facing);
   renderer->FillTriangleDecal(p1, p2, p3,
-                              activated ? inactiveColor : activeColor);
+                              activated ? drawInactiveColor : drawActiveColor);
 }
 
 void GridTile::SetFacing(Direction newFacing) {
-  if (facing == newFacing) return;  // No change in facing
+  if (facing == newFacing) [[unlikely]]
+    return;  // No change in facing
   facing = newFacing;
 
   // Store old directions
   // Exclude the input states. They are facing independent.
   // Why? Because a tile can never be rotated while the simulation is running.
-  TileSideStates oldReceive;
-  TileSideStates oldOutput;
-  std::copy(std::begin(canReceive), std::end(canReceive),
-            std::begin(oldReceive));
-  std::copy(std::begin(canOutput), std::end(canOutput), std::begin(oldOutput));
+  const auto [oldReceive, oldOutput] = [this] {
+    return std::pair{canReceive, canOutput};
+  }();
 
   // Rotate permissions by the difference amount
   for (auto& dir : AllDirections) {
     Direction newIndex = WorldToTileDirection(dir);
+    // If this direction is invalid, throw.
+    if (newIndex < Direction::Top || newIndex >= Direction::Count)
+        [[unlikely]] {
+      throw std::runtime_error("SetFacing: Invalid direction after rotation");
+    }
     canReceive[newIndex] = oldReceive[dir];
     canOutput[newIndex] = oldOutput[dir];
   }
 }
 
-std::string GridTile::GetTileInformation()
-    const {  // FIXED: Removed the "janky" logic that was needed due to
-             // coordinate system confusion.
-  // The inputStates array is indexed by world coordinates, but for display we
-  // want tile-relative coordinates. Now using proper WorldToTileDirection
-  // conversion.
+std::string GridTile::GetTileInformation() const {
   std::stringstream stream;
   // All in one line
   stream << "Tile Type: " << TileTypeName() << ", "
@@ -128,20 +129,22 @@ std::string GridTile::GetTileInformation()
     }
   }
   // Remove trailing space
-  if (stream.str().back() == ' ') {
+  if (stream.tellp() > 0) [[likely]] {
     stream.seekp(-1, std::ios_base::end);
   }
   stream << "], "
-         << "Activated: " << activated;  return stream.str();
+         << "Activated: " << activated;
+  return stream.str();
 }
 
 Direction GridTile::WorldToTileDirection(Direction worldDir) const {
-  // Convert world direction to tile-relative by rotating backwards by facing amount
+  // Convert world direction to tile-relative by rotating left by facing.
   return DirectionRotate(worldDir, -static_cast<int>(facing));
 }
 
 Direction GridTile::TileToWorldDirection(Direction tileDir) const {
-  // Convert tile-relative direction to world direction by rotating by facing amount
+  // Convert tile-relative direction to world direction by rotating right by
+  // facing.
   return DirectionRotate(tileDir, facing);
 }
 

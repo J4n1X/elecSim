@@ -11,7 +11,7 @@
 #include "olcPixelGameEngine.h"
 
 namespace ElecSim {
-#ifdef SIM_CACHING
+#ifdef SIM_PREPROCESSING
 // This class (at least in the future) contains all tiles and tilegroups,
 // returning a shared pointer to a special SimObject that will only have one
 // available function - ProcessSignal.
@@ -33,12 +33,12 @@ class TileGroupManager {
     std::shared_ptr<GridTile> tile;
 
     explicit SimulationTile(std::shared_ptr<GridTile> t) : tile(std::move(t)) {}
-    std::string GetObjectInfo() const {
+    std::string GetObjectInfo() const final {
       std::string info = "SimulationTile:\n  ";
       info += tile->GetTileInformation();
       return info;
     }
-    std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override {
+    std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) final {
       // Process the signal using the tile's ProcessSignal method
       auto newSignals = tile->ProcessSignal(signal);
       return newSignals;
@@ -64,8 +64,8 @@ class TileGroupManager {
                 : inputTile(std::move(input)),
           inbetweenTiles(std::move(inbetween)),
           outputTiles(std::move(output)) {}
-    std::string GetObjectInfo() const override;
-    std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
+    std::string GetObjectInfo() const final;
+    std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) final;
   };
 
  private:
@@ -138,6 +138,6 @@ class TileGroupManager {
   ~TileGroupManager() = default;
 };
 
-#endif  // SIM_CACHING
+#endif  // SIM_PREPROCESSING
 
 }  // namespace ElecSim

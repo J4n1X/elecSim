@@ -72,17 +72,23 @@ static constexpr std::array<Direction, static_cast<int>(Direction::Count)>
     AllDirections = {Direction::Top, Direction::Right, Direction::Bottom,
                      Direction::Left};
 
-// General rotation function - rotates a direction by a specified amount
-inline constexpr const Direction DirectionRotate(Direction dir, Direction amount) {
-  return static_cast<Direction>((static_cast<int>(dir) + static_cast<int>(amount)) %
-                                static_cast<int>(Direction::Count));
+// Rotate (steps) times. Can be positive or negative.
+// Positive = rotate right.
+// Negative = rotate left.
+constexpr Direction DirectionRotate(Direction dir, int steps) {
+  if consteval {
+    // Compile-time validation
+    static_assert(static_cast<int>(Direction::Count) == 4,
+                  "Direction enum must have exactly 4 values");
+  }
+  return static_cast<Direction>(std::abs(
+      (static_cast<int>(dir) + steps + static_cast<int>(Direction::Count)) %
+      static_cast<int>(Direction::Count)));
 }
 
-// Convenience functions using the general rotation
-inline constexpr const Direction DirectionRotate(Direction dir, int steps) {
-  return DirectionRotate(dir, static_cast<Direction>(steps));
+constexpr Direction DirectionRotate(Direction dir, Direction amount) {
+  return DirectionRotate(dir, static_cast<int>(amount));
 }
-
 
 // This is used only to inform if an update happened or not
 struct TileSideStates

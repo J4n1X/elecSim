@@ -12,9 +12,9 @@ WireGridTile::WireGridTile(olc::vi2d pos, Direction facing, float size)
   // Can receive from all directions except facing direction
   for (const auto& dir : AllDirections) {
     canReceive[dir] = (dir != facing);
-    canOutput[dir] = (dir == facing);
-    inputStates[dir] = false;
+    canOutput[dir] = (dir == facing);  
   }
+  inputStates.fill(false);
 }
 
 std::vector<SignalEvent> WireGridTile::ProcessSignal(
@@ -52,7 +52,7 @@ JunctionGridTile::JunctionGridTile(olc::vi2d pos, Direction facing, float size)
 
 std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
     const SignalEvent& signal) {
-  if (signal.isActive == activated) return {};  // Prevent feedback loops
+  if (signal.isActive == activated)[[unlikely]] return {};  // Prevent feedback loops
   if (!signal.isActive) {
     activated = false;
     std::vector<SignalEvent> events;
@@ -77,7 +77,7 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
 std::vector<SignalEvent> JunctionGridTile::PreprocessSignal(const SignalEvent incomingSignal) {
     std::vector<SignalEvent> events;
     for (const auto& dir : AllDirections) {
-        if (canOutput[dir]) {
+        if (canOutput[dir]) [[likely]]{
             events.push_back(SignalEvent(pos, dir, incomingSignal.isActive));
         }
     }
@@ -206,24 +206,22 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
 CrossingGridTile::CrossingGridTile(olc::vi2d pos, Direction facing, float size)
     : LogicTile(pos, facing, size, false, olc::DARK_BLUE, olc::BLUE) {
   // Allow receiving and outputting from all directions
-  for (const auto& dir : AllDirections) {
-    canReceive[dir] = true;
-    canOutput[dir] = true;
-    inputStates[dir] = false;
-  }
+  canReceive.fill(true);
+  canOutput.fill(true);
+  inputStates.fill(false);
 }
 
 void CrossingGridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
                             float screenSize, int alpha) {
   // Get colors based on activation state and alpha
-  olc::Pixel activeColor = this->activeColor;
-  olc::Pixel inactiveColor = this->inactiveColor;
-  activeColor.a = alpha;
-  inactiveColor.a = alpha;
+  olc::Pixel drawActiveColor = this->activeColor;
+  olc::Pixel drawInactiveColor = this->inactiveColor;
+  drawActiveColor.a = alpha;
+  drawInactiveColor.a = alpha;
 
   // Draw the base square
   renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
-                          inactiveColor);
+                          drawInactiveColor);
 
   // Draw crossing lines that touch the edges
   float lineThickness = screenSize / 10.0f;  // Adjust thickness as needed
@@ -232,13 +230,13 @@ void CrossingGridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
   renderer->FillRectDecal(
       olc::vf2d(screenPos.x, screenPos.y + (screenSize - lineThickness) / 2),
       olc::vf2d(screenSize, lineThickness),
-      activeColor);
+      drawActiveColor);
 
   // Vertical line - top to bottom
   renderer->FillRectDecal(
       olc::vf2d(screenPos.x + (screenSize - lineThickness) / 2, screenPos.y),
       olc::vf2d(lineThickness, screenSize),
-      activeColor);
+      drawActiveColor);
 }
 
 std::vector<SignalEvent> CrossingGridTile::ProcessSignal(

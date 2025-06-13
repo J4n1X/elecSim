@@ -24,7 +24,9 @@ cd build
 cmake ..
 ```
 
-If you'd like to use the the old way of processing tile updates, pass along ```-DSIM_CACHING=OFF``` after the initial configuration has completed.
+If you'd like to use the the old way of processing tile updates, pass along ```-DSIM_PREPROCESSING=OFF``` after the initial configuration has completed.
+
+Furthermore, you can turn off LTOs and CCache (if available) by using ```-DDISABLE_LTO=ON``` and ```-DDISABLE_CCACHE=ON```.
 
 To generate the required configuration for your system. To compile the project, all you must do after this is issue the following command: 
 

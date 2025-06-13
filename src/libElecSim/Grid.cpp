@@ -6,7 +6,6 @@
 #include <iostream>
 #include <ranges>
 #include <stdexcept>
-#include <type_traits>
 
 namespace ElecSim {
 
@@ -19,22 +18,6 @@ bool SignalEdge::operator==(const SignalEdge& other) const {
 std::size_t SignalEdgeHash::operator()(const SignalEdge& edge) const {
   using ankerl::unordered_dense::detail::wyhash::hash;
   return hash(&edge, sizeof(SignalEdge));
-}
-
-Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
-           int uiLayer, int gameLayer)
-    : renderWindow(size),
-      uiLayer(uiLayer),
-      gameLayer(gameLayer),
-      renderScale(renderScale),
-      renderOffset(renderOffset) {
-#ifdef DEBUG
-  std::cout << std::format(
-                   "Grid initialized with size: {}x{}, renderScale: {}, "
-                   "renderOffset: {}",
-                   size.x, size.y, renderScale, renderOffset)
-            << std::endl;
-#endif
 }
 
 void Grid::QueueUpdate(std::shared_ptr<GridTile> tile,
@@ -124,7 +107,7 @@ int Grid::Simulate() {
     updateQueue.pop();
     if (!update.tile) continue;
 
-#ifdef SIM_CACHING
+#ifdef SIM_PREPROCESSING
     auto simObjMaybe = tileManager.GetSimulationObject(update.tile->GetPos());
     if (simObjMaybe.has_value()) {
       auto simObj = simObjMaybe.value();
@@ -183,7 +166,7 @@ void Grid::ResetSimulation() {
       QueueUpdate(tile, event);
     }
   }
-#ifdef SIM_CACHING
+#ifdef SIM_PREPROCESSING
   if (fieldIsDirty) {
     tileManager.Clear();
     tileManager.PreprocessTiles(tiles);
@@ -207,6 +190,7 @@ int Grid::Draw(olc::PixelGameEngine* renderer) {
 
   auto spriteSize = std::ceil(renderScale);
   int drawnTiles = 0;
+
   for (const auto& [pos, tile] : tiles) {
     if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
 
@@ -225,25 +209,13 @@ int Grid::Draw(olc::PixelGameEngine* renderer) {
   return drawnTiles;
 }
 
-void Grid::SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile,
-                   bool emitter) {
-  tiles.insert_or_assign(pos, std::move(tile));
-  if (emitter) {
-    emitters.push_back(tiles.at(pos));
+void Grid::SetTile(olc::vi2d pos, std::unique_ptr<GridTile> tile) {
+  tile->SetPos(pos);
+  auto [mapElement, inserted] = tiles.insert_or_assign(pos, std::move(tile));
+  if (mapElement->second->IsEmitter()) {
+    emitters.push_back(mapElement->second);
   }
-  auto initSignals = tiles.at(pos)->Init();
-  for (const auto& signal : initSignals) {
-    QueueUpdate(tiles.at(pos), signal);
-  }
-
   fieldIsDirty = true;  // Mark the field as modified
-}
-
-void Grid::SetSelection(olc::vi2d startPos, olc::vi2d endPos) {
-  // TODO: Implement this function instead of repeatedly calling SetTile
-  (void)startPos;  // Avoid unused variable warning
-  (void)endPos;    // Avoid unused variable warning
-  throw std::runtime_error("SetSelection is not implemented yet");
 }
 
 olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
@@ -274,23 +246,18 @@ std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(olc::vi2d pos) {
 
 std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(olc::vi2d startPos,
                                                         olc::vi2d endPos) {
-  // ensure StartPos is actually the top-left corner
   olc::vi2d topLeft = startPos.min(endPos);
   olc::vi2d bottomRight = startPos.max(endPos);
-  // lambda to select tiles in the area
-  auto selectTilesInArea = [&](const auto& pair) {
-    const auto& [pos, tile] = pair;
-    return (pos.x >= topLeft.x && pos.x <= bottomRight.x &&
-            pos.y >= topLeft.y && pos.y <= bottomRight.y);
-  };
-  auto filtered = tiles | std::ranges::views::filter(selectTilesInArea);
-  std::vector<std::weak_ptr<GridTile>> selection = {};
-  for (const auto& [_, tile] : filtered) {
-    (void)_;
-    // cast to weak
-    selection.push_back(std::weak_ptr<GridTile>(tile));
+
+  // Replace this complex view chain with a simple loop
+  std::vector<std::weak_ptr<GridTile>> result;
+  for (const auto& [pos, tile] : tiles) {
+    if (pos.x >= topLeft.x && pos.x <= bottomRight.x && pos.y >= topLeft.y &&
+        pos.y <= bottomRight.y) {
+      result.emplace_back(tile);
+    }
   }
-  return selection;
+  return result;
 }
 
 void Grid::Save(const std::string& filename) {
@@ -303,10 +270,19 @@ void Grid::Save(const std::string& filename) {
   }
 
   size_t dataSize = 0;
-  for (const auto& [pos, tile] : tiles) {
-    auto data = tile->Serialize();
-    dataSize += data.size();
-    file.write(data.data(), data.size());
+  auto serializedTileData =
+      tiles | std::views::values | std::views::transform([](const auto& tile) {
+        return tile->Serialize();
+      }) |
+      std::views::transform([](const auto& data) -> std::vector<char> {
+        return std::vector<char>(data.begin(), data.end());
+      }) |
+      std::views::chunk(1000);
+  for (const auto& chunk : serializedTileData) {
+    auto chunkData =
+        chunk | std::views::join | std::ranges::to<std::vector<char>>();
+    file.write(chunkData.data(), chunkData.size());
+    dataSize += chunkData.size();
   }
 #ifdef DEBUG
   std::cout << std::format("Saved {} bytes to {}, total tiles: {}", dataSize,
@@ -333,10 +309,10 @@ void Grid::Load(const std::string& filename) {
     dataSize += file.gcount();
     if (file.gcount() == 0) break;
 
-    std::shared_ptr<GridTile> tile = std::move(GridTile::Deserialize(data));
-    tiles.insert_or_assign(tile->GetPos(), tile);
-    if (tile->IsEmitter()) {
-      emitters.push_back(tile);
+    std::unique_ptr<GridTile> tile = GridTile::Deserialize(data);
+    auto [mapPair, _] = tiles.insert_or_assign(tile->GetPos(), std::move(tile));
+    if (mapPair->second->IsEmitter()) {
+      emitters.push_back(mapPair->second);
     }
   }
 

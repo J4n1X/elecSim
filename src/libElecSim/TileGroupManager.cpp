@@ -9,7 +9,7 @@
 
 namespace ElecSim {
 
-#ifdef SIM_CACHING
+#ifdef SIM_PREPROCESSING
 
 // Processes the signal of a group. This yields a vector of new signals by
 // only simulating the input tile and simply cycling the state of the tiles
@@ -359,6 +359,6 @@ void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
 #endif
 }
 
-#endif  // SIM_CACHING
+#endif  // SIM_PREPROCESSING
 
 }  // namespace ElecSim
