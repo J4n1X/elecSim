@@ -76,14 +76,11 @@ static constexpr std::array<Direction, static_cast<int>(Direction::Count)>
 // Positive = rotate right.
 // Negative = rotate left.
 constexpr Direction DirectionRotate(Direction dir, int steps) {
-  if consteval {
-    // Compile-time validation
-    static_assert(static_cast<int>(Direction::Count) == 4,
-                  "Direction enum must have exactly 4 values");
-  }
-  return static_cast<Direction>(std::abs(
-      (static_cast<int>(dir) + steps + static_cast<int>(Direction::Count)) %
-      static_cast<int>(Direction::Count)));
+  int count = static_cast<int>(Direction::Count);
+  int value = (static_cast<int>(dir) + steps + count) % count;
+  // Manual constexpr abs for int
+  int abs_value = value < 0 ? -value : value;
+  return static_cast<Direction>(abs_value);
 }
 
 constexpr Direction DirectionRotate(Direction dir, Direction amount) {
