@@ -9,6 +9,8 @@
 
 namespace Engine {
 
+  // Transforms hardware input events into game events, which increases
+  // readability.
   class ControlManager {
     private:
       olc::PixelGameEngine* pge = nullptr;
