@@ -162,7 +162,7 @@ int main(int argc, char** argv) {
 
   if (hope_parse_argv(&hope, argv))  // error occurred, print error message
     return 1;
-  if (hope.used_set_name == "Help") {  // no need to even check the switch
+  if (std::string(hope.used_set_name) == "Help") {  // no need to even check the switch
     hope_print_help(&hope, stdout);
     return 0;
   }

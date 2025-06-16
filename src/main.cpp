@@ -7,7 +7,6 @@
 #include "nfd.hpp"
 #include "olcPixelGameEngine.h"
 
-
 using namespace ElecSim;
 
 class Game : public olc::PixelGameEngine {
@@ -91,8 +90,15 @@ class Game : public olc::PixelGameEngine {
 
   // --- Initialization ---
   bool OnUserCreate() override {
+#ifndef DEBUG 
+    // Capturing stdout to console (Release only)
+    ConsoleCaptureStdOut(true);
+#endif
+
+#ifdef DEBUG
     // Print class sizes
     PrintClassSizes();
+#endif
 
     gameLayer = CreateLayer();  // initialized as a black screen
 
@@ -189,12 +195,12 @@ class Game : public olc::PixelGameEngine {
     olc::vi2d minPos = std::ranges::fold_right(
         tileBuffer, olc::vi2d{INT_MAX, INT_MAX},
         [](const auto& tile, const olc::vi2d& acc) {
-          return olc::vi2d{
-              std::min(acc.x, tile->GetPos().x),
-              std::min(acc.y, tile->GetPos().y)};
+          return olc::vi2d{std::min(acc.x, tile->GetPos().x),
+                           std::min(acc.y, tile->GetPos().y)};
         });
     for (auto& tile : tileBuffer) {
-      auto clampedMinPos = olc::vi2d{std::max(0, minPos.x), std::max(0, minPos.y)};
+      auto clampedMinPos =
+          olc::vi2d{std::max(0, minPos.x), std::max(0, minPos.y)};
       auto newPos = tile->GetPos() - clampedMinPos;
       tile->SetPos(newPos);
     }
@@ -705,13 +711,16 @@ class Game : public olc::PixelGameEngine {
                             .count();
       } catch (const std::runtime_error& e) {
 #ifdef DEBUG
-        ConsoleOut() << std::format("Simulation runtime error: {}", e.what()) << std::endl;
+        ConsoleOut() << std::format("Simulation runtime error: {}", e.what())
+                     << std::endl;
 #endif
         paused = true;
         Reset();
         updatesPerTick = 0;  // Reset updates per tick on error
       } catch (const std::invalid_argument& e) {
-        ConsoleOut() << std::format("Simulation invalid argument error: {}", e.what()) << std::endl;
+        ConsoleOut() << std::format("Simulation invalid argument error: {}",
+                                    e.what())
+                     << std::endl;
         paused = true;
         Reset();
         updatesPerTick = 0;  // Reset updates per tick on error

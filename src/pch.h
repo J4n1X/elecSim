@@ -17,11 +17,10 @@
 #include <string>
 #include <string_view>
 #include <type_traits>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 // External library headers
 #include "olcPixelGameEngine.h"
+#include "extensions/olcPGEX_QuickGUI.h"
 #include "ankerl/unordered_dense.h"
 #include "nfd.hpp"

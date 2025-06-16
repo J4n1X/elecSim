@@ -1,4 +1,4 @@
-Zooming too fast. Maybe use Mousewheel?
+Zooming too fast. Maybe use Mousewheel? (Done)
 Max Zoom adjust (Done)
 WASD for camera controls (Done)
 Keep buffer when simulating but do render. (Done)

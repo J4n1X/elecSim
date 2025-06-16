@@ -18,8 +18,8 @@ endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(engine PRIVATE -Wall -Wextra -Wpedantic -Wno-unknown-pragmas)
-  target_link_libraries(engine PUBLIC olcPixelGameEngine nfd unordered_dense)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   add_compile_options(engine PRIVATE /W3)
-  target_link_libraries(engine PUBLIC olcPixelGameEngine nfd unordered_dense)
 endif()
+  
+target_link_libraries(engine PUBLIC olcPixelGameEngine nfd unordered_dense libElecSim)

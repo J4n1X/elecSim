@@ -88,24 +88,39 @@ int Grid::Simulate() {
     ++it;
   }
 
-  // We're now using signal chain tracking with visited positions to detect
-  // circular updates. Each signal keeps track of all positions it has
-  // visited, and we throw a runtime_error when we detect a cycle. However,
-  // we'll still keep a reasonable upper limit as a safety measure:
   constexpr int MAX_UPDATES = 100000;
+
+  // While false by default, if a large amount of updates are processed
+  // this tick, we turn it on to detect potential cycles and terminate them.
+  bool enableEdgeCheck = false;
   while (!updateQueue.empty()) {
     // Safety check - prevent extremely long update chains
     if (updatesProcessed > MAX_UPDATES) {
-      std::cerr << "Warning: Maximum update limit reached (" << MAX_UPDATES
-                << " updates). This may indicate a complex circuit or "
-                   "potential issue."
-                << std::endl;
-      break;
+      if (!enableEdgeCheck) {
+#ifdef DEBUG
+        std::cerr
+            << "Warning: Maximum update limit reached (" << MAX_UPDATES
+            << " updates). Enabling edge check to prevent potential cycle."
+            << std::endl;
+#else
+        std::cout << "Update limit reached, enabling edge check to terminate "
+                     "potential cycles."
+                  << std::endl;
+#endif
+      }
+      enableEdgeCheck = true;
     }
 
     auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
+    if (enableEdgeCheck) {
+      if (currentTickVisitedEdges.contains(
+              SignalEdge{update.tile->GetPos(), update.event.sourcePos})) {
+        // This edge has already been processed this tick, skip it
+        continue;
+      }
+    }
 
 #ifdef SIM_PREPROCESSING
     auto simObjMaybe = tileManager.GetSimulationObject(update.tile->GetPos());
@@ -143,6 +158,11 @@ int Grid::Simulate() {
 #else
     ProcessUpdateEvent(update);
 #endif
+    if (enableEdgeCheck) {
+      currentTickVisitedEdges.insert(
+          SignalEdge{update.tile->GetPos(), update.event.sourcePos});
+    }
+
     updatesProcessed++;
   }
   return updatesProcessed;
