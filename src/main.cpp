@@ -258,6 +258,7 @@ class Game : public olc::PixelGameEngine {
 
   void ClearBuffer() {
     tileBuffer.clear();
+    CalculateTileBufferBoxSize();
     // std::cout << "Cleared tile buffer" << std::endl;
   }
 
