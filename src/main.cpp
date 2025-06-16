@@ -19,21 +19,6 @@ class Game : public olc::PixelGameEngine {
     sAppName = std::format(appNameBaseFmt, "New File");
   }
   ~Game() {}
-  void PrintClassSizes() {
-    ConsoleOut() << "\n=== Class Memory Sizes ===\n";
-    ConsoleOut() << "Base GridTile: " << sizeof(GridTile) << " bytes\n";
-    ConsoleOut() << "WireGridTile: " << sizeof(WireGridTile) << " bytes\n";
-    ConsoleOut() << "JunctionGridTile: " << sizeof(JunctionGridTile)
-                 << " bytes\n";
-    ConsoleOut() << "EmitterGridTile: " << sizeof(EmitterGridTile)
-                 << " bytes\n";
-    ConsoleOut() << "SemiConductorGridTile: " << sizeof(SemiConductorGridTile)
-                 << " bytes\n";
-    ConsoleOut() << "ButtonGridTile: " << sizeof(ButtonGridTile) << " bytes\n";
-    ConsoleOut() << "SignalEvent: " << sizeof(SignalEvent) << " bytes\n";
-    ConsoleOut() << "UpdateEvent: " << sizeof(UpdateEvent) << " bytes\n";
-    ConsoleOut() << "============================\n\n";
-  }
   bool SetStartFile(const std::filesystem::path& path) {
     if (std::filesystem::exists(path)) {
       curFilename = path;
@@ -93,11 +78,6 @@ class Game : public olc::PixelGameEngine {
 #ifndef DEBUG 
     // Capturing stdout to console (Release only)
     ConsoleCaptureStdOut(true);
-#endif
-
-#ifdef DEBUG
-    // Print class sizes
-    PrintClassSizes();
 #endif
 
     gameLayer = CreateLayer();  // initialized as a black screen
