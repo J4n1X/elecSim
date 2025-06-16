@@ -1,6 +1,5 @@
 #include "GridTileTypes.h"
 
-#include <cmath>
 #include <ranges>
 
 namespace ElecSim {

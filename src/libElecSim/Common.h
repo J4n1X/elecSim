@@ -66,7 +66,7 @@ constexpr int GRIDTILE_BYTESIZE =
     sizeof(int) * 4;  // TileId + Facing + PosX + PosY
 
 enum class Direction { Top = 0, Right = 1, Bottom = 2, Left = 3, Count = 4 };
-std::string_view DirectionToString(Direction dir);
+const char* DirectionToString(Direction dir);
 
 static constexpr std::array<Direction, static_cast<int>(Direction::Count)>
     AllDirections = {Direction::Top, Direction::Right, Direction::Bottom,

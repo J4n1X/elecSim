@@ -1,7 +1,4 @@
 #include "v2d.h"
-#include <cmath>
-#include <algorithm>
-#include <string>
 
 // Note: Most functions in v2d.h are template functions or constexpr functions
 // that should remain in the header file for optimal performance and to avoid

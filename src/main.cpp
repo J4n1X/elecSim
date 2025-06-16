@@ -1,11 +1,11 @@
-#include <algorithm>
-
 #include "ControlManager.h"
 #include "Grid.h"
 #include "GridTileTypes.h"
 #include "MessageBox.h"
 #include "nfd.hpp"
 #include "olcPixelGameEngine.h"
+
+#include <ranges>
 
 using namespace ElecSim;
 
@@ -33,7 +33,7 @@ class Game : public olc::PixelGameEngine {
   static const olc::vf2d defaultRenderOffset;
   static constexpr float minRenderScale = 12.0f;
   static constexpr float maxRenderScale = 256.0f;
-  static constexpr std::string_view appNameBaseFmt =
+  static constexpr const char* appNameBaseFmt =
       "Electricity Simulator - {}";
 
   // --- Layer indices ---
@@ -575,7 +575,7 @@ class Game : public olc::PixelGameEngine {
     if (tileBuffer.empty()) {
       ss << "Empty";
     } else if (tileBuffer.size() == 1) {
-      ss << tileBuffer[0]->TileTypeName().data();
+      ss << tileBuffer[0]->TileTypeName();
     } else {
       ss << tileBuffer.size() << " tiles";
 

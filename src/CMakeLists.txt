@@ -7,8 +7,6 @@ file(GLOB CXXFILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 add_executable(elecSim ${CXXFILES})
 target_link_libraries(elecSim PRIVATE libElecSim engine)
 
-# Enable precompiled headers for faster compilation
-target_precompile_headers(elecSim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/pch.h)
 # Warnings
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(elecSim PRIVATE -Wall -Wextra -Wpedantic)

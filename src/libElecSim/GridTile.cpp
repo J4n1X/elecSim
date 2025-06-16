@@ -1,7 +1,5 @@
 #include "GridTile.h"
 
-#include <cmath>
-
 #include "GridTileTypes.h"
 
 namespace ElecSim {

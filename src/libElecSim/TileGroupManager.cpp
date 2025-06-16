@@ -1,6 +1,5 @@
 #include "TileGroupManager.h"
 
-#include <algorithm>
 #include <format>
 #include <iostream>
 #include <ranges>

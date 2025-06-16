@@ -1,6 +1,3 @@
-#include "olcPixelGameEngine.h"
-#include "extensions/olcPGEX_QuickGUI.h"
-
 #include "MessageBox.h"
 
 MessageBoxGui::MessageBoxGui(olc::PixelGameEngine* pge, std::string labelText, float scale, bool enabled){

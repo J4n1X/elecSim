@@ -2,8 +2,6 @@
 
 #include <array>
 #include <string>
-#include <string_view>
-#include <unordered_set>
 #include <vector>
 
 #include "Common.h"
@@ -74,7 +72,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
   bool CanOutputTo(Direction dir) const { return canOutput[dir]; }
 
-  virtual std::string_view TileTypeName() const = 0;
+  virtual constexpr const char* TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
   virtual bool IsDeterministic() const = 0;
   virtual int GetTileTypeId() const = 0;

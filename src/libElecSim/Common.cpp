@@ -15,7 +15,7 @@ bool PositionEqual::operator()(const olc::vi2d& lhs,
 }
 
 
-std::string_view DirectionToString(Direction dir) {
+const char* DirectionToString(Direction dir) {
   switch (dir) {
     case Direction::Top:
       return "Top";
