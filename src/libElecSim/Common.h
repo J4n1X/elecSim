@@ -5,58 +5,23 @@
 #include <memory>
 #include <tuple>
 
-#include "olcPixelGameEngine.h"
+#include "v2d.h"
 
-// Formatter for olc::v_2d
-template <typename T>
-struct std::formatter<olc::v_2d<T>, char> {
-  int decimals = 0;  // Number of decimal places to format
-
-  constexpr std::format_parse_context::iterator parse(
-      std::format_parse_context& ctx) {
-    auto it = ctx.begin();
-    auto end = ctx.end();
-    // Check for an opening brace for format specifiers
-    if (it != end && *it == ':') {
-      ++it;  // Consume the ':'
-      // If we have a number here, that's the number of decimals
-      while (it != end && std::isdigit(*it)) {
-        decimals = decimals * 10 + (*it - '0');
-        ++it;
-      }
-      // Loop until a '}' or end of string, consuming characters
-      while (it != end && *it != '}') {
-        ++it;
-      }
-    }
-
-    // Return the iterator to the end of the format specifier.
-    return it;
-  }
-  std::format_context::iterator format(const olc::v_2d<T>& vec,
-                                       std::format_context& ctx) const {
-    if constexpr (std::is_floating_point_v<T>) {
-      if (decimals >= 0) {
-        return std::format_to(ctx.out(), "({:.{}f}, {:.{}f})", vec.x, decimals,
-                              vec.y, decimals);
-      }
-    } else {
-      return std::format_to(ctx.out(), "({}, {})", vec.x, vec.y);
-    }
-  }
-};
+// Check if constraint is satisfied for all these types.
+template<typename T, typename... Ts>
+concept SameAsAny = (... || std::same_as<T, Ts>);
 
 namespace ElecSim {
 
-// Hash functor for olc::vi2d to use in unordered sets/maps
+// Hash functor for vi2d to use in unordered sets/maps
 struct PositionHash {
   using is_avalanching = void;
-  std::size_t operator()(const olc::vi2d& pos) const;
+  std::size_t operator()(const vi2d& pos) const;
 };
 
-// Equals functor for olc::vi2d
+// Equals functor for vi2d
 struct PositionEqual {
-  bool operator()(const olc::vi2d& lhs, const olc::vi2d& rhs) const;
+  bool operator()(const vi2d& lhs, const vi2d& rhs) const;
 };
 
 // Forward declaration to avoid circular includes
@@ -110,11 +75,11 @@ struct TileSideStates
 Direction FlipDirection(Direction dir);
 
 struct SignalEvent {
-  olc::vi2d sourcePos;
+  vi2d sourcePos;
   Direction fromDirection;
   bool isActive;
 
-  SignalEvent(olc::vi2d pos, Direction toDirection, bool active);
+  SignalEvent(vi2d pos, Direction toDirection, bool active);
 
   // Add a copy constructor to ensure the visitedPositions gets copied
   SignalEvent(const SignalEvent& other);
@@ -132,6 +97,6 @@ struct UpdateEvent {
   bool operator<(const UpdateEvent& other) const;
 };
 
-olc::vi2d TranslatePosition(olc::vi2d pos, Direction dir);
-Direction DirectionFromVectors(olc::vi2d from, olc::vi2d to);
+vi2d TranslatePosition(vi2d pos, Direction dir);
+Direction DirectionFromVectors(vi2d from, vi2d to);
 }  // namespace ElecSim

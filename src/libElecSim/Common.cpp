@@ -3,14 +3,14 @@
 
 namespace ElecSim {
 // Implementation of PositionHash::operator()
-std::size_t PositionHash::operator()(const olc::vi2d& pos) const {
+std::size_t PositionHash::operator()(const vi2d& pos) const {
   using ankerl::unordered_dense::detail::wyhash::hash;
-  return hash(&pos, sizeof(olc::vi2d));
+  return hash(&pos, sizeof(vi2d));
 }
 
 // Implementation of PositionEqual::operator()
-bool PositionEqual::operator()(const olc::vi2d& lhs,
-                               const olc::vi2d& rhs) const {
+bool PositionEqual::operator()(const vi2d& lhs,
+                               const vi2d& rhs) const {
   return lhs == rhs;
 }
 
@@ -67,7 +67,7 @@ Direction FlipDirection(Direction dir) {
   }
 }
 
-SignalEvent::SignalEvent(olc::vi2d pos, Direction toDirection, bool active)
+SignalEvent::SignalEvent(vi2d pos, Direction toDirection, bool active)
     : sourcePos(pos),
       fromDirection(FlipDirection(toDirection)),
       isActive(active) {}
@@ -94,23 +94,23 @@ bool UpdateEvent::operator<(const UpdateEvent& other) const {
   return updateCycleId < other.updateCycleId;
 }
 
-olc::vi2d TranslatePosition(olc::vi2d pos, const Direction dir) {
+vi2d TranslatePosition(vi2d pos, const Direction dir) {
   switch (dir) {
     case Direction::Top:
-      return pos + olc::vi2d(0, -1);
+      return pos + vi2d(0, -1);
     case Direction::Right:
-      return pos + olc::vi2d(1, 0);
+      return pos + vi2d(1, 0);
     case Direction::Bottom:
-      return pos + olc::vi2d(0, 1);
+      return pos + vi2d(0, 1);
     case Direction::Left:
-      return pos + olc::vi2d(-1, 0);
+      return pos + vi2d(-1, 0);
     default:
       return pos;
   }
 }
 
-Direction DirectionFromVectors(olc::vi2d from, olc::vi2d to) {
-  olc::vi2d diff = to - from;
+Direction DirectionFromVectors(vi2d from, vi2d to) {
+  vi2d diff = to - from;
   if (diff.x == 0 && diff.y < 0) return Direction::Top;
   if (diff.x > 0 && diff.y == 0) return Direction::Right;
   if (diff.x == 0 && diff.y > 0) return Direction::Bottom;

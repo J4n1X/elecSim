@@ -8,7 +8,6 @@
 #include "hope.h"
 #define OLC_PGE_APPLICATION
 #include "Grid.h"
-#include "olcPixelGameEngine.h"
 
 const char* prog_name = "Prober";
 const char* prog_desc = "Prober is a tool for simulating elecSim circuits.";
@@ -92,7 +91,7 @@ class TestParser {
   std::string GetCommandString(const Command& command) const {
     return std::format("{} {} {}", 
                       GetCommandTypeString(command.type), 
-                      olc::vi2d(command.x, command.y), 
+                      vi2d(command.x, command.y), 
                       command.value);
   }
 
@@ -144,7 +143,7 @@ class TestParser {
         commands.push_back({CommandType::Read, x, y, v});
         continue;
       }
-    unknown_read:
+    [[maybe_unused]]unknown_read:
       throw std::runtime_error(std::format("Unknown command '{}' at line {}", cmd, lineNum));
     malformed_write:
       throw std::runtime_error(std::format("Malformed write command at line {}", lineNum));
@@ -157,7 +156,8 @@ class TestParser {
   const std::vector<Command>& GetCommands() const { return commands; }
 };
 
-int main(int argc, char** argv) {
+int main([[maybe_unused]]int argc, char** argv) {
+
   hope_t hope = initParser(prog_name, prog_desc);
 
   if (hope_parse_argv(&hope, argv))  // error occurred, print error message
@@ -208,7 +208,7 @@ int main(int argc, char** argv) {
         break;
       case TestParser::CommandType::Read:
         std::cout << std::format("Tile at {}:\n  Expected: {}\n  Actual: ",
-                               olc::vi2d(command.x, command.y), 
+                               vi2d(command.x, command.y), 
                                (command.value ? "active" : "inactive"));
         if (tileMaybe.has_value()) {
           auto tile = tileMaybe.value();

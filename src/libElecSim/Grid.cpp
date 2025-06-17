@@ -195,41 +195,41 @@ void Grid::ResetSimulation() {
 #endif
 }
 
-int Grid::Draw(olc::PixelGameEngine* renderer) {
-  if (!renderer) throw std::runtime_error("Grid has no renderer available");
+// int Grid::Draw(olc::PixelGameEngine* renderer) {
+//   if (!renderer) throw std::runtime_error("Grid has no renderer available");
 
-  // Clear Background
-  renderer->SetDrawTarget(gameLayer);
-  renderer->Clear(backgroundColor);
+//   // Clear Background
+//   renderer->SetDrawTarget(gameLayer);
+//   renderer->Clear(backgroundColor);
 
-  // Tiles exclusively render as decals.
+//   // Tiles exclusively render as decals.
 
-  // Draw tiles
-  // This spriteSize causes overdraw all the time, but without it, we get
-  // pixel gaps Update: Now that we use decals, this is a non-issue.
+//   // Draw tiles
+//   // This spriteSize causes overdraw all the time, but without it, we get
+//   // pixel gaps Update: Now that we use decals, this is a non-issue.
 
-  auto spriteSize = std::ceil(renderScale);
-  int drawnTiles = 0;
+//   auto spriteSize = std::ceil(renderScale);
+//   int drawnTiles = 0;
 
-  for (const auto& [pos, tile] : tiles) {
-    if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
+//   for (const auto& [pos, tile] : tiles) {
+//     if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
 
-    olc::vf2d screenPos = WorldToScreenFloating(pos);
-    // Is this tile even visible?
-    if (screenPos.x + spriteSize <= 0 || screenPos.x >= renderWindow.x ||
-        screenPos.y + spriteSize <= 0 || screenPos.y >= renderWindow.y) {
-      continue;  // If not, why even draw it?
-    }
+//     olc::vf2d screenPos = WorldToScreenFloating(pos);
+//     // Is this tile even visible?
+//     if (screenPos.x + spriteSize <= 0 || screenPos.x >= renderWindow.x ||
+//         screenPos.y + spriteSize <= 0 || screenPos.y >= renderWindow.y) {
+//       continue;  // If not, why even draw it?
+//     }
 
-    tile->Draw(renderer, screenPos, spriteSize);
-    drawnTiles++;
-  }
+//     //tile->Draw(renderer, screenPos, spriteSize);
+//     drawnTiles++;
+//   }
 
-  // Highlight drawing has been moved to the Game class
-  return drawnTiles;
-}
+//   // Highlight drawing has been moved to the Game class
+//   return drawnTiles;
+// }
 
-void Grid::SetTile(olc::vi2d pos, std::unique_ptr<GridTile> tile) {
+void Grid::SetTile(vi2d pos, std::unique_ptr<GridTile> tile) {
   tile->SetPos(pos);
   auto [mapElement, inserted] = tiles.insert_or_assign(pos, std::move(tile));
   if (mapElement->second->IsEmitter()) {
@@ -237,37 +237,40 @@ void Grid::SetTile(olc::vi2d pos, std::unique_ptr<GridTile> tile) {
   }
   fieldIsDirty = true;  // Mark the field as modified
 }
+// TODO: These need to be moved into the game class or somewhere similar, like
+// the RenderManager.
+//olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
+//  return olc::vf2d((pos.x * renderScale) + renderOffset.x,
+//                   (pos.y * renderScale) + renderOffset.y);
+//}
+//
+//olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
+//  auto screenPosFloating = WorldToScreenFloating(pos);
+//  return olc::vi2d(static_cast<int>(std::floor(screenPosFloating.x)),
+//                   static_cast<int>(std::floor(screenPosFloating.y)));
+//}
+//
+//olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
+//  return olc::vf2d((pos.x - renderOffset.x) / renderScale,
+//                   (pos.y - renderOffset.y) / renderScale);
+//}
+//
 
-olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
-  return olc::vf2d((pos.x * renderScale) + renderOffset.x,
-                   (pos.y * renderScale) + renderOffset.y);
-}
 
-olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
-  auto screenPosFloating = WorldToScreenFloating(pos);
-  return olc::vi2d(static_cast<int>(std::floor(screenPosFloating.x)),
-                   static_cast<int>(std::floor(screenPosFloating.y)));
-}
-
-olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
-  return olc::vf2d((pos.x - renderOffset.x) / renderScale,
-                   (pos.y - renderOffset.y) / renderScale);
-}
-
-olc::vi2d Grid::AlignToGrid(const olc::vf2d& pos) {
-  return olc::vf2d(static_cast<int>(std::floor(pos.x)),
+vi2d Grid::AlignToGrid(const vf2d& pos) {
+  return vi2d(static_cast<int>(std::floor(pos.x)),
                    static_cast<int>(std::floor(pos.y)));
 }
 
-std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(olc::vi2d pos) {
+std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(vi2d pos) {
   auto tileIt = tiles.find(pos);
   return tileIt != tiles.end() ? std::optional{tileIt->second} : std::nullopt;
 }
 
-std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(olc::vi2d startPos,
-                                                        olc::vi2d endPos) {
-  olc::vi2d topLeft = startPos.min(endPos);
-  olc::vi2d bottomRight = startPos.max(endPos);
+std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(vi2d startPos,
+                                                        vi2d endPos) {
+  vi2d topLeft = startPos.min(endPos);
+  vi2d bottomRight = startPos.max(endPos);
 
   // Replace this complex view chain with a simple loop
   std::vector<std::weak_ptr<GridTile>> result;

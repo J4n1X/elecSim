@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "Common.h"
-#include "olcPixelGameEngine.h"
+#include "v2d.h"
 
 namespace ElecSim {
 // Base tile class
@@ -15,28 +15,32 @@ namespace ElecSim {
 // right now.
 class GridTile : public std::enable_shared_from_this<GridTile> {
  protected:
-  olc::vi2d pos;
+  vi2d pos;
   Direction facing;
-  float size;
   bool activated;
   bool defaultActivation;
-  olc::Pixel inactiveColor;
-  olc::Pixel activeColor;
   TileSideStates canReceive;
   TileSideStates canOutput;
   TileSideStates inputStates;
 
  public:
-  GridTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
-           Direction facing = Direction::Top, float size = 1.0f,
-           bool defaultActivation = false,
-           olc::Pixel inactiveColor = olc::BLACK,
-           olc::Pixel activeColor = olc::BLACK);
+  GridTile(vi2d pos = vi2d(0.0f, 0.0f),
+           Direction facing = Direction::Top, bool defaultActivation = false);
+
+  // Copy constructor
+  GridTile(const GridTile& other);
+
+  // Move constructor
+  GridTile(GridTile&& other) noexcept;
+
+  // Copy assignment operator
+  GridTile& operator=(const GridTile& other);
 
   virtual ~GridTile() {};
 
-  virtual void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
-                    float screenSize, int alpha = 255);
+  // Removed.
+  // virtual void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
+  //                  float screenSize, int alpha = 255);
 
   // For tiles that need it, this provides interaction logic.
   virtual std::vector<SignalEvent> Init() { return {}; };
@@ -50,7 +54,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual std::vector<SignalEvent> PreprocessSignal(
       const SignalEvent incomingSignal) = 0;
 
-  void SetPos(olc::vi2d newPos) { pos = newPos; }
+  void SetPos(vi2d newPos) { pos = newPos; }
   void SetActivation(bool newActivated) { activated = newActivated; }
   void SetFacing(Direction newFacing);
   void SetDefaultActivation(bool newDefault) { defaultActivation = newDefault; }
@@ -64,8 +68,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 
   bool GetActivation() const { return activated; }
   bool GetDefaultActivation() const { return defaultActivation; }
-  const olc::vi2d& GetPos() const { return pos; }
-  float GetSize() const { return size; }
+  const vi2d& GetPos() const { return pos; }
   const Direction& GetFacing() const { return facing; }
   std::string GetTileInformation() const;
 
@@ -77,21 +80,18 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual bool IsDeterministic() const = 0;
   virtual int GetTileTypeId() const = 0;
 
-  // Virtual clone method for copying tiles
-  virtual std::unique_ptr<GridTile> Clone() const = 0;  std::array<char, GRIDTILE_BYTESIZE> Serialize();
+  // Pure virtual clone method - must be implemented by all derived classes
+  [[nodiscard]] virtual std::unique_ptr<GridTile> Clone() const = 0;
+
+  std::array<char, GRIDTILE_BYTESIZE> Serialize();
   static std::unique_ptr<GridTile> Deserialize(
       std::array<char, GRIDTILE_BYTESIZE> data);
-  // Helper function to get the triangle points
-  static std::array<olc::vf2d, 3> GetTrianglePoints(olc::vf2d screenPos,
-                                                    int screenSize,
-                                                    Direction facing);
 
  protected:
   // Convert between world and tile-relative coordinate systems
   Direction WorldToTileDirection(Direction worldDir) const;
   Direction TileToWorldDirection(Direction tileDir) const;
 
- private:
 };
 
 // This is a mere overlay of GridTile, and just implements the functions typical
@@ -99,13 +99,10 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 // and can be used in deterministic simulations.
 class DeterministicTile : public GridTile {
  public:
-  explicit DeterministicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
-                    Direction facing = Direction::Top, float size = 1.0f,
-                    bool defaultActivation = false,
-                    olc::Pixel inactiveColor = olc::BLACK,
-                    olc::Pixel activeColor = olc::BLACK)
-      : GridTile(pos, facing, size, defaultActivation, inactiveColor,
-                 activeColor) {}
+  explicit DeterministicTile(vi2d pos = vi2d(0.0f, 0.0f),
+                             Direction facing = Direction::Top,
+                             bool defaultActivation = false)
+      : GridTile(pos, facing, defaultActivation) {}
 
   bool IsDeterministic() const override { return true; }
   bool IsEmitter() const override { return false; }
@@ -113,13 +110,10 @@ class DeterministicTile : public GridTile {
 
 class LogicTile : public GridTile {
  public:
-  explicit LogicTile(olc::vi2d pos = olc::vf2d(0.0f, 0.0f),
-            Direction facing = Direction::Top, float size = 1.0f,
-            bool defaultActivation = false,
-            olc::Pixel inactiveColor = olc::BLACK,
-            olc::Pixel activeColor = olc::BLACK)
-      : GridTile(pos, facing, size, defaultActivation, inactiveColor,
-                 activeColor) {}
+  explicit LogicTile(vi2d pos = vi2d(0.0f, 0.0f),
+                     Direction facing = Direction::Top,
+                     bool defaultActivation = false)
+      : GridTile(pos, facing, defaultActivation) {}
   bool IsDeterministic() const override { return false; }
   std::vector<SignalEvent> PreprocessSignal(
       [[maybe_unused]] const SignalEvent incomingSignal) override {

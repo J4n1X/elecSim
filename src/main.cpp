@@ -1,11 +1,14 @@
+#include <ranges>
+
 #include "ControlManager.h"
+#include "Drawables.h"
 #include "Grid.h"
 #include "GridTileTypes.h"
 #include "MessageBox.h"
+#include "RenderManager.h"
 #include "nfd.hpp"
 #include "olcPixelGameEngine.h"
-
-#include <ranges>
+#include "v2d.h"
 
 using namespace ElecSim;
 
@@ -29,12 +32,12 @@ class Game : public olc::PixelGameEngine {
 
  private:
   // --- Constants ---
+  // TODO: Anything with rendering must be moved into the RenderManager
   static constexpr float defaultRenderScale = 32.0f;
   static const olc::vf2d defaultRenderOffset;
   static constexpr float minRenderScale = 12.0f;
   static constexpr float maxRenderScale = 256.0f;
-  static constexpr const char* appNameBaseFmt =
-      "Electricity Simulator - {}";
+  static constexpr const char* appNameBaseFmt = "Electricity Simulator - {}";
 
   // --- Layer indices ---
   int uiLayer = 0;
@@ -63,19 +66,19 @@ class Game : public olc::PixelGameEngine {
   olc::Pixel highlightColor = olc::RED;
 
   // --- Placement logic ---
-  olc::vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
-  olc::vi2d lastPlacedPos = {0, 0};        // Prevents overwriting same tile
+  vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
+  vi2d lastPlacedPos = {0, 0};        // Prevents overwriting same tile
   std::vector<std::unique_ptr<GridTile>>
       tileBuffer;  // Selected tiles for operations (stored as unique_ptr
                    // copies)
-  olc::vi2d tileBufferBoxSize = {
+  vi2d tileBufferBoxSize = {
       0, 0};  // Size of the tile buffer box (calculated when copies are made)
   int selectedBrushIndex = 1;
   Direction selectedBrushFacing = Direction::Top;
 
   // --- Initialization ---
   bool OnUserCreate() override {
-#ifndef DEBUG 
+#ifndef DEBUG
     // Capturing stdout to console (Release only)
     ConsoleCaptureStdOut(true);
 #endif
@@ -90,8 +93,7 @@ class Game : public olc::PixelGameEngine {
     EnableLayer((uint8_t)uiLayer, true);
     EnableLayer((uint8_t)gameLayer, true);
 
-    grid = Grid(ScreenWidth(), ScreenHeight(), defaultRenderScale,
-                defaultRenderOffset, gameLayer);
+    grid = Grid();
 
     if (curFilename.empty()) {
       curFilename =
@@ -134,6 +136,7 @@ class Game : public olc::PixelGameEngine {
     };
 
     auto newTile = createTile();
+
     if (!newTile) {
       return;  // No valid selection
     }
@@ -153,11 +156,11 @@ class Game : public olc::PixelGameEngine {
       return;
     }
 
-    olc::vi2d minPos = {INT_MAX, INT_MAX};
-    olc::vi2d maxPos = {INT_MIN, INT_MIN};
+    vi2d minPos = {INT_MAX, INT_MAX};
+    vi2d maxPos = {INT_MIN, INT_MIN};
 
     for (const auto& tile : tileBuffer) {
-      olc::vi2d pos = tile->GetPos();
+      vi2d pos = tile->GetPos();
       minPos.x = std::min(minPos.x, pos.x);
       minPos.y = std::min(minPos.y, pos.y);
       maxPos.x = std::max(maxPos.x, pos.x);
@@ -172,15 +175,14 @@ class Game : public olc::PixelGameEngine {
   }
 
   void JustifyBufferTiles() {
-    olc::vi2d minPos = std::ranges::fold_right(
-        tileBuffer, olc::vi2d{INT_MAX, INT_MAX},
-        [](const auto& tile, const olc::vi2d& acc) {
-          return olc::vi2d{std::min(acc.x, tile->GetPos().x),
-                           std::min(acc.y, tile->GetPos().y)};
+    vi2d minPos = std::ranges::fold_right(
+        tileBuffer, vi2d{INT_MAX, INT_MAX},
+        [](const auto& tile, const vi2d& acc) {
+          return vi2d{std::min(acc.x, tile->GetPos().x),
+                      std::min(acc.y, tile->GetPos().y)};
         });
     for (auto& tile : tileBuffer) {
-      auto clampedMinPos =
-          olc::vi2d{std::max(0, minPos.x), std::max(0, minPos.y)};
+      auto clampedMinPos = vi2d{std::max(0, minPos.x), std::max(0, minPos.y)};
       auto newPos = tile->GetPos() - clampedMinPos;
       tile->SetPos(newPos);
     }
@@ -198,7 +200,7 @@ class Game : public olc::PixelGameEngine {
   // But a rotation matrix does not support non-square matrices.
   // Thus, we expand into a square matrix, and then, in the end, justify.
   void RotateBufferTiles() {
-    olc::vi2d maxPos = {INT_MIN, INT_MIN};
+    vi2d maxPos = {INT_MIN, INT_MIN};
 
     // Rotate all tiles in the buffer to the next facing direction
     Direction newFacing =
@@ -211,7 +213,7 @@ class Game : public olc::PixelGameEngine {
     selectedBrushFacing = newFacing;
 
     for (const auto& tile : tileBuffer) {
-      olc::vi2d pos = tile->GetPos();
+      vi2d pos = tile->GetPos();
       maxPos.x = std::max(maxPos.x, pos.x);
       maxPos.y = std::max(maxPos.y, pos.y);
     }
@@ -221,9 +223,9 @@ class Game : public olc::PixelGameEngine {
 
     // Apply rotation to each tile
     for (auto& tile : tileBuffer) {
-      olc::vi2d rotatedRelPos = {0, 0};
+      vi2d rotatedRelPos = {0, 0};
       int newX = 0, newY = 0;
-      olc::vi2d relPos = tile->GetPos();
+      vi2d relPos = tile->GetPos();
       newY = relPos.x;
       newX = farOffset - relPos.y;
       rotatedRelPos.x = std::abs(newX);
@@ -246,7 +248,7 @@ class Game : public olc::PixelGameEngine {
 
   // --- Event handling method for ControlManager ---
   void HandleGameEvent(Engine::GameStates::Event event, float deltaTime,
-                       olc::vi2d& highlightWorldPos) {
+                       const vi2d& highlightWorldPos) {
     using enum Engine::GameStates::Event;
     switch (event) {
       // General events
@@ -277,20 +279,21 @@ class Game : public olc::PixelGameEngine {
         break;
 
       // Camera events
+      // TODO: Now broken due to complete detachment of libElecSim. Fix.
       case CameraMoveUp:
-        HandleCameraMove(0.0f, 30.f * grid.GetRenderScale() * deltaTime);
+        // HandleCameraMove(0.0f, 30.f * grid.GetRenderScale() * deltaTime);
         break;
 
       case CameraMoveDown:
-        HandleCameraMove(0.0f, -30.f * grid.GetRenderScale() * deltaTime);
+        // HandleCameraMove(0.0f, -30.f * grid.GetRenderScale() * deltaTime);
         break;
 
       case CameraMoveLeft:
-        HandleCameraMove(30.f * grid.GetRenderScale() * deltaTime, 0.0f);
+        // HandleCameraMove(30.f * grid.GetRenderScale() * deltaTime, 0.0f);
         break;
 
       case CameraMoveRight:
-        HandleCameraMove(-30.f * grid.GetRenderScale() * deltaTime, 0.0f);
+        // HandleCameraMove(-30.f * grid.GetRenderScale() * deltaTime, 0.0f);
         break;
 
       case CameraZoomIn:
@@ -299,15 +302,15 @@ class Game : public olc::PixelGameEngine {
         break;
 
       case CameraReset:
-        grid.SetRenderOffset(defaultRenderOffset);
-        grid.SetRenderScale(defaultRenderScale);
+        // grid.SetRenderOffset(defaultRenderOffset);
+        // grid.SetRenderScale(defaultRenderScale);
         break;
 
       case CameraPan: {
         auto panDelta =
             controlManager.GetMousePosition() - controlManager.GetPanStartPos();
-        grid.SetRenderOffset(
-            (grid.GetRenderOffset() - panDelta / grid.GetRenderScale()));
+        // grid.SetRenderOffset(
+        //     (grid.GetRenderOffset() - panDelta / grid.GetRenderScale()));
         break;
       }
 
@@ -393,23 +396,26 @@ class Game : public olc::PixelGameEngine {
 
   // --- Helper methods for camera movement ---
   void HandleCameraMove(float deltaX, float deltaY) {
-    grid.SetRenderOffset(grid.GetRenderOffset() + olc::vf2d(deltaX, deltaY));
+    // TODO: This is now broken due to complete detachment of libElecSim.
+    // grid.SetRenderOffset(grid.GetRenderOffset() + olc::vf2d(deltaX, deltaY));
   }
 
   void HandleCameraZoom(int direction) {
-    olc::vf2d hoverWorldPos = grid.ScreenToWorld(
-        static_cast<olc::vi2d>(controlManager.GetMousePosition()));
-    float renderScale = grid.GetRenderScale();
-
-    float newScale = std::clamp(renderScale + (direction * renderScale * 0.1f),
-                                minRenderScale, maxRenderScale);
-    grid.SetRenderScale(newScale);
-
-    olc::vf2d afterZoomPos = grid.ScreenToWorld(
-        static_cast<olc::vi2d>(controlManager.GetMousePosition()));
-    olc::vf2d newOffset =
-        grid.GetRenderOffset() + (afterZoomPos - hoverWorldPos) * newScale;
-    grid.SetRenderOffset(newOffset);
+    // TODO: This is now broken due to complete detachment of libElecSim.
+    // olc::vf2d hoverWorldPos = grid.ScreenToWorld(
+    //     static_cast<olc::vi2d>(controlManager.GetMousePosition()));
+    // float renderScale = grid.GetRenderScale();
+    //
+    // float newScale = std::clamp(renderScale + (direction * renderScale *
+    // 0.1f),
+    //                            minRenderScale, maxRenderScale);
+    // grid.SetRenderScale(newScale);
+    //
+    // olc::vf2d afterZoomPos = grid.ScreenToWorld(
+    //    static_cast<olc::vi2d>(controlManager.GetMousePosition()));
+    // olc::vf2d newOffset =
+    //    grid.GetRenderOffset() + (afterZoomPos - hoverWorldPos) * newScale;
+    // grid.SetRenderOffset(newOffset);
   }
 
   bool SaveGrid() {
@@ -467,7 +473,7 @@ class Game : public olc::PixelGameEngine {
   }
 
   // --- Tile selection and clipboard operations ---
-  void CopyTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
+  void CopyTiles(const vi2d& startIndex, const vi2d& endIndex) {
     // This sets the original facing direction to Top
     selectedBrushFacing = Direction::Top;
 
@@ -490,28 +496,28 @@ class Game : public olc::PixelGameEngine {
     CalculateTileBufferBoxSize();
   }
 
-  void PasteTiles(const olc::vi2d& pastePosition) {
+  void PasteTiles(const vi2d& pastePosition) {
     auto uniqueTiles =
         tileBuffer |
         std::views::transform([&](const auto& tile) { return tile->Clone(); });
-    grid.SetSelection(pastePosition, uniqueTiles);
+    //grid.SetSelection(pastePosition, uniqueTiles);
 
     unsavedChanges = true;
   }
 
-  void CutTiles(const olc::vi2d& startIndex, const olc::vi2d& endIndex) {
+  void CutTiles(const vi2d& startIndex, const vi2d& endIndex) {
     // First copy the tiles to buffer
     CopyTiles(startIndex, endIndex);
 
     // Then delete them from the grid
     // Ensure startIndex is actually the top-left corner
-    olc::vi2d topLeft = startIndex.min(endIndex);
-    olc::vi2d bottomRight = startIndex.max(endIndex);
+    vi2d topLeft = startIndex.min(endIndex);
+    vi2d bottomRight = startIndex.max(endIndex);
 
     // Delete all tiles in the selection rectangle
     for (int y = topLeft.y; y <= bottomRight.y; y++) {
       for (int x = topLeft.x; x <= bottomRight.x; x++) {
-        olc::vi2d pos(x, y);
+        vi2d pos(x, y);
         grid.EraseTile(pos);
       }
     }
@@ -521,52 +527,55 @@ class Game : public olc::PixelGameEngine {
   // Draw the current buffer tiles half transparent (preview)
   // TODO: We should move the scale variables out of the Grid, it has no right
   // to manage those
-  void DrawTilePreviews(olc::vi2d highlightWorldPos) {
+  void DrawTilePreviews(vi2d highlightWorldPos) {
     if (!tileBuffer.empty() && !selectionActive) {
       // Then draw each tile with transparency
       for (const auto& tile : tileBuffer) {
         // Calculate position for preview
         auto previewPos = tile->GetPos() + highlightWorldPos;
         // Draw with transparency
-        tile->Draw(this, grid.WorldToScreen(previewPos), grid.GetRenderScale(),
-                   128);
+        // tile->Draw(this, grid.WorldToScreen(previewPos),
+        // grid.GetRenderScale(),
+        //           128);
       }
     }
   }
 
-  void DrawHighlight(olc::vi2d highlightWorldPos) {
-    if (tileBufferBoxSize == olc::vi2d(0, 0)) {
-      return;
-    }
-    if (selectionActive) {
-      olc::vi2d start = selectionStartIndex;
-      olc::vi2d end = highlightWorldPos;
-      // Ensure start is the top-left and end is the bottom-right
-      // We also need to encount for entering the negative domain
-      olc::vi2d topLeft = start.min(end);
-      olc::vi2d bottomRight = start.max(end);
-
-      olc::vi2d gridSize = bottomRight - topLeft + olc::vi2d(1, 1);
-      if (gridSize.x < 0 || gridSize.y < 0) {
-        throw std::runtime_error(
-            "Selection rectangle has negative size, this should never happen");
-      }
-      olc::vf2d posScreen = grid.WorldToScreenFloating(topLeft);
-      olc::vf2d sizeScreen = {gridSize.x * grid.GetRenderScale(),
-                              gridSize.y * grid.GetRenderScale()};
-      SetDrawTarget(uiLayer);
-      DrawRectDecal(posScreen, sizeScreen, highlightColor);
-    } else {
-      SetDrawTarget(uiLayer);
-      DrawRectDecal(grid.WorldToScreenFloating(highlightWorldPos),
-                    tileBufferBoxSize * grid.GetRenderScale(), highlightColor);
-    }
+  void DrawHighlight(vi2d highlightWorldPos) {
+    // if (tileBufferBoxSize == vi2d(0, 0)) {
+    //   return;
+    // }
+    // if (selectionActive) {
+    //   vi2d start = selectionStartIndex;
+    //   vi2d end = highlightWorldPos;
+    //   // Ensure start is the top-left and end is the bottom-right
+    //   // We also need to encount for entering the negative domain
+    //   vi2d topLeft = start.min(end);
+    //   vi2d bottomRight = start.max(end);
+    //
+    //  vi2d gridSize = bottomRight - topLeft + vi2d(1, 1);
+    //  if (gridSize.x < 0 || gridSize.y < 0) {
+    //    throw std::runtime_error(
+    //        "Selection rectangle has negative size, this should never
+    //        happen");
+    //  }
+    //  olc::vf2d posScreen = grid.WorldToScreenFloating(topLeft);
+    //  olc::vf2d sizeScreen = {gridSize.x * grid.GetRenderScale(),
+    //                          gridSize.y * grid.GetRenderScale()};
+    //  SetDrawTarget(uiLayer);
+    //  DrawRectDecal(posScreen, sizeScreen, highlightColor);
+    //} else {
+    //  SetDrawTarget(uiLayer);
+    //  DrawRectDecal(grid.WorldToScreenFloating(highlightWorldPos),
+    //                tileBufferBoxSize * grid.GetRenderScale(),
+    //                highlightColor);
+    //}
   }
 
   uint64_t drawTimeMicros = 0;
   uint64_t simTimeMicros = 0;
 
-  void DrawStatusString(olc::vi2d highlightWorldPos, int drawnTilesCount) {
+  void DrawStatusString(vi2d highlightWorldPos, int drawnTilesCount) {
     // Status string
     std::stringstream ss;
     ss << highlightWorldPos << "; "
@@ -621,6 +630,41 @@ class Game : public olc::PixelGameEngine {
     DrawString(olc::vi2d(0, 0), ss.str(), olc::BLACK, 2);
   }
 
+  size_t RenderAllTiles() {
+    // Draw tiles
+    // This spriteSize causes overdraw all the time, but without it, we get
+    // pixel gaps Update: Now that we use decals, this is a non-issue.
+
+    // auto spriteSize = std::ceil(defaultRenderScale);
+    // int drawnTiles = 0;
+    //
+    // for (const auto& [pos, tile] : grid.GetTiles()) {
+    //   if (!tile)
+    //     throw std::runtime_error("Grid contained entry with empty tile");
+    //
+    //   olc::vf2d screenPos = grid.WorldToScreenFloating(pos);
+    //   olc::vf2d renderWindow = GetWindowSize() / GetPixelSize();
+    //   // Is this tile even visible?
+    //   if (screenPos.x + spriteSize <= 0 || screenPos.x >= renderWindow.x ||
+    //       screenPos.y + spriteSize <= 0 || screenPos.y >= renderWindow.y) {
+    //     continue;  // If not, why even draw it?
+    //   }
+    //   // Attempt cast to Drawable
+    //   auto drawableTile =
+    //       std::dynamic_pointer_cast<Engine::Drawable<olc::PixelGameEngine>>(
+    //           tile);
+    //   if (!drawableTile) {
+    //     throw std::runtime_error(
+    //         "Grid contained entry with non-Drawable tile type");
+    //   }
+    //   drawableTile->Draw(this, vf2d(screenPos.x, screenPos.y), spriteSize,
+    //   255); drawnTiles++;
+    // }
+    //
+    // // Highlight drawing has been moved to the Game class
+    // return drawnTiles;
+  }
+
   bool OnConsoleCommand(const std::string& command) override {
     if (command == "exit") {
       engineRunning = false;
@@ -654,7 +698,7 @@ class Game : public olc::PixelGameEngine {
       }
       int x = std::stoi(args.substr(0, pos));
       int y = std::stoi(args.substr(pos + 1));
-      auto tileOpt = grid.GetTile(olc::vi2d(x, y));
+      auto tileOpt = grid.GetTile(vi2d(x, y));
       if (tileOpt.has_value()) {
         ConsoleOut() << tileOpt.value()->GetTileInformation() << std::endl;
       }
@@ -669,15 +713,15 @@ class Game : public olc::PixelGameEngine {
   bool OnUserUpdate(float fElapsedTime) override {
     // Handle window resizing
     auto curScreenSize = GetWindowSize() / GetPixelSize();
-    if (grid.GetRenderWindow() != curScreenSize) {
-#ifdef DEBUG
-      std::cout << std::format("Window resized to {}x{}", curScreenSize.x,
-                               curScreenSize.y)
-                << std::endl;
-#endif
-      grid.Resize(curScreenSize);
-      SetScreenSize(curScreenSize.x, curScreenSize.y);
-    }
+//    if (grid.GetRenderWindow() != curScreenSize) {
+//#ifdef DEBUG
+//      std::cout << std::format("Window resized to {}x{}", curScreenSize.x,
+//                               curScreenSize.y)
+//                << std::endl;
+//#endif
+//      grid.Resize(curScreenSize);
+//      SetScreenSize(curScreenSize.x, curScreenSize.y);
+//    }
 
     // Simulation step
     accumulatedTime += fElapsedTime;
@@ -711,14 +755,14 @@ class Game : public olc::PixelGameEngine {
 
     // Calculate mouse position and highlight (always needed for drawing)
     auto [selTileXIndex, selTileYIndex] = controlManager.GetMousePosition();
-    olc::vf2d hoverWorldPos =
-        grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
-    olc::vi2d highlightWorldPos = grid.AlignToGrid(hoverWorldPos);
+    //olc::vf2d hoverWorldPos =
+    //    grid.ScreenToWorld(olc::vi2d(selTileXIndex, selTileYIndex));
+    //olc::vi2d highlightWorldPos = grid.AlignToGrid(hoverWorldPos);
 
     if (!unsavedChangesGui.IsEnabled()) {
       const auto& events = controlManager.ProcessInput();
       for (const auto& event : events) {
-        HandleGameEvent(event, fElapsedTime, highlightWorldPos);
+        HandleGameEvent(event, fElapsedTime, {});
       }
     }
     auto guiResult = unsavedChangesGui.Update();
@@ -726,21 +770,26 @@ class Game : public olc::PixelGameEngine {
     // Draw grid and UI
 
     auto drawStartTime = std::chrono::high_resolution_clock::now();
+
+    //&int drawnTiles = grid.Draw(this);
+    SetDrawTarget(gameLayer);
+    Clear(olc::BLUE);
+    size_t drawnTiles = RenderAllTiles();
+
     SetDrawTarget(uiLayer);
     Clear(olc::BLANK);
-    int drawnTiles = grid.Draw(this);
     unsavedChangesGui.Draw();
     if (!unsavedChangesGui.IsEnabled()) {
       // Draw the other GUI elements
       if (paused) {
-        DrawHighlight(highlightWorldPos);
-        DrawTilePreviews(highlightWorldPos);
+        //DrawHighlight(highlightWorldPos);
+        //DrawTilePreviews(highlightWorldPos);
       }
       auto drawEndTime = std::chrono::high_resolution_clock::now();
       drawTimeMicros = std::chrono::duration_cast<std::chrono::microseconds>(
                            drawEndTime - drawStartTime)
                            .count();
-      DrawStatusString(highlightWorldPos, drawnTiles);
+      //DrawStatusString(highlightWorldPos, drawnTiles);
     }
 
     if (guiResult != MessageBoxGui::Result::Nothing) {

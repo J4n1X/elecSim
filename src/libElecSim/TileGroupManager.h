@@ -3,10 +3,11 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <queue>
 
 #include "GridTile.h"
 #include "ankerl/unordered_dense.h"
-#include "olcPixelGameEngine.h"
+#include "v2d.h"
 
 namespace ElecSim {
 #ifdef SIM_PREPROCESSING
@@ -70,10 +71,10 @@ class TileGroupManager {
   // This is a map of all tiles, keyed by their position.
   // The value is a shared pointer to the tile.
   using TileMap =
-      ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<GridTile>,
+      ankerl::unordered_dense::map<vi2d, std::shared_ptr<GridTile>,
                                    PositionHash, PositionEqual>;
   using SimObjMap =
-      ankerl::unordered_dense::map<olc::vi2d, std::shared_ptr<SimulationObject>,
+      ankerl::unordered_dense::map<vi2d, std::shared_ptr<SimulationObject>,
                                    PositionHash, PositionEqual>;
   SimObjMap simulationObjects;
 
@@ -126,7 +127,7 @@ class TileGroupManager {
   void PreprocessTiles(const TileMap& tiles);  // This will preprocess all tiles
                                                // and create simulation objects.
   std::optional<std::shared_ptr<SimulationObject>> const GetSimulationObject(
-      const olc::vi2d& pos) {
+      const vi2d& pos) {
     auto it = simulationObjects.find(pos);
     if (it != simulationObjects.end()) {
       return it->second;
