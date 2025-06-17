@@ -87,3 +87,6 @@ private:
 Beide dieser Prinzipien funktionieren nicht, denn Sie setzen auf Polymorphismus, aber das können wir ehrlich gesagt nicht wirklich machen, und das will ich auch nicht so machen. 
 
 https://www.youtube.com/watch?v=gTNJXVmuRRA Video über Modernes C++ um Virtuelle Funktionen zu eliminieren.
+
+
+Diese Arbeit hat mich so aus dem Konzept gebracht, dass ich nun keine Lust mehr auf olcPixelGameEngine habe. Ich will SFML verwenden.
