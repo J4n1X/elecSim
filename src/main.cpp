@@ -22,11 +22,6 @@ constexpr const static vu2d initialWindowSize = vi2d(1280, 960);
 //   sf::Window window;
 // };
 
-bool isInView(sf::Vector2f pos, const sf::View& view) {
-  // Check if the position is within the view's rectangle
-  return view.getViewport().contains(pos);
-}
-
 int main(int argc, char* argv[]) {
   sf::RenderWindow window(
       sf::VideoMode(Engine::ToSfmlVector(initialWindowSize)), "ElecSim");
@@ -104,11 +99,16 @@ int main(int argc, char* argv[]) {
     window.setView(view);
     window.clear(sf::Color::Blue);
 
-    auto visibleRect = cullingBox.
+
+    sf::FloatRect viewBounds(
+        view.getCenter() - view.getSize() / 2.f,
+        view.getSize()
+    );
+
     auto viewables =
         renderables |
-        std::views::filter([view](const auto& tile) {
-          return true;
+        std::views::filter([viewBounds](const auto& tile) {
+          return viewBounds.findIntersection(tile->getGlobalBounds()).has_value();
         });
     for (const auto& tile : viewables) {
       tile->UpdateVisualState();

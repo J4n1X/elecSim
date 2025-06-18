@@ -212,7 +212,8 @@ void Grid::ResetSimulation() {
 //   int drawnTiles = 0;
 
 //   for (const auto& [pos, tile] : tiles) {
-//     if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
+//     if (!tile) throw std::runtime_error("Grid contained entry with empty
+//     tile");
 
 //     olc::vf2d screenPos = WorldToScreenFloating(pos);
 //     // Is this tile even visible?
@@ -239,27 +240,26 @@ void Grid::SetTile(vi2d pos, std::unique_ptr<GridTile> tile) {
 }
 // TODO: These need to be moved into the game class or somewhere similar, like
 // the RenderManager.
-//olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
+// olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
 //  return olc::vf2d((pos.x * renderScale) + renderOffset.x,
 //                   (pos.y * renderScale) + renderOffset.y);
 //}
 //
-//olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
+// olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
 //  auto screenPosFloating = WorldToScreenFloating(pos);
 //  return olc::vi2d(static_cast<int>(std::floor(screenPosFloating.x)),
 //                   static_cast<int>(std::floor(screenPosFloating.y)));
 //}
 //
-//olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
+// olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
 //  return olc::vf2d((pos.x - renderOffset.x) / renderScale,
 //                   (pos.y - renderOffset.y) / renderScale);
 //}
 //
 
-
 vi2d Grid::AlignToGrid(const vf2d& pos) {
   return vi2d(static_cast<int>(std::floor(pos.x)),
-                   static_cast<int>(std::floor(pos.y)));
+              static_cast<int>(std::floor(pos.y)));
 }
 
 std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(vi2d pos) {
@@ -311,6 +311,8 @@ void Grid::Save(const std::string& filename) {
   std::cout << std::format("Saved {} bytes to {}, total tiles: {}", dataSize,
                            filename, tiles.size())
             << std::endl;
+#else
+  (void)dataSize;
 #endif
   file.close();
 }
@@ -344,6 +346,8 @@ void Grid::Load(const std::string& filename) {
   std::cout << std::format("Loaded {} bytes from {}, total {} tiles", dataSize,
                            filename, tiles.size())
             << std::endl;
+#else
+  (void)dataSize;
 #endif
   fieldIsDirty = true;  // Mark the field as modified
   ResetSimulation();    // So that this preprocesses the tiles
