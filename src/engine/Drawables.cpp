@@ -75,9 +75,13 @@ BasicTileDrawable::BasicTileDrawable(
     : TileDrawable(std::move(initialPtr)),
       activeColor(activeColor),
       inactiveColor(inactiveColor) {
-  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size));
-  setOrigin({size / 2.f, size / 2.f});  // Origin is in the center.
+  const float origin = size / 2.f;
 
+  setOrigin({origin, origin});  // Origin is in the center.
+  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) - getOrigin());
+
+  // Because we have changed the origin, we need to adjust the position 
+  // of the shapes accordingly.
   square.setPosition({0.f, 0.f});
   triangle.setPosition({0.f, 0.f});
 

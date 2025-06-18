@@ -88,6 +88,28 @@ class CrossingTileDrawable : public TileDrawable {
             sf::RenderStates states) const final override;
 };
 
+
+class Highlighter : public sf::Drawable, public sf::Transformable {
+ public:
+  explicit Highlighter(const sf::FloatRect& bounds, sf::Color color = sf::Color(255, 0, 0, 128)) : color(color) {
+    rectangle.setPosition({0.f, 0.f});
+    rectangle.setSize(bounds.size);
+    rectangle.setFillColor(sf::Color::Transparent);
+    rectangle.setOutlineColor(color);
+    rectangle.setOutlineThickness(BasicTileDrawable::DEFAULT_SIZE / 8.f);
+  }
+
+  void draw(sf::RenderTarget& target, sf::RenderStates states) const override {
+    states.transform *= getTransform();
+    target.draw(rectangle, states);
+  }
+
+ private:
+  static constexpr float size = TileDrawable::DEFAULT_SIZE;
+  sf::RectangleShape rectangle;
+  sf::Color color;
+};
+
 // Factory function to create appropriate drawable for any tile type
 std::unique_ptr<TileDrawable> CreateTileDrawable(
     std::shared_ptr<ElecSim::GridTile> tilePtr);
