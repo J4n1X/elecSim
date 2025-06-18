@@ -137,7 +137,7 @@ Direction GridTile::TileToWorldDirection(Direction tileDir) const {
 
 std::array<char, GRIDTILE_BYTESIZE> GridTile::Serialize() {
   std::array<char, GRIDTILE_BYTESIZE> data{};
-  *reinterpret_cast<int*>(data.data()) = GetTileTypeId();
+  *reinterpret_cast<int*>(data.data()) = static_cast<int>(GetTileType());
   *reinterpret_cast<Direction*>(data.data() + sizeof(int)) = facing;
   *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing)) = pos.x;
   *reinterpret_cast<int*>(data.data() + sizeof(int) + sizeof(facing) +

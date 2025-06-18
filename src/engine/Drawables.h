@@ -1,63 +1,95 @@
 #pragma once
 
-#include <concepts>
 #include <memory>
-#include <type_traits>
 
 #include "Common.h"
 #include "GridTileTypes.h"
-#include "RenderManager.h"
-#include "olcPixelGameEngine.h"
+#include "SFML/Graphics.hpp"
+#include "SFML/Graphics/Drawable.hpp"
+#include "SFML/Graphics/Transformable.hpp"
+#include "SFML/Graphics/Rect.hpp"
 #include "v2d.h"
 
 namespace Engine {
 
-namespace Target {
-namespace Olc {
-
-extern const std::array<olc::Pixel, 7> activeColors;
-extern const std::array<olc::Pixel, 7> inactiveColors;
-
-void OlcDrawTile(olc::PixelGameEngine *renderer, olc::vf2d pos, float size,
-                 int alpha, bool activation, ElecSim::Direction facing,
-                 int tileId);
-
 template <typename T>
-  requires std::derived_from<T, ElecSim::GridTile>
-class BasicTileDrawable : public Drawable<olc::PixelGameEngine> {
-  protected:
-  std::shared_ptr<T> tilePtr;
+  requires std::is_arithmetic_v<T>
+sf::Vector2<T> ToSfmlVector(const v2d<T>& vec) {
+  return sf::Vector2<T>(vec.x, vec.y);
+}
 
+// Base class for all tile drawables - polymorphic approach
+class TileDrawable : public sf::Drawable, public sf::Transformable {
  public:
-  BasicTileDrawable() : tilePtr(nullptr) {}
-  BasicTileDrawable(std::shared_ptr<T> &&tilePtr) : tilePtr(tilePtr) {}
-  void Draw(olc::PixelGameEngine *renderer, vf2d pos, float screenSize,
-            uint8_t alpha) const {
-    // Convert v2d to olc::vf2d
-    olc::vf2d olcPos(pos.x, pos.y);
-    OlcDrawTile(renderer, olcPos, screenSize, alpha, tilePtr->GetActivation(),
-                tilePtr->GetFacing(), tilePtr->GetTileTypeId());
+  static constexpr float DEFAULT_SIZE = 32.f;
+
+  explicit TileDrawable(std::shared_ptr<ElecSim::GridTile> tilePtr)
+      : tilePtr(std::move(tilePtr)) {}
+  virtual ~TileDrawable() = default;
+
+  // Updates the drawable based on the current tile state
+  virtual void UpdateVisualState() = 0;
+
+  // Gets the tile this drawable represents
+  [[nodiscard]] std::shared_ptr<ElecSim::GridTile> GetTile() const noexcept {
+    return tilePtr;
   }
+
+  [[nodiscard]] sf::FloatRect getGlobalBounds() const {
+    return getTransform().transformRect(
+        sf::FloatRect({0.f, 0.f}, {size, size}));
+  }
+
+  // Pure virtual clone method - must be implemented by all derived classes
+  [[nodiscard]] virtual std::unique_ptr<TileDrawable> Clone() const = 0;
+
+ protected:
+  float size = DEFAULT_SIZE;
+  std::shared_ptr<ElecSim::GridTile> tilePtr;
 };
 
-class WireDrawable : public BasicTileDrawable<ElecSim::WireGridTile> {};
-
-class JunctionDrawable : public BasicTileDrawable<ElecSim::JunctionGridTile> {};
-
-class EmitterDrawable : public BasicTileDrawable<ElecSim::EmitterGridTile> {};
-
-class SemiConductorDrawable
-    : public BasicTileDrawable<ElecSim::SemiConductorGridTile> {};
-
-class ButtonDrawable : public BasicTileDrawable<ElecSim::ButtonGridTile> {};
-
-class InverterDrawable : public BasicTileDrawable<ElecSim::InverterGridTile> {};
-
-class CrossingDrawable : public BasicTileDrawable<ElecSim::CrossingGridTile> {
+// Basic tile drawable for most tile types - uses square + triangle
+class BasicTileDrawable : public TileDrawable {
  public:
-  void Draw(olc::PixelGameEngine *renderer, vf2d pos, float scale,
-            uint8_t alpha) const final override;
+  BasicTileDrawable(std::shared_ptr<ElecSim::GridTile> tilePtr,
+                    sf::Color activeColor, sf::Color inactiveColor);
+
+  void UpdateVisualState() override;
+  [[nodiscard]] std::unique_ptr<TileDrawable> Clone() const override;
+
+ private:
+  virtual void draw(sf::RenderTarget& target,
+                    sf::RenderStates states) const override;
+
+  sf::RectangleShape square;
+  sf::ConvexShape triangle;
+  sf::Color activeColor;
+  sf::Color inactiveColor;
 };
-}  // namespace Olc
-}  // namespace Target
+
+// Specialized drawable for crossing tiles
+class CrossingTileDrawable : public TileDrawable {
+ public:
+  explicit CrossingTileDrawable(
+      std::shared_ptr<ElecSim::CrossingGridTile> initialPtr);
+  CrossingTileDrawable(std::shared_ptr<ElecSim::GridTile> initialPtr);
+
+  void UpdateVisualState() final override;
+  [[nodiscard]] std::unique_ptr<TileDrawable> Clone() const final override;
+
+ private:
+  void Setup();
+
+  sf::RectangleShape baseSquare;
+  std::array<sf::RectangleShape, 4> squares;
+  const sf::Color activeColor = sf::Color(0, 0, 255);
+  const sf::Color inactiveColor = sf::Color(0, 0, 128);
+  void draw(sf::RenderTarget& target,
+            sf::RenderStates states) const final override;
+};
+
+// Factory function to create appropriate drawable for any tile type
+std::unique_ptr<TileDrawable> CreateTileDrawable(
+    std::shared_ptr<ElecSim::GridTile> tilePtr);
+
 }  // namespace Engine

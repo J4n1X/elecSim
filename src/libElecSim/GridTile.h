@@ -8,11 +8,21 @@
 #include "v2d.h"
 
 namespace ElecSim {
+
 // Base tile class
 // TODO: I want to add a Construct() function that creates a new tile of any
 // type, maybe with templates? A factory?
 // TODO: Maybe we should not store refNum in here, but this is the easiest way
 // right now.
+enum class TileType : int {
+  Wire,
+  Junction,
+  Emitter,
+  SemiConductor,
+  Button,
+  Inverter,
+  Crossing
+};
 class GridTile : public std::enable_shared_from_this<GridTile> {
  protected:
   vi2d pos;
@@ -24,8 +34,8 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   TileSideStates inputStates;
 
  public:
-  GridTile(vi2d pos = vi2d(0.0f, 0.0f),
-           Direction facing = Direction::Top, bool defaultActivation = false);
+  GridTile(vi2d pos = vi2d(0.0f, 0.0f), Direction facing = Direction::Top,
+           bool defaultActivation = false);
 
   // Copy constructor
   GridTile(const GridTile& other);
@@ -68,7 +78,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 
   bool GetActivation() const { return activated; }
   bool GetDefaultActivation() const { return defaultActivation; }
-  const vi2d& GetPos() const { return pos; }
+  const vi2d GetPos() const { return pos; }
   const Direction& GetFacing() const { return facing; }
   std::string GetTileInformation() const;
 
@@ -78,7 +88,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   virtual constexpr const char* TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
   virtual bool IsDeterministic() const = 0;
-  virtual int GetTileTypeId() const = 0;
+  virtual TileType GetTileType() const = 0;
 
   // Pure virtual clone method - must be implemented by all derived classes
   [[nodiscard]] virtual std::unique_ptr<GridTile> Clone() const = 0;
@@ -91,7 +101,6 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   // Convert between world and tile-relative coordinate systems
   Direction WorldToTileDirection(Direction worldDir) const;
   Direction TileToWorldDirection(Direction tileDir) const;
-
 };
 
 // This is a mere overlay of GridTile, and just implements the functions typical

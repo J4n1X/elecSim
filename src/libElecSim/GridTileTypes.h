@@ -16,7 +16,7 @@ class WireGridTile : public DeterministicTile {
   std::vector<SignalEvent> PreprocessSignal(const SignalEvent incomingSignal) override;
   constexpr const char* TileTypeName() const override { return "Wire"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 0; }
+  TileType GetTileType() const override { return TileType::Wire; }
   
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
@@ -31,7 +31,7 @@ class JunctionGridTile : public DeterministicTile {
   std::vector<SignalEvent> PreprocessSignal(const SignalEvent incomingSignal) override;
   constexpr const char* TileTypeName() const override { return "Junction"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 1; }
+  TileType GetTileType() const override { return TileType::Junction; }
   
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
@@ -54,7 +54,7 @@ class EmitterGridTile : public LogicTile {
 
   constexpr const char* TileTypeName() const override { return "Emitter"; }
   bool IsEmitter() const override { return true; }
-  int GetTileTypeId() const override { return 2; }
+  TileType GetTileType() const override { return TileType::Emitter; }
   
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
@@ -72,7 +72,7 @@ class SemiConductorGridTile : public LogicTile {
 
   constexpr const char* TileTypeName() const override { return "Semiconductor"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 3; }
+  TileType GetTileType() const override { return TileType::SemiConductor; }
   
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
@@ -88,7 +88,7 @@ class ButtonGridTile : public LogicTile {
 
   constexpr const char* TileTypeName() const override { return "Button"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 4; }
+  TileType GetTileType() const override { return TileType::Button; }
   
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
@@ -103,7 +103,7 @@ class InverterGridTile : public LogicTile {
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   constexpr const char* TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 5; }
+  TileType GetTileType() const override { return TileType::Inverter; }
   
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
@@ -120,7 +120,7 @@ class CrossingGridTile : public LogicTile {
   
   constexpr const char* TileTypeName() const override { return "Crossing"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 6; }
+  TileType GetTileType() const override { return TileType::Crossing; }
   
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };

@@ -56,3 +56,13 @@ FetchContent_Declare(unordered_dense
   GIT_TAG main
 )
 FetchContent_MakeAvailable(unordered_dense)
+
+# SFML 3.0.1
+include(FetchContent)
+FetchContent_Declare(SFML
+    GIT_REPOSITORY https://github.com/SFML/SFML.git
+    GIT_TAG 3.0.1
+    GIT_SHALLOW ON
+    EXCLUDE_FROM_ALL
+    SYSTEM)
+FetchContent_MakeAvailable(SFML)

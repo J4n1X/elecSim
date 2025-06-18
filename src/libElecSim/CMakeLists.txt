@@ -12,7 +12,7 @@ else()
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_compile_options(libElecSim PRIVATE -Wall -Wextra -Wpedantic -Wno-unknown-pragmas)
+  target_compile_options(libElecSim PRIVATE -Werror -Wall -Wextra -Wpedantic -Wno-unknown-pragmas)
   target_link_libraries(libElecSim PUBLIC unordered_dense)
 elseif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   add_compile_options(libElecSim PRIVATE /W3)

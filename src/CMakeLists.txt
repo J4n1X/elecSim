@@ -16,7 +16,7 @@ add_executable(elecSim ${OUTER_FILES} ${ENGINE_FILES})
 target_include_directories(elecSim PRIVATE 
   ${CMAKE_CURRENT_SOURCE_DIR}/engine
 )
-target_link_libraries(elecSim PRIVATE libElecSim nfd olcPixelGameEngine)
+target_link_libraries(elecSim PRIVATE libElecSim nfd olcPixelGameEngine SFML::Graphics)
 
 # Warnings
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")

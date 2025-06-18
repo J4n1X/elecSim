@@ -10,6 +10,7 @@
 
 // Extracted olc::v_2d so that libelecsim does not have to depend on 
 // olcPixelGameEngine
+// TODO: Move all of these functions out of the header file.
 
 template <class T>
   requires std::is_arithmetic_v<T>
