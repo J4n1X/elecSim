@@ -27,12 +27,12 @@ sf::Vector2f AlignToGrid(const sf::Vector2f& pos) {
 
 vi2d WorldToGrid(const sf::Vector2f& pos) {
   auto aligned = AlignToGrid(pos);
-  return vi2d(static_cast<int>(aligned.x / Engine::BasicTileDrawable::DEFAULT_SIZE),
-              static_cast<int>(aligned.y / Engine::BasicTileDrawable::DEFAULT_SIZE));
+  return vi2d(
+      static_cast<int>(aligned.x / Engine::BasicTileDrawable::DEFAULT_SIZE),
+      static_cast<int>(aligned.y / Engine::BasicTileDrawable::DEFAULT_SIZE));
 }
 
-void HandleInput(sf::RenderWindow& window,
-                sf::View& view,
+void HandleInput(sf::RenderWindow& window, sf::View& view,
                  sf::Vector2f& cameraVelocity) {
   cameraVelocity = sf::Vector2f(0.f, 0.f);  // Reset camera velocity
   if (keysHeld[static_cast<int>(sf::Keyboard::Key::W)]) {
@@ -70,13 +70,11 @@ int main(int argc, char* argv[]) {
   sf::View view(cullingBox);
   sf::Vector2f cameraVelocity(0.f, 0.f);
 
-  //sf::Font font("arial.ttf");
-  //sf::Text text(font);
-  //text.setString("Hello, ElecSim!");
-  //text.setCharacterSize(24);
-  //text.setFillColor(sf::Color::Black);
-
-
+  // sf::Font font("arial.ttf");
+  // sf::Text text(font);
+  // text.setString("Hello, ElecSim!");
+  // text.setCharacterSize(24);
+  // text.setFillColor(sf::Color::Black);
 
   keysHeld.fill(false);  // Initialize all keys as not pressed
   if (argc > 1) {
@@ -101,13 +99,26 @@ int main(int argc, char* argv[]) {
       // Handle keyboard press events
       if (auto keyDownEvent = event->getIf<sf::Event::KeyPressed>()) {
         sf::Keyboard::Key code = keyDownEvent->code;
-        keysHeld[static_cast<int>(code)] = true;
+        if (static_cast<int>(code) < 0 ||
+            static_cast<int>(code) >= sf::Keyboard::KeyCount) {
+          std::cerr << std::format(
+              "Warning: An invalid key has been pressed, yielding code {}. "
+              "Skipping.\n",
+              static_cast<int>(code));
+          continue;  // Skip invalid key codes
+        } else {
+          keysHeld[static_cast<int>(code)] = true;
+        }
       }
       if (auto keyUpEvent = event->getIf<sf::Event::KeyReleased>()) {
         sf::Keyboard::Key code = keyUpEvent->code;
-        keysHeld[static_cast<int>(code)] = false;
+        if (static_cast<int>(code) > 0 ||
+            static_cast<int>(code) < sf::Keyboard::KeyCount) {
+          keysHeld[static_cast<int>(code)] = false;
+        }
       }
-      if(auto mouseWheelEvent = event->getIf<sf::Event::MouseWheelScrolled>()) {
+      if (auto mouseWheelEvent =
+              event->getIf<sf::Event::MouseWheelScrolled>()) {
         mouseWheelDelta = mouseWheelEvent->delta;
       }
     }
@@ -137,7 +148,7 @@ int main(int argc, char* argv[]) {
       window.draw(*tile);
     }
     window.draw(highlighter);
-    window.draw(text);
+    // window.draw(text);
 
     window.display();
     // Update and render logic would go here
