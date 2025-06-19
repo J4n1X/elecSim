@@ -34,7 +34,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   TileSideStates inputStates;
 
  public:
-  GridTile(vi2d pos = vi2d(0.0f, 0.0f), Direction facing = Direction::Top,
+  GridTile(vi2d pos = vi2d(0, 0), Direction facing = Direction::Top,
            bool defaultActivation = false);
 
   // Copy constructor
@@ -108,7 +108,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
 // and can be used in deterministic simulations.
 class DeterministicTile : public GridTile {
  public:
-  explicit DeterministicTile(vi2d pos = vi2d(0.0f, 0.0f),
+  explicit DeterministicTile(vi2d pos = vi2d(0, 0),
                              Direction facing = Direction::Top,
                              bool defaultActivation = false)
       : GridTile(pos, facing, defaultActivation) {}
@@ -119,7 +119,7 @@ class DeterministicTile : public GridTile {
 
 class LogicTile : public GridTile {
  public:
-  explicit LogicTile(vi2d pos = vi2d(0.0f, 0.0f),
+  explicit LogicTile(vi2d pos = vi2d(0, 0),
                      Direction facing = Direction::Top,
                      bool defaultActivation = false)
       : GridTile(pos, facing, defaultActivation) {}

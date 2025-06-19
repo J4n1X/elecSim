@@ -5,70 +5,6 @@
 
 namespace Engine {
 
-#if 0
-template <typename T>
-  requires std::derived_from<T, ElecSim::GridTile>
-constexpr void CreateTileDrawable(
-    vf2d worldPos, ElecSim::Direction facing) {
-  auto tilePtr = std::make_shared<T>(worldPos, facing);
-  // Decide by the tile type which drawable to create (needs to be constexpr)
-  if constexpr (std::is_same_v<T, ElecSim::WireGridTile>) {
-    return std::make_unique<BasicTileDrawable<ElecSim::WireGridTile>>(
-        std::move(tilePtr), sf::Color(128, 128, 0), sf::Color(255, 255, 255));
-  }
-  if constexpr (std::is_same_v<T, ElecSim::JunctionGridTile>) {
-    return std::make_unique<BasicTileDrawable<ElecSim::JunctionGridTile>>(
-        std::move(tilePtr), sf::Color(255, 255, 0), sf::Color(192, 192, 192));
-  }
-  if constexpr (std::is_same_v<T, ElecSim::EmitterGridTile>) {
-    return std::make_unique<BasicTileDrawable<ElecSim::EmitterGridTile>>(
-        std::move(tilePtr), sf::Color(0, 255, 255), sf::Color(0, 128, 128));
-  }
-  if constexpr (std::is_same_v<T, ElecSim::SemiConductorGridTile>) {
-    return std::make_unique<BasicTileDrawable<ElecSim::SemiConductorGridTile>>(
-        std::move(tilePtr), sf::Color(0, 255, 0), sf::Color(0, 128, 0));
-  }
-  if constexpr (std::is_same_v<T, ElecSim::ButtonGridTile>) {
-    return std::make_unique<BasicTileDrawable<ElecSim::ButtonGridTile>>(
-        std::move(tilePtr), sf::Color(255, 0, 0), sf::Color(128, 0, 0));
-  }
-  if constexpr (std::is_same_v<T, ElecSim::InverterGridTile>) {
-    return std::make_unique<BasicTileDrawable<ElecSim::InverterGridTile>>(
-        std::move(tilePtr), sf::Color(255, 0, 255), sf::Color(128, 0, 128));
-  }
-  if constexpr (std::is_same_v<T, ElecSim::CrossingGridTile>) {
-    return std::make_unique<BasicTileDrawable<ElecSim::CrossingGridTile>>(
-        std::move(tilePtr), sf::Color(0, 0, 255), sf::Color(0, 0, 128));
-  }
-}
-
-void CrossingDrawable::Draw(olc::PixelGameEngine *renderer, vf2d pos,
-                            float screenSize, uint8_t alpha) const {
-  // Get colors based on activation state and alpha
-  olc::Pixel drawActiveColor = activeColors[tilePtr->GetTileTypeId()];
-  olc::Pixel drawInactiveColor = inactiveColors[tilePtr->GetTileTypeId()];
-  drawActiveColor.a = alpha;
-  drawInactiveColor.a = alpha;
-
-  // Draw the base square
-  renderer->FillRectDecal(olc::vf2d(pos.x, pos.y),
-                          olc::vi2d(screenSize, screenSize), drawInactiveColor);
-
-  // Draw crossing lines that touch the edges
-  float lineThickness = screenSize / 10.0f;  // Adjust thickness as needed
-
-  // Horizontal line - top left to bottom right
-  renderer->FillRectDecal(
-      olc::vf2d(pos.x, pos.y + (screenSize - lineThickness) / 2),
-      olc::vf2d(screenSize, lineThickness), drawActiveColor);
-
-  // Vertical line - top to bottom
-  renderer->FillRectDecal(
-      olc::vf2d(pos.x + (screenSize - lineThickness) / 2, pos.y),
-      olc::vf2d(lineThickness, screenSize), drawActiveColor);
-}
-#endif
-
 BasicTileDrawable::BasicTileDrawable(
     std::shared_ptr<ElecSim::GridTile> initialPtr, sf::Color activeColor,
     sf::Color inactiveColor)
@@ -140,9 +76,10 @@ void BasicTileDrawable::draw(sf::RenderTarget& target,
 // ------------------------------------
 
 void CrossingTileDrawable::Setup() {
-  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size));
   setOrigin({size / 2.f, size / 2.f});  // Origin is in the center.
+  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) - getOrigin());
 
+  baseSquare.setPosition({0.f, 0.f});
   baseSquare.setSize({size, size});
 
   const float trenchSize = size / 8.f;
@@ -226,6 +163,7 @@ std::unique_ptr<TileDrawable> CreateTileDrawable(
     case TileType::Crossing:
       return std::make_unique<CrossingTileDrawable>(std::move(tilePtr));
   }
+  throw std::runtime_error("Unknown tile type for drawable creation");
 }
 
 }  // namespace Engine

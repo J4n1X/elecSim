@@ -5,7 +5,9 @@
 #include <string>
 #include <vector>
 
-#include "hope.h"
+extern "C" {
+  #include "hope.h"
+}
 #define OLC_PGE_APPLICATION
 #include "Grid.h"
 
@@ -143,8 +145,8 @@ class TestParser {
         commands.push_back({CommandType::Read, x, y, v});
         continue;
       }
-    [[maybe_unused]]unknown_read:
-      throw std::runtime_error(std::format("Unknown command '{}' at line {}", cmd, lineNum));
+    //unknown_read:
+    //  throw std::runtime_error(std::format("Unknown command '{}' at line {}", cmd, lineNum));
     malformed_write:
       throw std::runtime_error(std::format("Malformed write command at line {}", lineNum));
     malformed_interact:
@@ -213,7 +215,7 @@ int main([[maybe_unused]]int argc, char** argv) {
         if (tileMaybe.has_value()) {
           auto tile = tileMaybe.value();
           std::cout << (tile->GetActivation() ? "active" : "inactive");
-          if (tile->GetActivation() != command.value) {
+          if (tile->GetActivation() != static_cast<bool>(command.value)) {
             std::cout << " (Test failed)";
             return 1;
           }
