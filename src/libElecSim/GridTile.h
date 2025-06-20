@@ -85,6 +85,7 @@ class GridTile : public std::enable_shared_from_this<GridTile> {
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
   bool CanOutputTo(Direction dir) const { return canOutput[dir]; }
 
+  // TODO: Remove this. We now have the TileType enum, which should be used instead.
   virtual constexpr const char* TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
   virtual bool IsDeterministic() const = 0;

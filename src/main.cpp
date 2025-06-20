@@ -1,4 +1,6 @@
+#include <iostream>
 #include <ranges>
+#include <string>
 #include <type_traits>
 
 #include "Drawables.h"
@@ -56,14 +58,128 @@ void HandleInput(sf::RenderWindow& window, sf::View& view,
   // Mouse wheel zooms in and out
   // TODO: Restore "Zoom to mouse" functionality
   if (mouseWheelDelta != 0.f) {
-    sf::Vector2f viewSize = window.getView().getSize();
     float zoomFactor = 1.f + mouseWheelDelta * 0.1f;  // Adjust zoom sensitivity
     view.zoom(zoomFactor);
     mouseWheelDelta = 0.f;  // Reset after applying
   }
 }
 
+int generate_texture_atlas() {
+  std::cout << "Generating texture atlas...\n";
+  // Create a render texture for the atlas
+  const int tileSize =
+      static_cast<int>(Engine::BasicTileDrawable::DEFAULT_SIZE);
+  const int tilesPerRow =
+      256 / tileSize /
+      2;  // Arrange tiles in a 3x3 grid (we have 7 tiles, so 3x3 is sufficient)
+  const int atlasSize = tileSize * 2 * tilesPerRow;
+
+  sf::RenderTexture renderTexture;
+  if (!renderTexture.resize({static_cast<unsigned int>(atlasSize),
+                             static_cast<unsigned int>(atlasSize)})) {
+    std::cerr << "Failed to create render texture!\n";
+    return -1;
+  }
+
+  // Create instances of all tile types
+  std::vector<std::shared_ptr<ElecSim::GridTile>> tiles;
+
+  // Wire
+  tiles.push_back(std::make_shared<ElecSim::WireGridTile>(
+      vi2d(0, 0), ElecSim::Direction::Top));
+
+  // Junction
+  tiles.push_back(std::make_shared<ElecSim::JunctionGridTile>(
+      vi2d(0, 0), ElecSim::Direction::Top));
+
+  // Emitter
+  tiles.push_back(std::make_shared<ElecSim::EmitterGridTile>(
+      vi2d(0, 0), ElecSim::Direction::Top));
+
+  // SemiConductor
+  tiles.push_back(std::make_shared<ElecSim::SemiConductorGridTile>(
+      vi2d(0, 0), ElecSim::Direction::Top));
+
+  // Button
+  tiles.push_back(std::make_shared<ElecSim::ButtonGridTile>(
+      vi2d(0, 0), ElecSim::Direction::Top));
+
+  // Inverter
+  tiles.push_back(std::make_shared<ElecSim::InverterGridTile>(
+      vi2d(0, 0), ElecSim::Direction::Top));
+
+  // Crossing
+  tiles.push_back(std::make_shared<ElecSim::CrossingGridTile>(
+      vi2d(0, 0), ElecSim::Direction::Top));
+
+  // Clear the render texture with a transparent background
+  renderTexture.clear(sf::Color::Transparent);
+
+  // Create drawables and render each tile to the atlas
+  for (size_t i = 0; i < tiles.size(); ++i) {
+    auto drawable = Engine::CreateTileDrawable(tiles[i]);
+
+    // Calculate position in the atlas grid
+    int row = static_cast<int>(i / tilesPerRow);
+    int col = static_cast<int>(i % tilesPerRow);
+    float x = col * tileSize * 2;
+    float y = row * tileSize;
+
+    // Position the drawable
+    drawable->setPosition(sf::Vector2f(x, y) + drawable->getOrigin());
+
+    // Update the visual state and draw
+    drawable->UpdateVisualState();
+    renderTexture.draw(*drawable);
+
+    // And once more for the activated state
+    drawable->GetTile()->SetActivation(true);
+    drawable->UpdateVisualState();
+    drawable->setPosition(sf::Vector2f(x + tileSize, y) +
+                          drawable->getOrigin());
+    renderTexture.draw(*drawable);
+
+    std::cout << "Rendered " << tiles[i]->TileTypeName() << " at (" << x << ", "
+              << y << ")\n";
+  }
+
+  // Finish rendering
+  renderTexture.display();
+
+  // Save the texture to file
+  sf::Texture atlasTexture = renderTexture.getTexture();
+  sf::Image atlasImage = atlasTexture.copyToImage();
+
+  if (atlasImage.saveToFile("tile_atlas.png")) {
+    std::cout << "Texture atlas saved as 'tile_atlas.png'\n";
+    std::cout << "Atlas size: " << atlasSize << "x" << atlasSize << " pixels\n";
+    std::cout << "Tile size: " << tileSize << "x" << tileSize << " pixels\n";
+    std::cout << "Tiles per row: " << tilesPerRow << "\n";
+
+    // Print tile mapping for reference
+    std::cout << "\nTile mapping:\n";
+    for (size_t i = 0; i < tiles.size(); ++i) {
+      int row = static_cast<int>(i / tilesPerRow);
+      int col = static_cast<int>(i % tilesPerRow);
+      std::cout << "  " << tiles[i]->TileTypeName() << ": (" << col << ", "
+                << row << ")\n";
+    }
+
+  } else {
+    std::cerr << "Failed to save texture atlas!\n";
+    return -1;
+  }
+
+  return 0;
+}
+
+// Texture atlas generation main function
 int main(int argc, char* argv[]) {
+  // Check if user wants to generate atlas
+  if (argc > 1 && std::string(argv[1]) == "--generate-atlas") {
+    return generate_texture_atlas();
+  }
+
   sf::RenderWindow window(
       sf::VideoMode(Engine::ToSfmlVector(initialWindowSize)), "ElecSim");
   sf::FloatRect cullingBox = sf::FloatRect({0.f, 0.f}, {1280.f, 960.f});
@@ -98,23 +214,21 @@ int main(int argc, char* argv[]) {
       }
       // Handle keyboard press events
       if (auto keyDownEvent = event->getIf<sf::Event::KeyPressed>()) {
-        sf::Keyboard::Key code = keyDownEvent->code;
-        if (static_cast<int>(code) < 0 ||
-            static_cast<int>(code) >= sf::Keyboard::KeyCount) {
+        unsigned int code = static_cast<unsigned int>(keyDownEvent->code);
+        if (code < 0 || code >= sf::Keyboard::KeyCount) {
           std::cerr << std::format(
               "Warning: An invalid key has been pressed, yielding code {}. "
               "Skipping.\n",
-              static_cast<int>(code));
+              code);
           continue;  // Skip invalid key codes
         } else {
-          keysHeld[static_cast<int>(code)] = true;
+          keysHeld[code] = true;
         }
       }
       if (auto keyUpEvent = event->getIf<sf::Event::KeyReleased>()) {
-        sf::Keyboard::Key code = keyUpEvent->code;
-        if (static_cast<int>(code) > 0 ||
-            static_cast<int>(code) < sf::Keyboard::KeyCount) {
-          keysHeld[static_cast<int>(code)] = false;
+        unsigned int code = static_cast<unsigned int>(keyUpEvent->code);
+        if (code > 0 || code < sf::Keyboard::KeyCount) {
+          keysHeld[code] = false;
         }
       }
       if (auto mouseWheelEvent =
@@ -153,4 +267,5 @@ int main(int argc, char* argv[]) {
     window.display();
     // Update and render logic would go here
   }
+  return 0;
 }
