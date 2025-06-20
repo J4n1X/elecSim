@@ -90,3 +90,7 @@ https://www.youtube.com/watch?v=gTNJXVmuRRA Video über Modernes C++ um Virtuell
 
 
 Diese Arbeit hat mich so aus dem Konzept gebracht, dass ich nun keine Lust mehr auf olcPixelGameEngine habe. Ich will SFML verwenden.
+
+Update 20.06.2025:
+Ja, wir brauchen SFML, aber das Rendering ist schrecklich langsam. Die Lösung: VertexArrays. Unsere Tiles sind immer Quads, welche wir mit einer Texture gestalten können. Den Texture-Atlas könnten wir eventuell sogar dynamisch generieren, um die Auflösung der Tiles hoch zu halten. 
+Gemäss https://www.reddit.com/r/sfml/comments/11a6cto/best_way_to_draw_thousands_of_objects/ wäre das nicht mal so dumm.
