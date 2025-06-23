@@ -4,6 +4,12 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(TESTS_DIR ${PROJECT_SOURCE_DIR}/examples/tests)
 set(CMAKE_UNITY_BUILD_BATCH_SIZE 8)
+
+# Download cmrc (If we ever need it, I'll uncomment this)
+#file(DOWNLOAD "https://raw.githubusercontent.com/vector-of-bool/cmrc/refs/heads/master/CMakeRC.cmake"
+#"${CMAKE_BINARY_DIR}/CMakeRC.cmake")
+#include("${CMAKE_BINARY_DIR}/CMakeRC.cmake")
+
 # Debug and Release configuration options
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -UDEBUG")
@@ -46,7 +52,9 @@ if(lto_supported)
   endif()
 endif()
 
+# Dependencies for the project
 include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
+
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -64,6 +72,9 @@ endif()
 
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+# Create the resource target (if we ever use more than just a single file. I'll keep it in here for now.)
+# cmrc_add_resource_library(game-resources ALIAS gameResources::rc ${PROJECT_SOURCE_DIR}/media/BAHNSCHRIFT.TTF)
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
