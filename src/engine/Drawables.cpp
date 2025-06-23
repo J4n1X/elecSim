@@ -14,25 +14,25 @@ BasicTileDrawable::BasicTileDrawable(
   const float origin = size / 2.f;
 
   setOrigin({origin, origin});  // Origin is in the center.
-  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) - getOrigin());
-  vArray = CreateTileVertexArray();
+  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) + getOrigin());
+  vArray = CreateVertexArray();
 }
 
 void BasicTileDrawable::UpdateVisualState() {
   if (tilePtr->GetActivation()) {
-    for(size_t i = 0; i < vArray.getVertexCount(); ++i) {
-      if(i > 2 && i < 6) {
+    for (size_t i = 0; i < vArray.getVertexCount(); ++i) {
+      if (i > 2 && i < 6) {
         vArray[i].color = inactiveColor;  // Triangles 1 and 3 are inactive
       } else {
-        vArray[i].color = activeColor;     // Triangle 2 is active
+        vArray[i].color = activeColor;  // Triangle 2 is active
       }
     }
   } else {
-    for(size_t i = 0; i < vArray.getVertexCount(); ++i) {
-      if(i > 2 && i < 6) {
+    for (size_t i = 0; i < vArray.getVertexCount(); ++i) {
+      if (i > 2 && i < 6) {
         vArray[i].color = activeColor;  // Triangles 1 and 3 are active
       } else {
-        vArray[i].color = inactiveColor;     // Triangle 2 is inactive
+        vArray[i].color = inactiveColor;  // Triangle 2 is inactive
       }
     }
   }
@@ -69,33 +69,35 @@ void BasicTileDrawable::draw(sf::RenderTarget& target,
   target.draw(vArray, states);
 }
 
-
 // Test Vertex Array for a tile
-sf::VertexArray BasicTileDrawable::CreateTileVertexArray() {
+sf::VertexArray BasicTileDrawable::CreateVertexArray() {
   sf::VertexArray v(sf::PrimitiveType::Triangles, 9);
-  // Triangle one
-  v[0].position = sf::Vector2f(0.f, 0.f);
-  v[1].position = sf::Vector2f(size / 2.f, 0.f);
-  v[2].position = sf::Vector2f(0.f, size);
-  v[0].color = inactiveColor;
-  v[1].color = inactiveColor;
-  v[2].color = inactiveColor;
+  // Define triangle vertices and their default colors
+  struct Triangle {
+    std::array<sf::Vector2f, 3> positions;
+    sf::Color color;
+  };
 
-  // Triangle two
-  v[3].position = sf::Vector2f(size / 2.f, 0.f);
-  v[4].position = sf::Vector2f(size, size);
-  v[5].position = sf::Vector2f(0.f, size);
-  v[3].color = activeColor;
-  v[4].color = activeColor;
-  v[5].color = activeColor;
+  const std::array<Triangle, 3> triangles = {
+      {// Triangle one (inactive by default)
+       {{sf::Vector2f(0.f, 0.f), sf::Vector2f(size / 2.f, 0.f),
+         sf::Vector2f(0.f, size)},
+        inactiveColor},
+       // Triangle two (active by default)
+       {{sf::Vector2f(size / 2.f, 0.f), sf::Vector2f(size, size),
+         sf::Vector2f(0.f, size)},
+        activeColor},
+       // Triangle three (inactive by default)
+       {{sf::Vector2f(size / 2.f, 0.f), sf::Vector2f(size, 0.f),
+         sf::Vector2f(size, size)},
+        inactiveColor}}};
 
-  // Triangle three
-  v[6].position = sf::Vector2f(size / 2.f, 0.f);
-  v[7].position = sf::Vector2f(size, 0.f);
-  v[8].position = sf::Vector2f(size, size);
-  v[6].color = inactiveColor;
-  v[7].color = inactiveColor;
-  v[8].color = inactiveColor;
+  for (size_t t = 0; t < triangles.size(); ++t) {
+    for (size_t i = 0; i < 3; ++i) {
+      v[t * 3 + i].position = triangles[t].positions[i];
+      v[t * 3 + i].color = triangles[t].color;
+    }
+  }
   return v;
 }
 
@@ -105,7 +107,7 @@ sf::VertexArray BasicTileDrawable::CreateTileVertexArray() {
 
 void CrossingTileDrawable::Setup() {
   setOrigin({size / 2.f, size / 2.f});  // Origin is in the center.
-  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) - getOrigin());
+  setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) + getOrigin());
 
   baseSquare.setPosition({0.f, 0.f});
   baseSquare.setSize({size, size});

@@ -4,25 +4,6 @@ include(FetchContent)
 # Project setup: Grab dependencies.
 # -----------------------------------------------------------------------------
 
-# olcPixelGameEngine
-FetchContent_Declare(
-  olcPixelGameEngine
-  GIT_REPOSITORY https://github.com/OneLoneCoder/olcPixelGameEngine
-  GIT_TAG master
-)
-FetchContent_MakeAvailable(olcPixelGameEngine)
-
-file(WRITE ${olcpixelgameengine_SOURCE_DIR}/olcPixelGameEngine.cpp 
-"#define OLC_PGE_APPLICATION\n
-#include \"olcPixelGameEngine.h\"
-#define OLC_PGEX_QUICKGUI
-#include \"extensions/olcPGEX_QuickGUI.h\""
-)
-add_library(olcPixelGameEngine STATIC ${olcpixelgameengine_SOURCE_DIR}/olcPixelGameEngine.cpp)
-target_include_directories(olcPixelGameEngine SYSTEM PUBLIC
-${olcpixelgameengine_SOURCE_DIR}
-)
-
 # Hope
 FetchContent_Declare(
   hope

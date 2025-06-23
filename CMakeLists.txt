@@ -47,11 +47,6 @@ if(lto_supported)
 endif()
 
 include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
-#This has to be here for some reason, doesn't work in deps.cmake
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-  target_link_libraries(olcPixelGameEngine PUBLIC X11 GL pthread png stdc++fs)
-endif()
-
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)

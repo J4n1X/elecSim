@@ -60,7 +60,7 @@ class BasicTileDrawable : public TileDrawable {
  private:
   virtual void draw(sf::RenderTarget& target,
                     sf::RenderStates states) const override;
-  sf::VertexArray CreateTileVertexArray();
+  sf::VertexArray CreateVertexArray();
 
   sf::VertexArray vArray;
   sf::Color activeColor;
