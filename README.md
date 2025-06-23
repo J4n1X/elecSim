@@ -1,5 +1,7 @@
 # Elecsim: A pulse simulation with the goal of creating logic circuits
 
+## TODO: This needs a rewrite before the branch is merged! Also make sure to adjust the third party licenses file!
+
 Elecsim is a tile-based logic simulation, and intended to be game, not an actual electronics simulator. It is written in C++ and is cross-platform compatible.
 
 Below, you can see some of the things you can build with Elecsim.
