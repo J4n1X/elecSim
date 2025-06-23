@@ -49,22 +49,18 @@ void ZoomViewAt(sf::View& view, sf::Vector2i pixel,
   view.move(offsetCoords);
 }
 
+namespace Engine {
 Game::Game()
-    : window(sf::VideoMode(Engine::ToSfmlVector(initialWindowSize)),
-             windowTitle.c_str()),
+    : window(sf::VideoMode(initialWindowSize), windowTitle.data()),
       gridView(sf::FloatRect(
-          {0.f, 0.f}, sf::Vector2f(static_cast<float>(initialWindowSize.x),
-                                   static_cast<float>(initialWindowSize.y)) /
-                          defaultZoomFactor)),
-      guiView(sf::FloatRect(
-          {0.f, 0.f}, sf::Vector2f(static_cast<float>(initialWindowSize.x),
-                                   static_cast<float>(initialWindowSize.y)))),
+          {0.f, 0.f}, sf::Vector2f(initialWindowSize) / defaultZoomFactor)),
+      guiView(sf::FloatRect({0.f, 0.f}, sf::Vector2f(initialWindowSize))),
       grid{},
       highlighter{{{0.f, 0.f},
                    {Engine::BasicTileDrawable::DEFAULT_SIZE,
                     Engine::BasicTileDrawable::DEFAULT_SIZE}}},
       mouseWheelDelta(0.f),
-      panStartPos(0.f, 0.f),
+      panStartPos(0, 0),
       cameraVelocity(0.f, 0.f),
       zoomFactor(defaultZoomFactor),
       text(font),
@@ -100,12 +96,23 @@ void Game::LoadGrid(std::string const& filename) {
   gridFilename = filename;
   window.setTitle(std::format("{} - {}", windowTitle, filename));
 
+  ResetViews();
+
   // Regenerate renderables from grid tiles
   renderables =
       grid.GetTiles() | std::views::values |
       std::views::transform(
           [](const auto& tile) { return Engine::CreateTileDrawable(tile); }) |
       std::ranges::to<std::vector<std::unique_ptr<Engine::TileDrawable>>>();
+}
+
+void Game::ResetViews() {
+  // Reset views and positions
+  zoomFactor = defaultZoomFactor;
+  gridView.setSize(sf::Vector2f(window.getSize()) / zoomFactor);
+  gridView.setCenter(sf::Vector2f(window.getSize()) / zoomFactor / 2.f);
+  guiView.setSize(sf::Vector2f(window.getSize()));
+  guiView.setCenter(sf::Vector2f(window.getSize()) / 2.f);
 }
 
 int Game::Run(int argc, char* argv[]) {
@@ -142,6 +149,8 @@ void Game::HandleEvents() {
     if (auto mouseWheelEvent = event->getIf<sf::Event::MouseWheelScrolled>()) {
       mouseWheelDelta = mouseWheelEvent->delta;
     }
+    if (auto mouseButtonEvent = event->getIf<sf::Event::MouseButtonPressed>()) {
+    }
 
     if (auto resizeEvent = event->getIf<sf::Event::Resized>()) {
       HandleResize(resizeEvent->size);
@@ -154,7 +163,7 @@ void Game::HandleResize(const sf::Vector2u& newSize) {
   gridView.setSize(sf::Vector2f(newSize) / zoomFactor);
   guiView.setSize(sf::Vector2f(newSize));
 
-  gridView.setCenter(sf::Vector2f(newSize) / zoomFactor / 2.f);
+  // Reset the position of the gui view. No need to do it for the grid view.
   guiView.setCenter(sf::Vector2f(newSize) / 2.f);
 
   // Keep text at top-left with a small margin
@@ -163,25 +172,30 @@ void Game::HandleResize(const sf::Vector2u& newSize) {
 
 void Game::HandleInput() {
   using namespace sf::Keyboard;
+  using namespace sf::Mouse;
   constexpr float baseMoveSpeed = 16.f;
   const float moveFactor = 1.f / zoomFactor;
   cameraVelocity = sf::Vector2f(0.f, 0.f);
 
-  if (keysHeld[Key::W]) {
+  // Camera controls
+  if (keysHeld[Key::W] || keysHeld[Key::Up]) {
     cameraVelocity.y = -baseMoveSpeed * moveFactor;
   }
-  if (keysHeld[Key::S]) {
+  if (keysHeld[Key::S] || keysHeld[Key::Down]) {
     cameraVelocity.y = baseMoveSpeed * moveFactor;
   }
-  if (keysHeld[Key::A]) {
+  if (keysHeld[Key::A] || keysHeld[Key::Left]) {
     cameraVelocity.x = -baseMoveSpeed * moveFactor;
   }
-  if (keysHeld[Key::D]) {
+  if (keysHeld[Key::D] || keysHeld[Key::Right]) {
     cameraVelocity.x = baseMoveSpeed * moveFactor;
+  }
+  if (keysHeld[Key::C]) {
+    ResetViews();
+    keysHeld.setReleased(Key::C);  // Disable the key after resetting
   }
 
   // Save/Load dialogues
-  // Save
   if (keysHeld[Key::F2]) {
     if (auto savePath = OpenSaveDialog()) {
       SaveGrid(*savePath);
@@ -189,7 +203,6 @@ void Game::HandleInput() {
     // Disable the key to prevent accidental reloads
     keysHeld.setReleased(Key::F2);
   }
-
   if (keysHeld[Key::F3]) {
     if (auto loadPath = OpenLoadDialog()) {
       LoadGrid(*loadPath);
@@ -204,17 +217,7 @@ void Game::HandleInput() {
   }
 
   // Middle mouse button pans the camera
-  if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle)) {
-    // This approach won't cause the sliding pan I want, because it is based on
-    // world coords.
-    // if (panStartPos == sf::Vector2f(0.f, 0.f)) {
-    //  panStartPos =
-    //      window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView);
-    //}
-    // auto currentMousePos =
-    //    window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView);
-    // cameraVelocity = (panStartPos - currentMousePos);
-    // And this approach is uncontrollable, really.
+  if (mouseHeld[Button::Middle]) {
     if (panStartPos == sf::Vector2i(0, 0)) {
       panStartPos = sf::Mouse::getPosition(window);
     }
@@ -239,8 +242,8 @@ void Game::HandleInput() {
   }
 
   // Mouse position needs to be recalculated
-  mousePos =
-      AlignToGrid(window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView));
+  mousePos = AlignToGrid(
+      window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView));
   highlighter.setPosition(mousePos);
 }
 
@@ -293,3 +296,4 @@ vi2d Game::WorldToGrid(const sf::Vector2f& pos) const {
   return vi2d(static_cast<int>(aligned.x / Engine::TileDrawable::DEFAULT_SIZE),
               static_cast<int>(aligned.y / Engine::TileDrawable::DEFAULT_SIZE));
 }
+}  // namespace Engine

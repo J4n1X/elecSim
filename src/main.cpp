@@ -47,7 +47,7 @@ int generate_texture_atlas() {
   const int tilesPerRow = 4;
 
   const int atlasWidth = tileSize * 2 * tilesPerRow;
-  const int atlasHeight = tileSize * (tiles.size() / tilesPerRow * 2);
+  const int atlasHeight = tileSize * (static_cast<int>(tiles.size()) / tilesPerRow * 2);
 
   sf::RenderTexture renderTexture;
   if (!renderTexture.resize({static_cast<unsigned int>(atlasWidth),
@@ -130,6 +130,6 @@ int main(int argc, char* argv[]) {
   }
 #endif
 
-  Game game;
+  Engine::Game game;
   return game.Run(argc, argv);
 }

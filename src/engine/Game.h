@@ -7,9 +7,12 @@
 #include "Drawables.h"
 #include "Grid.h"
 #include "KeyState.h"
+#include "MouseState.h"
 #include "SFML/Graphics.hpp"
 #include "SFML/System/Clock.hpp"
 #include "v2d.h"
+
+namespace Engine {
 
 class FPS {
  public:
@@ -42,6 +45,7 @@ class Game {
   void Initialize();
   void SaveGrid(std::string const& filename);
   void LoadGrid(std::string const& filename);
+  void ResetViews();
   void HandleEvents();
   void HandleInput();
   void HandleResize(const sf::Vector2u& newSize);
@@ -55,16 +59,17 @@ class Game {
   sf::RenderWindow window;
   sf::View gridView;
   sf::View guiView;
-  constexpr static std::string windowTitle = std::string("ElecSim");
+  constexpr static std::string_view windowTitle = "ElecSim";
 
   // Game state
-  std::string gridFilename; 
+  std::string gridFilename;
   ElecSim::Grid grid;
-  Engine::Highlighter highlighter;
-  std::vector<std::unique_ptr<Engine::TileDrawable>> renderables;
+  Highlighter highlighter;
+  std::vector<std::unique_ptr<TileDrawable>> renderables;
 
   // Input handling
-  Engine::KeyState keysHeld;
+  KeyState keysHeld;
+  MouseState mouseHeld;
   float mouseWheelDelta;
   sf::Vector2i panStartPos;
   sf::Vector2f cameraVelocity;
@@ -74,7 +79,7 @@ class Game {
   static constexpr float defaultZoomFactor = 32.f;
 
   // Window settings
-  static constexpr vu2d initialWindowSize = vi2d(1280, 960);
+  static constexpr sf::Vector2u initialWindowSize = sf::Vector2u(1280, 960);
 
   // UI
   FPS fpsTracker;
@@ -82,3 +87,4 @@ class Game {
   sf::Text text;
   sf::Vector2f mousePos;
 };
+}  // namespace Engine

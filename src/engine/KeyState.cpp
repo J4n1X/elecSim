@@ -1,6 +1,7 @@
 #include "KeyState.h"
 #include <iostream>
 #include <format>
+#include <stdexcept>
 
 namespace Engine {
 
@@ -11,10 +12,9 @@ KeyState::KeyState() {
 bool& KeyState::operator[](sf::Keyboard::Key key) {
     unsigned int code = static_cast<unsigned int>(key);
     if (code >= sf::Keyboard::KeyCount) {
-        std::cerr << std::format(
-            "Warning: Invalid key code {} accessed. Returning reference to first element.\n",
-            code);
-        return keys[0];
+        throw std::out_of_range(std::format(
+            "Invalid key code {} accessed. Valid range is 0-{}.",
+            code, sf::Keyboard::KeyCount - 1));
     }
     return keys[code];
 }
@@ -22,10 +22,9 @@ bool& KeyState::operator[](sf::Keyboard::Key key) {
 const bool& KeyState::operator[](sf::Keyboard::Key key) const {
     unsigned int code = static_cast<unsigned int>(key);
     if (code >= sf::Keyboard::KeyCount) {
-        std::cerr << std::format(
-            "Warning: Invalid key code {} accessed. Returning reference to first element.\n",
-            code);
-        return keys[0];
+        throw std::out_of_range(std::format(
+            "Invalid key code {} accessed. Valid range is 0-{}.",
+            code, sf::Keyboard::KeyCount - 1));
     }
     return keys[code];
 }
