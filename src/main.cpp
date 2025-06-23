@@ -6,8 +6,7 @@
 #include "Drawables.h"
 #include "Grid.h"
 #include "SFML/Graphics.hpp"
-#include "SFML/Graphics/Rect.hpp"
-#include "SFML/System/Vector2.hpp"
+#include "SFML/System/Clock.hpp"
 #include "v2d.h"
 
 constexpr const static vu2d initialWindowSize = vi2d(1280, 960);
@@ -19,35 +18,37 @@ Engine::Highlighter highlighter{{{0.f, 0.f},
 std::array<bool, sf::Keyboard::KeyCount> keysHeld{};
 float mouseWheelDelta = 0.f;
 
+constexpr const float defaultZoomFactor = 32.f;  // Default zoom factor
+float zoomFactor = defaultZoomFactor;            // Current zoom factor
+
 sf::Vector2f AlignToGrid(const sf::Vector2f& pos) {
-  return sf::Vector2f(
-      std::floor(pos.x / Engine::BasicTileDrawable::DEFAULT_SIZE) *
-          Engine::BasicTileDrawable::DEFAULT_SIZE,
-      std::floor(pos.y / Engine::BasicTileDrawable::DEFAULT_SIZE) *
-          Engine::BasicTileDrawable::DEFAULT_SIZE);
+  return sf::Vector2f(std::floor(pos.x / Engine::TileDrawable::DEFAULT_SIZE) *
+                          Engine::TileDrawable::DEFAULT_SIZE,
+                      std::floor(pos.y / Engine::TileDrawable::DEFAULT_SIZE) *
+                          Engine::TileDrawable::DEFAULT_SIZE);
 }
 
 vi2d WorldToGrid(const sf::Vector2f& pos) {
   auto aligned = AlignToGrid(pos);
-  return vi2d(
-      static_cast<int>(aligned.x / Engine::BasicTileDrawable::DEFAULT_SIZE),
-      static_cast<int>(aligned.y / Engine::BasicTileDrawable::DEFAULT_SIZE));
+  return vi2d(static_cast<int>(aligned.x / Engine::TileDrawable::DEFAULT_SIZE),
+              static_cast<int>(aligned.y / Engine::TileDrawable::DEFAULT_SIZE));
 }
 
 void HandleInput(sf::RenderWindow& window, sf::View& view,
                  sf::Vector2f& cameraVelocity) {
   cameraVelocity = sf::Vector2f(0.f, 0.f);  // Reset camera velocity
+  float moveFactor = 1.f / zoomFactor;  // Adjust movement speed based on zoom
   if (keysHeld[static_cast<int>(sf::Keyboard::Key::W)]) {
-    cameraVelocity.y = -10.f;  // Move up
+    cameraVelocity.y = -32.f * moveFactor;  // Move up
   }
   if (keysHeld[static_cast<int>(sf::Keyboard::Key::S)]) {
-    cameraVelocity.y = 10.f;  // Move down
+    cameraVelocity.y = 32.f * moveFactor;  // Move down
   }
   if (keysHeld[static_cast<int>(sf::Keyboard::Key::A)]) {
-    cameraVelocity.x = -10.f;  // Move left
+    cameraVelocity.x = -32.f * moveFactor;  // Move left
   }
   if (keysHeld[static_cast<int>(sf::Keyboard::Key::D)]) {
-    cameraVelocity.x = 10.f;  // Move right
+    cameraVelocity.x = 32.f * moveFactor;  // Move right
   }
 
   // Escape key closes the window
@@ -58,8 +59,9 @@ void HandleInput(sf::RenderWindow& window, sf::View& view,
   // Mouse wheel zooms in and out
   // TODO: Restore "Zoom to mouse" functionality
   if (mouseWheelDelta != 0.f) {
-    float zoomFactor = 1.f + mouseWheelDelta * 0.1f;  // Adjust zoom sensitivity
-    view.zoom(zoomFactor);
+    float zoomDiff = 1.f + mouseWheelDelta * 0.1f;  // Adjust zoom sensitivity
+    view.zoom(zoomDiff);
+    zoomFactor /= zoomDiff;
     mouseWheelDelta = 0.f;  // Reset after applying
   }
 }
@@ -173,6 +175,28 @@ int generate_texture_atlas() {
   return 0;
 }
 
+class FPS {
+ public:
+  FPS() : mFrame(0), mFps(0) {}
+  unsigned int getFPS() const { return mFps; }
+
+ private:
+  unsigned int mFrame;
+  unsigned int mFps;
+  sf::Clock mClock;
+
+ public:
+  void update() {
+    if (mClock.getElapsedTime().asSeconds() >= 1.f) {
+      mFps = mFrame;
+      mFrame = 0;
+      mClock.restart();
+    }
+
+    ++mFrame;
+  }
+};
+
 // Texture atlas generation main function
 int main(int argc, char* argv[]) {
   // Check if user wants to generate atlas
@@ -180,17 +204,27 @@ int main(int argc, char* argv[]) {
     return generate_texture_atlas();
   }
 
+  sf::Vector2f initialWindowSizeVec(static_cast<float>(initialWindowSize.x),
+                                    static_cast<float>(initialWindowSize.y));
+
   sf::RenderWindow window(
       sf::VideoMode(Engine::ToSfmlVector(initialWindowSize)), "ElecSim");
-  sf::FloatRect cullingBox = sf::FloatRect({0.f, 0.f}, {1280.f, 960.f});
-  sf::View view(cullingBox);
+  window.setVerticalSyncEnabled(true);
+  window.setFramerateLimit(60);
+
+  sf::View gridView(
+      sf::FloatRect({0.f, 0.f}, initialWindowSizeVec / zoomFactor));
+  sf::View guiView(sf::FloatRect({0.f, 0.f}, initialWindowSizeVec));
+
   sf::Vector2f cameraVelocity(0.f, 0.f);
 
-  // sf::Font font("arial.ttf");
-  // sf::Text text(font);
-  // text.setString("Hello, ElecSim!");
-  // text.setCharacterSize(24);
-  // text.setFillColor(sf::Color::Black);
+  // FPS tracker
+  FPS fpsTracker;
+
+  sf::Font font("media/BAHNSCHRIFT.TTF");
+  sf::Text text(font);
+  text.setCharacterSize(24);
+  text.setFillColor(sf::Color::Black);
 
   keysHeld.fill(false);  // Initialize all keys as not pressed
   if (argc > 1) {
@@ -205,9 +239,9 @@ int main(int argc, char* argv[]) {
           [](const auto& tile) { return Engine::CreateTileDrawable(tile); }) |
       std::ranges::to<std::vector<std::unique_ptr<Engine::TileDrawable>>>();
 
-  window.setVerticalSyncEnabled(true);
-  window.setFramerateLimit(60);
   while (window.isOpen()) {
+    fpsTracker.update();
+
     while (const std::optional event = window.pollEvent()) {
       if (event->is<sf::Event::Closed>()) {
         window.close();
@@ -235,23 +269,30 @@ int main(int argc, char* argv[]) {
               event->getIf<sf::Event::MouseWheelScrolled>()) {
         mouseWheelDelta = mouseWheelEvent->delta;
       }
+      if (auto resizeEvent = event->getIf<sf::Event::Resized>()) {
+        // Update the gridView to match the new window size
+        gridView.setSize(sf::Vector2f(resizeEvent->size) / zoomFactor);
+        guiView.setSize(sf::Vector2f(
+            resizeEvent->size));  // This prevents warping of the GUI
+      }
     }
-    HandleInput(window, view, cameraVelocity);
+    HandleInput(window, gridView, cameraVelocity);
 
     if (cameraVelocity != sf::Vector2f(0.f, 0.f)) {
-      view.move(cameraVelocity);
+      gridView.move(cameraVelocity);
     }
     // Get mouse position and align it to the grid
     sf::Vector2f mousePos = AlignToGrid(
-        window.mapPixelToCoords(sf::Mouse::getPosition(window), view));
+        window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView));
     highlighter.setPosition(mousePos);
 
-    window.setView(view);
+    window.setView(gridView);
     window.clear(sf::Color::Blue);
 
-    sf::FloatRect viewBounds(view.getCenter() - view.getSize() / 2.f,
-                             view.getSize());
+    sf::FloatRect viewBounds(gridView.getCenter() - gridView.getSize() / 2.f,
+                             gridView.getSize());
 
+    window.setView(gridView);
     auto viewables =
         renderables | std::views::filter([viewBounds](const auto& tile) {
           return viewBounds.findIntersection(tile->getGlobalBounds())
@@ -262,7 +303,12 @@ int main(int argc, char* argv[]) {
       window.draw(*tile);
     }
     window.draw(highlighter);
-    // window.draw(text);
+
+    text.setString(std::format(
+        "FPS: {}; Mouse Position: ({:.2f}, {:.2f}); Zoom level: {:.2f}\n",
+        fpsTracker.getFPS(), mousePos.x, mousePos.y, zoomFactor));
+    window.setView(guiView);
+    window.draw(text);
 
     window.display();
     // Update and render logic would go here

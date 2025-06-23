@@ -21,7 +21,7 @@ sf::Vector2<T> ToSfmlVector(const v2d<T>& vec) {
 // Base class for all tile drawables - polymorphic approach
 class TileDrawable : public sf::Drawable, public sf::Transformable {
  public:
-  static constexpr float DEFAULT_SIZE = 32.f;
+  static constexpr float DEFAULT_SIZE = 1.f;
 
   explicit TileDrawable(std::shared_ptr<ElecSim::GridTile> tilePtr)
       : tilePtr(std::move(tilePtr)) {}
@@ -60,9 +60,9 @@ class BasicTileDrawable : public TileDrawable {
  private:
   virtual void draw(sf::RenderTarget& target,
                     sf::RenderStates states) const override;
+  sf::VertexArray CreateTileVertexArray();
 
-  sf::RectangleShape square;
-  sf::ConvexShape triangle;
+  sf::VertexArray vArray;
   sf::Color activeColor;
   sf::Color inactiveColor;
 };
