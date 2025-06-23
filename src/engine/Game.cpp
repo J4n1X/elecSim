@@ -601,6 +601,7 @@ void Game::Render() {
     auto originalPos = highlighter.getPosition();
     auto originalSize = highlighter.getSize();
 
+    // TODO: This is temporary. Implement proper.
     for (const auto& tile : tileBuffer) {
       vi2d previewPos = tile->GetPos() + currentGridPos;
       highlighter.setPosition(
