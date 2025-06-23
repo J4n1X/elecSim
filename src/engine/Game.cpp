@@ -16,7 +16,7 @@ std::optional<std::string> OpenSaveDialog() {
   };
   NFD::Init();
   NFD::UniquePath resultPath;
-  auto curDir = std::filesystem::current_path();
+  auto curDir = std::filesystem::current_path().string();
   auto result = NFD::SaveDialog(resultPath, filterItem, 1, curDir.c_str());
   if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
   std::string filename = resultPath.get();
@@ -31,7 +31,7 @@ std::optional<std::string> OpenLoadDialog() {
   };
   NFD::Init();
   NFD::UniquePath resultPath;
-  auto curDir = std::filesystem::path().parent_path().string();
+  auto curDir = std::filesystem::current_path().string();
   auto result = NFD::OpenDialog(resultPath, filterItem, 1, curDir.c_str());
   if (result != nfdresult_t::NFD_OKAY) return std::nullopt;
   std::string filename = resultPath.get();
@@ -186,12 +186,16 @@ void Game::HandleInput() {
     if (auto savePath = OpenSaveDialog()) {
       SaveGrid(*savePath);
     }
+    // Disable the key to prevent accidental reloads
+    keysHeld.setReleased(Key::F2);
   }
 
   if (keysHeld[Key::F3]) {
     if (auto loadPath = OpenLoadDialog()) {
       LoadGrid(*loadPath);
     }
+    // Disable the key to prevent accidental reloads
+    keysHeld.setReleased(Key::F3);
   }
 
   // Escape key closes the window
