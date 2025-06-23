@@ -99,6 +99,23 @@ class Highlighter : public sf::Drawable, public sf::Transformable {
     rectangle.setOutlineThickness(BasicTileDrawable::DEFAULT_SIZE / 8.f);
   }
 
+  void setSize(const sf::Vector2f& size) {
+    rectangle.setSize(size);
+  }
+
+  void setColor(const sf::Color& newColor) {
+    color = newColor;
+    rectangle.setOutlineColor(color);
+  }
+
+  void setFillColor(const sf::Color& fillColor) {
+    rectangle.setFillColor(fillColor);
+  }
+
+  sf::Vector2f getSize() const {
+    return rectangle.getSize();
+  }
+
   void draw(sf::RenderTarget& target, sf::RenderStates states) const override {
     states.transform *= getTransform();
     target.draw(rectangle, states);

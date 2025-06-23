@@ -6,6 +6,7 @@
 
 #include "Drawables.h"
 #include "Grid.h"
+#include "GridTileTypes.h"
 #include "KeyState.h"
 #include "MouseState.h"
 #include "SFML/Graphics.hpp"
@@ -50,26 +51,50 @@ class Game {
   void HandleInput();
   void HandleResize(const sf::Vector2u& newSize);
   void Update();
-  void Render();
-
-  sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
+  void Render();  sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
   vi2d WorldToGrid(const sf::Vector2f& pos) const;
+  void RegenerateRenderables();
+
+  // Tile manipulation methods
+  void CreateBrushTile();
+  void CalculateTileBufferBoxSize();
+  void JustifyBufferTiles();
+  void RotateBufferTiles();
+  void ClearBuffer();
+  void CopyTiles(const vi2d& startIndex, const vi2d& endIndex);
+  void PasteTiles(const vi2d& pastePosition);
+  void CutTiles(const vi2d& startIndex, const vi2d& endIndex);
+  void DeleteTiles(const vi2d& position);
+  void PlaceTile(const vi2d& position);
 
   // Window and rendering
   sf::RenderWindow window;
   sf::View gridView;
   sf::View guiView;
-  constexpr static std::string_view windowTitle = "ElecSim";
-
-  // Game state
+  constexpr static std::string_view windowTitle = "ElecSim";  // Game state
   std::string gridFilename;
   ElecSim::Grid grid;
   Highlighter highlighter;
   std::vector<std::unique_ptr<TileDrawable>> renderables;
 
+  // Tile manipulation
+  bool selectionActive = false;
+  bool unsavedChanges = false;
+  vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
+  vi2d lastPlacedPos = {0, 0};        // Prevents overwriting same tile
+  std::vector<std::unique_ptr<ElecSim::GridTile>> tileBuffer;  // Selected tiles for operations
+  vi2d tileBufferBoxSize = {0, 0};  // Size of the tile buffer box
+  int selectedBrushIndex = 1;
+  ElecSim::Direction selectedBrushFacing = ElecSim::Direction::Top;
+
   // Input handling
+  // TODO: Maybe we can bind these together.
+  KeyState keysPressed;
   KeyState keysHeld;
+  KeyState keysReleased;
+  MouseState mousePressed;
   MouseState mouseHeld;
+  MouseState mouseReleased;
   float mouseWheelDelta;
   sf::Vector2i panStartPos;
   sf::Vector2f cameraVelocity;

@@ -43,7 +43,7 @@ The controls are as follows:
   - Up, Down, Left, Right (Or WASD): Move the camera
   - Mousewheel Up: Zoom in
   - Mousewheel Down: Zoom out
-  - C: Reset the Camera to the default position and the default render scale
+  - F: Reset the Camera to the default position and the default render scale
   - F1: Open the console (use "help" for a list of available commands)
   - F2: Save file to disk
   - F3: Load file from disk
