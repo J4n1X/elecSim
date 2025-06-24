@@ -22,8 +22,8 @@ BasicTileDrawable::BasicTileDrawable(
 
   setOrigin({origin, origin});  // Origin is in the center.
   setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) + getOrigin());
-
   vArray = CreateVertexArray();
+  UpdateVisualState();
 }
 
 void BasicTileDrawable::UpdateVisualState() {
