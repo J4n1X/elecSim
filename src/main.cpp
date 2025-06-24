@@ -66,7 +66,7 @@ int generate_texture_atlas() {
 
   // Create drawables and render each tile to the atlas
   for (size_t i = 0; i < tiles.size(); ++i) {
-    auto drawable = Engine::CreateTileDrawable(tiles[i]);
+    auto drawable = Engine::CreateTileRenderable(tiles[i]);
 
     // Calculate position in the atlas grid
     int row = static_cast<int>(i / tilesPerRow);

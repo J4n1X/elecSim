@@ -1,6 +1,7 @@
 #include "Game.h"
 
 #include "GridTileTypes.h"
+#include "TileChunk.h"
 #include "nfd.hpp"
 
 // This binary blob contains the "Bahnschrift" font that we are using.
@@ -56,6 +57,8 @@ Game::Game()
       gridView(sf::FloatRect(
           {0.f, 0.f}, sf::Vector2f(initialWindowSize) / defaultZoomFactor)),
       guiView(sf::FloatRect({0.f, 0.f}, sf::Vector2f(initialWindowSize))),
+      gridVertexBuffer(sf::PrimitiveType::Triangles,
+                       sf::VertexBuffer::Usage::Dynamic),
       grid{},
       highlighter{{{0.f, 0.f},
                    {Engine::BasicTileDrawable::DEFAULT_SIZE,
@@ -532,11 +535,12 @@ void Game::PlaceTile(const vi2d& position) {
   if (tileBuffer.empty()) return;
 
   // Place the first tile from the buffer (for single tile placement)
-  auto clonedTile = tileBuffer[0]->Clone();
+  std::shared_ptr<ElecSim::GridTile> clonedTile = tileBuffer[0]->Clone();
   clonedTile->SetPos(position);
-  grid.SetTile(position, std::move(clonedTile));
+  auto renderable = CreateTileRenderable(std::move(clonedTile));
+  grid.SetTile(position, clonedTile);
 
-  RegenerateRenderables();
+  AddRenderable(std::move(renderable));
 
   unsavedChanges = true;
 }
@@ -553,17 +557,17 @@ void Game::Render() {
 
   sf::FloatRect viewBounds(gridView.getCenter() - gridView.getSize() / 2.f,
                            gridView.getSize());
+  // The old approach. Turns out that filtering this is useless with our new rendering approach, because the GPU already culls what's not in view.
+  //auto viewables =
+  //    renderables | std::views::filter([viewBounds](const auto& tile) {
+  //      return viewBounds.findIntersection(tile->getGlobalBounds()).has_value();
+  //    });
+  // for (const auto& tile : viewables) {
+  //   tile->UpdateVisualState();
+  //   window.draw(*tile);
+  // }
 
-  auto viewables =
-      renderables | std::views::filter([viewBounds](const auto& tile) {
-        return viewBounds.findIntersection(tile->getGlobalBounds()).has_value();
-      });
-
-  for (const auto& tile : viewables) {
-    tile->UpdateVisualState();
-    window.draw(*tile);
-  }
-  window.draw(highlighter);
+  window.draw(gridVertexBuffer);
 
   // Draw selection rectangle if active
   if (selectionActive) {
@@ -593,6 +597,8 @@ void Game::Render() {
     highlighter.setSize(originalSize);
     highlighter.setColor(sf::Color(255, 0, 0, 128));
     highlighter.setFillColor(sf::Color::Transparent);
+  } else {
+    window.draw(highlighter);
   }
 
   // Draw tile buffer preview (for paste preview)
@@ -636,12 +642,13 @@ void Game::Render() {
                                                           : "Left";
 
   text.setString(std::format(
-      "FPS: {}; Mouse Position: ({:.2f}, {:.2f}); Grid: ({}, {}); Zoom: "
+      "FPS: {}; Grid Position: ({}, {}); Zoom: "
       "{:.2f}\n"
-      "Brush: {} ({}); Facing: {}; Buffer: {} tiles; Selection: {}\n",
-      fpsTracker.getFPS(), mousePos.x, mousePos.y, WorldToGrid(mousePos).x,
-      WorldToGrid(mousePos).y, zoomFactor, selectedBrushIndex, brushName,
-      facingName, tileBuffer.size(), selectionActive ? "Active" : "None"));
+      "Brush: {} ({}); Facing: {}; Buffer: {} tiles; Selection: {}\n"
+      "Total Tiles: {}",
+      fpsTracker.getFPS(), WorldToGrid(mousePos).x, WorldToGrid(mousePos).y,
+      zoomFactor, selectedBrushIndex, brushName, facingName, tileBuffer.size(),
+      selectionActive ? "Active" : "None", grid.GetTileCount()));
   window.setView(guiView);
   window.draw(text);
 
@@ -661,11 +668,37 @@ vi2d Game::WorldToGrid(const sf::Vector2f& pos) const {
               static_cast<int>(aligned.y / Engine::TileDrawable::DEFAULT_SIZE));
 }
 
+void Engine::Game::AddRenderables(
+    std::vector<std::unique_ptr<Engine::TileDrawable>> tiles) {
+      (void)tiles;
+    }
+
+void Game::AddRenderable(std::unique_ptr<Engine::TileDrawable>tilePtr) {
+  (void)tilePtr;  // This is to avoid unused variable warning
+  // unused for now
+}
+
+// TODO: Maybe keep this as a view so it's lazy, or do it differently.
 void Game::RegenerateRenderables() {
   renderables =
       grid.GetTiles() | std::views::values |
       std::views::transform(
-          [](const auto& tile) { return Engine::CreateTileDrawable(tile); }) |
+          [](const auto& tile) { return Engine::CreateTileRenderable(tile); }) |
       std::ranges::to<std::vector<std::unique_ptr<Engine::TileDrawable>>>();
+
+  auto vArrayChunks = renderables | std::views::transform([](const auto& tile) {
+                        return tile->GetVertexArray();
+                      }) |
+                      std::views::join |
+                      std::ranges::to<std::vector<sf::Vertex>>();
+
+  if (!gridVertexBuffer.create(vArrayChunks.size())) {
+    throw std::runtime_error("Failed to create vertex buffer");
+  }
+  if (!vArrayChunks.empty()) {
+    if (!gridVertexBuffer.update(vArrayChunks.data(), vArrayChunks.size(), 0)) {
+      throw std::runtime_error("Failed to update vertex buffer");
+    }
+  }
 }
 }  // namespace Engine

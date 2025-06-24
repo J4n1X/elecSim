@@ -6,8 +6,8 @@
 #include "GridTileTypes.h"
 #include "SFML/Graphics.hpp"
 #include "SFML/Graphics/Drawable.hpp"
-#include "SFML/Graphics/Transformable.hpp"
 #include "SFML/Graphics/Rect.hpp"
+#include "SFML/Graphics/Transformable.hpp"
 #include "v2d.h"
 
 namespace Engine {
@@ -17,7 +17,6 @@ template <typename T>
 sf::Vector2<T> ToSfmlVector(const v2d<T>& vec) {
   return sf::Vector2<T>(vec.x, vec.y);
 }
-
 // Base class for all tile drawables - polymorphic approach
 class TileDrawable : public sf::Drawable, public sf::Transformable {
  public:
@@ -29,6 +28,16 @@ class TileDrawable : public sf::Drawable, public sf::Transformable {
 
   // Updates the drawable based on the current tile state
   virtual void UpdateVisualState() = 0;
+
+  [[nodiscard]] std::vector<sf::Vertex> GetVertexArray() const {
+    std::vector<sf::Vertex> vertices;
+    vertices.reserve(vArray.getVertexCount());
+    for(size_t i = 0; i < vArray.getVertexCount(); ++i) {
+      vertices.emplace_back(getTransform().transformPoint(
+          vArray[i].position), vArray[i].color);
+    }
+    return vertices;
+  }
 
   // Gets the tile this drawable represents
   [[nodiscard]] std::shared_ptr<ElecSim::GridTile> GetTile() const noexcept {
@@ -45,7 +54,9 @@ class TileDrawable : public sf::Drawable, public sf::Transformable {
 
  protected:
   float size = DEFAULT_SIZE;
+  sf::VertexArray vArray;
   std::shared_ptr<ElecSim::GridTile> tilePtr;
+  [[nodiscard]] virtual sf::VertexArray CreateVertexArray() const = 0;
 };
 
 // Basic tile drawable for most tile types - uses square + triangle
@@ -58,11 +69,10 @@ class BasicTileDrawable : public TileDrawable {
   [[nodiscard]] std::unique_ptr<TileDrawable> Clone() const override;
 
  private:
+  [[nodiscard]] sf::VertexArray CreateVertexArray() const override;
   virtual void draw(sf::RenderTarget& target,
                     sf::RenderStates states) const override;
-  sf::VertexArray CreateVertexArray();
 
-  sf::VertexArray vArray;
   sf::Color activeColor;
   sf::Color inactiveColor;
 };
@@ -79,29 +89,25 @@ class CrossingTileDrawable : public TileDrawable {
 
  private:
   void Setup();
-
-  sf::RectangleShape baseSquare;
-  std::array<sf::RectangleShape, 4> squares;
-  const sf::Color activeColor = sf::Color(0, 0, 255);
-  const sf::Color inactiveColor = sf::Color(0, 0, 128);
+  constexpr static sf::Color color = sf::Color(0, 0, 128);
+  [[nodiscard]] sf::VertexArray CreateVertexArray() const final override;
   void draw(sf::RenderTarget& target,
             sf::RenderStates states) const final override;
 };
 
-
 class Highlighter : public sf::Drawable, public sf::Transformable {
  public:
-  explicit Highlighter(const sf::FloatRect& bounds, sf::Color color = sf::Color(255, 0, 0, 128)) : color(color) {
+  explicit Highlighter(const sf::FloatRect& bounds,
+                       sf::Color color = sf::Color(255, 0, 0, 128))
+      : color(color) {
     rectangle.setPosition({0.f, 0.f});
     rectangle.setSize(bounds.size);
     rectangle.setFillColor(sf::Color::Transparent);
     rectangle.setOutlineColor(color);
-    rectangle.setOutlineThickness(BasicTileDrawable::DEFAULT_SIZE / 8.f);
+    rectangle.setOutlineThickness(TileDrawable::DEFAULT_SIZE / 8.f);
   }
 
-  void setSize(const sf::Vector2f& size) {
-    rectangle.setSize(size);
-  }
+  void setSize(const sf::Vector2f& size) { rectangle.setSize(size); }
 
   void setColor(const sf::Color& newColor) {
     color = newColor;
@@ -112,9 +118,7 @@ class Highlighter : public sf::Drawable, public sf::Transformable {
     rectangle.setFillColor(fillColor);
   }
 
-  sf::Vector2f getSize() const {
-    return rectangle.getSize();
-  }
+  sf::Vector2f getSize() const { return rectangle.getSize(); }
 
   void draw(sf::RenderTarget& target, sf::RenderStates states) const override {
     states.transform *= getTransform();
@@ -128,7 +132,7 @@ class Highlighter : public sf::Drawable, public sf::Transformable {
 };
 
 // Factory function to create appropriate drawable for any tile type
-std::unique_ptr<TileDrawable> CreateTileDrawable(
+std::unique_ptr<TileDrawable> CreateTileRenderable(
     std::shared_ptr<ElecSim::GridTile> tilePtr);
 
 }  // namespace Engine

@@ -230,14 +230,15 @@ void Grid::ResetSimulation() {
 //   return drawnTiles;
 // }
 
-void Grid::SetTile(vi2d pos, std::unique_ptr<GridTile> tile) {
+void ElecSim::Grid::SetTile(vi2d pos, std::shared_ptr<GridTile> tile) {
   tile->SetPos(pos);
-  auto [mapElement, inserted] = tiles.insert_or_assign(pos, std::move(tile));
+  auto [mapElement, inserted] = tiles.insert_or_assign(pos, tile);
   if (mapElement->second->IsEmitter()) {
     emitters.push_back(mapElement->second);
   }
   fieldIsDirty = true;  // Mark the field as modified
 }
+
 // TODO: These need to be moved into the game class or somewhere similar, like
 // the RenderManager.
 // olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {

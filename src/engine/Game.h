@@ -53,6 +53,8 @@ class Game {
   void Update();
   void Render();  sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
   vi2d WorldToGrid(const sf::Vector2f& pos) const;
+  void AddRenderables(std::vector<std::unique_ptr<Engine::TileDrawable>> tiles);
+  void AddRenderable(std::unique_ptr<Engine::TileDrawable> tile);
   void RegenerateRenderables();
 
   // Tile manipulation methods
@@ -71,6 +73,7 @@ class Game {
   sf::RenderWindow window;
   sf::View gridView;
   sf::View guiView;
+  sf::VertexBuffer gridVertexBuffer;
   constexpr static std::string_view windowTitle = "ElecSim";  // Game state
   std::string gridFilename;
   ElecSim::Grid grid;
@@ -100,8 +103,8 @@ class Game {
   sf::Vector2f cameraVelocity;
 
   // Camera and zoom
-  float zoomFactor;
   static constexpr float defaultZoomFactor = 32.f;
+  float zoomFactor;
 
   // Window settings
   static constexpr sf::Vector2u initialWindowSize = sf::Vector2u(1280, 960);

@@ -67,7 +67,7 @@ class Grid {
 
   // Sets a tile at the given position, overwriting the position is currently
   // has stored internally.
-  void SetTile(vi2d pos, std::unique_ptr<GridTile> tile);
+  void SetTile(vi2d pos, std::shared_ptr<GridTile> tile);
   // Expects a container of buffer tiles, which have coordinates relative to the
   // buffer system they are in. Supports any iterable container holding
   // std::unique_ptr<GridTile> or types convertible to it (e.g.,

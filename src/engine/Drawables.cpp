@@ -3,6 +3,13 @@
 #include <algorithm>
 #include <ranges>
 
+// Very basic helper struct
+struct Triangle {
+  constexpr static uint32_t VERTEX_COUNT = 3;
+  std::array<sf::Vector2f, 3> positions;
+  sf::Color color;
+};
+
 namespace Engine {
 
 BasicTileDrawable::BasicTileDrawable(
@@ -15,6 +22,7 @@ BasicTileDrawable::BasicTileDrawable(
 
   setOrigin({origin, origin});  // Origin is in the center.
   setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) + getOrigin());
+
   vArray = CreateVertexArray();
 }
 
@@ -70,13 +78,8 @@ void BasicTileDrawable::draw(sf::RenderTarget& target,
 }
 
 // Test Vertex Array for a tile
-sf::VertexArray BasicTileDrawable::CreateVertexArray() {
+sf::VertexArray BasicTileDrawable::CreateVertexArray() const {
   sf::VertexArray v(sf::PrimitiveType::Triangles, 9);
-  // Define triangle vertices and their default colors
-  struct Triangle {
-    std::array<sf::Vector2f, 3> positions;
-    sf::Color color;
-  };
 
   const std::array<Triangle, 3> triangles = {
       {// Triangle one (inactive by default)
@@ -94,8 +97,11 @@ sf::VertexArray BasicTileDrawable::CreateVertexArray() {
 
   for (size_t t = 0; t < triangles.size(); ++t) {
     for (size_t i = 0; i < 3; ++i) {
-      v[t * 3 + i].position = triangles[t].positions[i];
-      v[t * 3 + i].color = triangles[t].color;
+      // auto transformedPos = getTransform().transformPoint(
+      //     triangles[t].positions[i]);
+      // v[t * 3 + i] = sf::Vertex(
+      //     transformedPos, triangles[t].color);
+      v[t * 3 + i] = sf::Vertex(triangles[t].positions[i], triangles[t].color);
     }
   }
   return v;
@@ -108,20 +114,46 @@ sf::VertexArray BasicTileDrawable::CreateVertexArray() {
 void CrossingTileDrawable::Setup() {
   setOrigin({size / 2.f, size / 2.f});  // Origin is in the center.
   setPosition(Engine::ToSfmlVector(tilePtr->GetPos() * size) + getOrigin());
+  vArray = CreateVertexArray();
+}
 
-  baseSquare.setPosition({0.f, 0.f});
-  baseSquare.setSize({size, size});
-
+sf::VertexArray CrossingTileDrawable::CreateVertexArray() const {
   const float trenchSize = size / 8.f;
   const float squareSize = (size - trenchSize) / 2.f;
   const float offset = squareSize + trenchSize;
-  for (auto& square : squares) {
-    square.setSize({squareSize, squareSize});
+  sf::VertexArray v(sf::PrimitiveType::Triangles, Triangle::VERTEX_COUNT * 8);
+
+  // Lambda that creates a quad
+  auto createQuad = [](sf::Vector2f pos, sf::Color color,
+                       float size) -> std::array<Triangle, 2> {
+    return {
+        Triangle{
+            {pos, pos + sf::Vector2f(size, 0.f), pos + sf::Vector2f(0.f, size)},
+            color},  // Triangle 1
+        Triangle{{pos + sf::Vector2f(size, 0.f), pos + sf::Vector2f(size, size),
+                  pos + sf::Vector2f(0.f, size)},
+                 color}  // Triangle 2
+    };
+  };
+  for (size_t i = 0; i < 4; i++) {
+    float offsetX = (i % 2) * offset;
+    float offsetY = (i / 2) * offset;
+    auto triangles = createQuad({offsetX, offsetY}, color, squareSize);
+    size_t baseIndex = i * Triangle::VERTEX_COUNT * 2;
+    auto vertices =
+        triangles | std::views::transform(
+                        [](const Triangle& t) -> std::array<sf::Vertex, 3> {
+                          return {sf::Vertex(t.positions[0], t.color),
+                                  sf::Vertex(t.positions[1], t.color),
+                                  sf::Vertex(t.positions[2], t.color)};
+                        }) | std::views::join;
+    // Flatten the triangles into vertices and assign to v using ranges and views
+    size_t idx = 0;
+    for (const auto& vert : vertices) {
+      v[baseIndex + idx++] = vert;
+    }
   }
-  squares[0].setPosition({0.f, 0.f});
-  squares[1].setPosition({offset, 0.f});
-  squares[2].setPosition({0.f, offset});
-  squares[3].setPosition({offset, offset});
+  return v;
 }
 
 CrossingTileDrawable::CrossingTileDrawable(
@@ -146,29 +178,18 @@ CrossingTileDrawable::CrossingTileDrawable(
 }
 
 void CrossingTileDrawable::UpdateVisualState() {
-  if (tilePtr->GetActivation()) {
-    baseSquare.setFillColor(activeColor);
-    for (auto& square : squares) {
-      square.setFillColor(activeColor);
-    }
-  } else {
-    baseSquare.setFillColor(inactiveColor);
-    for (auto& square : squares) {
-      square.setFillColor(inactiveColor);
-    }
-  }
+  // Do nothing
+  return;
 }
 
 void CrossingTileDrawable::draw(sf::RenderTarget& target,
                                 sf::RenderStates states) const {
   states.transform *= getTransform();
-  for (const auto& square : squares) {
-    target.draw(square, states);
-  }
+  target.draw(vArray, states);
 }
 
 // TODO: There's probably a better way. But I want this to work right now.
-std::unique_ptr<TileDrawable> CreateTileDrawable(
+std::unique_ptr<TileDrawable> CreateTileRenderable(
     std::shared_ptr<ElecSim::GridTile> tilePtr) {
   switch (tilePtr->GetTileType()) {
     using ElecSim::TileType;
