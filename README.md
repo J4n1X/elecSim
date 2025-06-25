@@ -30,6 +30,8 @@ If you'd like to use the the old way of processing tile updates, pass along ```-
 
 Furthermore, you can turn off LTOs and CCache (if available) by using ```-DDISABLE_LTO=ON``` and ```-DDISABLE_CCACHE=ON```.
 
+If you are using Linux and you are on the debug configuration and want to use the address sanitizer, youc an pass ```-DENABLE_MEMCHECK```
+
 To generate the required configuration for your system. To compile the project, all you must do after this is issue the following command: 
 
 ```cmake --build .```

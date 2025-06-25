@@ -23,7 +23,7 @@ enum class TileType : int {
   Inverter,
   Crossing
 };
-class GridTile : public std::enable_shared_from_this<GridTile> {
+class GridTile {
  protected:
   vi2d pos;
   Direction facing;

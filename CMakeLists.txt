@@ -2,8 +2,16 @@ cmake_minimum_required(VERSION 3.20)
 project("elecSim")
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(TESTS_DIR ${PROJECT_SOURCE_DIR}/examples/tests)
 set(CMAKE_UNITY_BUILD_BATCH_SIZE 8)
+cmake_policy(SET CMP0140 NEW)
+
+include(ProcessorCount)
+ProcessorCount(NUM_PRCESSORS)
+
+set(TESTS_DIR ${PROJECT_SOURCE_DIR}/examples/tests)
+set(BUILD_DIR ${CMAKE_BINARY_DIR})
+set(ASSETS_DIR ${PROJECT_SOURCE_DIR}/media)
+set(TOOLS_DIR ${BUILD_DIR}/early_build/bin)
 
 # Download cmrc (If we ever need it, I'll uncomment this)
 #file(DOWNLOAD "https://raw.githubusercontent.com/vector-of-bool/cmrc/refs/heads/master/CMakeRC.cmake"
@@ -13,13 +21,6 @@ set(CMAKE_UNITY_BUILD_BATCH_SIZE 8)
 # Debug and Release configuration options
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -UDEBUG")
-
-if (WIN32)
-    # /ENTRY:mainCRTStartup keeps the same "main" function instead of requiring "WinMain"
-    set(SUBSYSTEM_LINKER_OPTIONS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
-else()
-    set(SUBSYSTEM_LINKER_OPTIONS "-mwindows")
-endif()
 
 # These are some options that the user can set
 option(SIM_PREPROCESSING "Enable caching for simulation results" ON)
@@ -52,14 +53,9 @@ if(lto_supported)
   endif()
 endif()
 
-# Dependencies for the project
-include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
-
-
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 # Set default build type if not specified
 if(NOT CMAKE_BUILD_TYPE)
@@ -70,8 +66,40 @@ if(CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_CONFIGURATION_TYPES "Debug;Release" CACHE STRING "Available build configurations" FORCE)
 endif()
 
-
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+
+if(EARLY_BUILD)
+  message(STATUS "Building tools needed to configure the project")
+  # Fetch Dependencies
+  include(${CMAKE_SOURCE_DIR}/cmake/early_deps.cmake)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/tools)
+  return()
+endif()
+
+# Prepare needed tools for the project's build step
+find_program(BLOBBER blobber PATHS ${TOOLS_DIR})
+if(NOT BLOBBER_FOUND)
+  message(STATUS "Preparing configuration step tools")
+  set(workdir ${BUILD_DIR}/early_build)
+  execute_process(COMMAND ${CMAKE_COMMAND} -E make_directory "${workdir}")
+  execute_process(COMMAND ${CMAKE_COMMAND} 
+                  -G "${CMAKE_GENERATOR}"
+                  -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
+                  -DCMAKE_BUILD_TYPE=Release
+                  -DEARLY_BUILD=ON
+                  ${CMAKE_SOURCE_DIR}
+                  WORKING_DIRECTORY "${workdir}")
+  execute_process(COMMAND ${CMAKE_COMMAND} --build . -j ${NUM_PRCESSORS}
+                  WORKING_DIRECTORY "${workdir}")
+endif()
+
+# Add the seperate building of tools as a target
+add_custom_target(tools ALL
+  COMMAND ${CMAKE_COMMAND} --build ${BUILD_DIR}/early_build  -j ${NUM_PRCESSORS}
+)
+
+# Dependencies for the project
+include(${CMAKE_SOURCE_DIR}/cmake/deps.cmake)
 
 # Create the resource target (if we ever use more than just a single file. I'll keep it in here for now.)
 # cmrc_add_resource_library(game-resources ALIAS gameResources::rc ${PROJECT_SOURCE_DIR}/media/BAHNSCHRIFT.TTF)

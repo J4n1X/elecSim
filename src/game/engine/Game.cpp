@@ -10,7 +10,7 @@
 #include <iostream>
 #include <ranges>
 
-#include "BLOB_font.h"
+#include "BAHNSCHRIFT_TTF_blob.h"
 
 std::optional<std::string> OpenSaveDialog() {
   constexpr nfdfilteritem_t filterItem[] = {
@@ -82,7 +82,7 @@ void Game::Initialize() {
   text.setPosition(
       sf::Vector2f(10.f, 10.f));  // Position text at top-left with margin
 
-  if (!font.openFromMemory(BAHNSCHRIFT_TTF, BAHNSCHRIFT_TTF_len)) {
+  if (!font.openFromMemory(BAHNSCHRIFT_TTF_data, BAHNSCHRIFT_TTF_len)) {
     std::cerr << "Error: Could not load font from memory.\n";
     throw std::runtime_error("Failed to load font");
   }
