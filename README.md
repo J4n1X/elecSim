@@ -10,13 +10,11 @@ Below, you can see some of the things you can build with Elecsim.
 
 ## Building the project
 
-For the dependencies required to compile PixelGameEngine, please consult the [Wiki of PixelGameEngine](https://github.com/OneLoneCoder/olcPixelGameEngine/wiki). 
+Since this project uses SFML, if you're using Linux, you will be required to install [the dependencies needed by it.](https://www.sfml-dev.org/tutorials/3.0/getting-started/build-from-source/#installing-dependencies)
 
 The dependencies required for NFDE [can be found here](https://github.com/btzy/nativefiledialog-extended?tab=readme-ov-file#linux)
 
-Download or clone both of these projects into the "include" folder (which must be created).
-
-The project itself can be compiled using cmake. On a command line, navigate into the project directory and use: 
+This project is built using CMake, so prepare a build directory and configure it.
 
 ```
 mkdir build
@@ -26,15 +24,19 @@ cd build
 cmake ..
 ```
 
+At certain points, the configuration may freeze. This is normal as the program is fetching the required dependencies. 
+
 If you'd like to use the the old way of processing tile updates, pass along ```-DSIM_PREPROCESSING=OFF``` after the initial configuration has completed.
 
 Furthermore, you can turn off LTOs and CCache (if available) by using ```-DDISABLE_LTO=ON``` and ```-DDISABLE_CCACHE=ON```.
 
 If you are using Linux and you are on the debug configuration and want to use the address sanitizer, youc an pass ```-DENABLE_MEMCHECK```
 
-To generate the required configuration for your system. To compile the project, all you must do after this is issue the following command: 
+To compile the project, all you must do after this is issue the following command: 
 
 ```cmake --build .```
+
+Naturally, you may want to configure cmake with a built type as well. 
 
 The compiled binaries can be found in the newly created "bin" directory. 
 
@@ -46,7 +48,7 @@ The controls are as follows:
   - Mousewheel Up: Zoom in
   - Mousewheel Down: Zoom out
   - F: Reset the Camera to the default position and the default render scale
-  - F1: Open the console (use "help" for a list of available commands)
+  - F1: Open the console (use "help" for a list of available commands) [ONLY WORKS ON VERSION 0.1.0!]
   - F2: Save file to disk
   - F3: Load file from disk
   - Comma: Speed up the update rate
@@ -106,7 +108,8 @@ Sorted in order of how important I deem them to the proper function of the game.
 Massive thanks go out to these outstanding projects! Without them, this would have been a whole lot harder to actually get done.
 
   - [Native File Dialog Extended](https://github.com/btzy/nativefiledialog-extended) by Bernard Teo
-  - [PixelGameEngine](https://github.com/OneLoneCoder/olcPixelGameEngine) by Javidx9
+  - [PixelGameEngine](https://github.com/OneLoneCoder/olcPixelGameEngine) by Javidx9, which has been used in the initial development phase.
+  - [SFML](https://www.sfml-dev.org/) by many, many people in their community
 
 ## License
 
