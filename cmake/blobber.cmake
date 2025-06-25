@@ -34,6 +34,11 @@ function(generate_blobs target_name program paths)
   if(NOT paths)
     message(FATAL_ERROR "No paths provided to generate_blobs function")
   endif()
+
+  if(NOT EXISTS ${program})
+    message(FATAL_ERROR "Program needed for blobbing does not exist: ${program}")
+  endif()
+  
   foreach(path IN LISTS paths)
     _generate_blob(${target_name} ${program} ${path})
     set(BLOB_FILES ${blob_files} ${BLOB_PATH})

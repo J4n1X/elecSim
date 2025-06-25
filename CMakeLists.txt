@@ -91,6 +91,7 @@ if(NOT BLOBBER_FOUND)
                   WORKING_DIRECTORY "${workdir}")
   execute_process(COMMAND ${CMAKE_COMMAND} --build . -j ${NUM_PRCESSORS}
                   WORKING_DIRECTORY "${workdir}")
+  find_program(BLOBBER blobber PATHS ${TOOLS_DIR})
 endif()
 
 # Add the seperate building of tools as a target
