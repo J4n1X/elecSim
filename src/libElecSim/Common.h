@@ -27,8 +27,10 @@ struct PositionEqual {
 // Forward declaration to avoid circular includes
 class GridTile;
 
-constexpr int GRIDTILE_BYTESIZE =
+constexpr const static size_t GRIDTILE_COUNT = 7;  // Number of tile types
+constexpr const int GRIDTILE_BYTESIZE =
     sizeof(int) * 4;  // TileId + Facing + PosX + PosY
+
 
 enum class Direction { Top = 0, Right = 1, Bottom = 2, Left = 3, Count = 4 };
 const char* DirectionToString(Direction dir);
@@ -99,4 +101,5 @@ struct UpdateEvent {
 
 vi2d TranslatePosition(vi2d pos, Direction dir);
 Direction DirectionFromVectors(vi2d from, vi2d to);
+
 }  // namespace ElecSim
