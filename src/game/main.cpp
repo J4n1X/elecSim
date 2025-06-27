@@ -8,8 +8,16 @@
 #include "v2d.h"
 
 #ifdef DEBUG
+#include "meshes.h"
+#include "ArrowTile_mesh_blob.h"
+#include "CrossingTile_mesh_blob.h"
 int generate_texture_atlas() {
   std::cout << "Generating texture atlas...\n";
+
+// Load meshes
+  Engine::MeshLoader meshLoader;
+  meshLoader.LoadMeshFromString(std::string((const char*)ArrowTile_mesh_data, ArrowTile_mesh_len));
+  meshLoader.LoadMeshFromString(std::string((const char*)CrossingTile_mesh_data, CrossingTile_mesh_len));
 
   // Create instances of all tile types
   std::vector<std::shared_ptr<ElecSim::GridTile>> tiles;
@@ -66,7 +74,7 @@ int generate_texture_atlas() {
 
   // Create drawables and render each tile to the atlas
   for (size_t i = 0; i < tiles.size(); ++i) {
-    auto drawable = Engine::CreateTileRenderable(tiles[i]);
+    auto drawable = Engine::CreateTileRenderable(tiles[i], meshLoader.GetMeshes());
 
     // Calculate position in the atlas grid
     int row = static_cast<int>(i / tilesPerRow);
@@ -78,12 +86,11 @@ int generate_texture_atlas() {
     drawable->setPosition(sf::Vector2f(x, y) + drawable->getOrigin());
 
     // Update the visual state and draw
-    drawable->UpdateVisualState();
+    drawable->GetTile()->SetActivation(false);
     renderTexture.draw(*drawable);
 
     // And once more for the activated state
     drawable->GetTile()->SetActivation(true);
-    drawable->UpdateVisualState();
     drawable->setPosition(sf::Vector2f(x + 1.f, y) + drawable->getOrigin());
     renderTexture.draw(*drawable);
 

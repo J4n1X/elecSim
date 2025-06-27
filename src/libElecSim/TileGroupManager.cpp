@@ -17,10 +17,10 @@ namespace ElecSim {
 //       on all tiles inbetween, not just the input tile. Would yield accurate
 //       probing results (gettile console command), but might also slow down
 //       the simulation significantly.
+// UPDATE: This would be really fucking slow. There'll be a better way, later.
 std::vector<SignalEvent> TileGroupManager::SimulationGroup::ProcessSignal(
     const SignalEvent& signal) {
   auto newSignals = inputTile->ProcessSignal(signal);
-  // TODO: Better checks.
   if (newSignals.empty()) {
     return {};  // No new signals produced
   }

@@ -68,10 +68,10 @@ int main(int argc, char *argv[]) {
     *p = '_';
   }
 
-  // Test
+  fprintf(output_file, "#ifndef %s_BLOB_\n#define %s_BLOB_\n", file_name, file_name);
+  fprintf(output_file, "const static unsigned char %s_data[] = {\n  ", file_name);
+  
   char buffer[1024];
-  fprintf(output_file, "const unsigned char %s_data[] = {\n  ", file_name);
-
   size_t bytes_read = 0, bytes_processed = 0;
   while ((bytes_read = fread(buffer, 1, sizeof(buffer), input_file)) > 0) {
     for (size_t i = 0; i < bytes_read; i++) {
@@ -85,7 +85,7 @@ int main(int argc, char *argv[]) {
       bytes_processed++;
     }
   }
-  fprintf(output_file, "\n};\nunsigned long %s_len = %lu;", file_name,
+  fprintf(output_file, "\n};\nconst static unsigned long %s_len = %lu;\n#endif", file_name,
           bytes_processed);
   fclose(input_file);
   fclose(output_file);

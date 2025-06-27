@@ -35,6 +35,22 @@ class FPS {
   sf::Clock mClock;
 };
 
+class FrameTime {
+ public:
+  FrameTime() : frameTime(0.f) {}
+
+  void update() {
+    sf::Time deltaTime = clock.restart();
+    frameTime = deltaTime.asSeconds();
+  }
+
+  float getFrameTime() const { return frameTime; }
+
+ private:
+  sf::Clock clock;
+  float frameTime;
+};
+
 class Game {
  public:
   Game();
@@ -55,7 +71,8 @@ class Game {
   vi2d WorldToGrid(const sf::Vector2f& pos) const;
   void AddRenderables(std::vector<std::unique_ptr<Engine::TileDrawable>> tiles);
   void AddRenderable(std::unique_ptr<Engine::TileDrawable> tile);
-  void RegenerateRenderables();
+  std::shared_ptr<sf::VertexArray> GetMeshTemplate(ElecSim::TileType type, bool activation) const;
+  void RebuildGridVertices();
 
   // Tile manipulation methods
   void CreateBrushTile();
@@ -67,24 +84,27 @@ class Game {
   void PasteTiles(const vi2d& pastePosition);
   void CutTiles(const vi2d& startIndex, const vi2d& endIndex);
   void DeleteTiles(const vi2d& position);
-  void PlaceTile(const vi2d& position);
 
   // Window and rendering
   sf::RenderWindow window;
   sf::View gridView;
   sf::View guiView;
-  sf::VertexBuffer gridVertexBuffer;
+  sf::VertexArray gridVertices;
   constexpr static std::string_view windowTitle = "ElecSim";  // Game state
   std::string gridFilename;
   ElecSim::Grid grid;
   Highlighter highlighter;
-  std::vector<std::unique_ptr<TileDrawable>> renderables;
+  std::vector<std::shared_ptr<sf::VertexArray>> meshTemplates;
+
+  // Game state
+  bool paused = true; // Simulation state
+  float tps = 8.f;  // Ticks per second for simulation
+  float lastTickElapsedTime = 0.f;  // Time elapsed since last tick
 
   // Tile manipulation
   bool selectionActive = false;
   bool unsavedChanges = false;
   vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
-  vi2d lastPlacedPos = {0, 0};        // Prevents overwriting same tile
   std::vector<std::unique_ptr<ElecSim::GridTile>> tileBuffer;  // Selected tiles for operations
   vi2d tileBufferBoxSize = {0, 0};  // Size of the tile buffer box
   int selectedBrushIndex = 1;
@@ -109,8 +129,11 @@ class Game {
   // Window settings
   static constexpr sf::Vector2u initialWindowSize = sf::Vector2u(1280, 960);
 
-  // UI
+  // Time tracking systems
   FPS fpsTracker;
+  FrameTime frameTimeTracker;
+
+  // UI
   sf::Font font;
   sf::Text text;
   sf::Vector2f mousePos;

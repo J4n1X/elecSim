@@ -11,18 +11,19 @@ file(GLOB ENGINE_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cp
 
 # Blob stuff
 set(ASSETS 
-  ${ASSETS_DIR}/BAHNSCHRIFT.TTF
-  ${ASSETS_DIR}/tile_atlas.png
+  "${ASSETS_DIR}/BAHNSCHRIFT.TTF"
+  "${ASSETS_DIR}/tile_atlas.png"
+  "${ASSETS_DIR}/ArrowTile.mesh"
+  "${ASSETS_DIR}/CrossingTile.mesh"
 )
 
 add_executable(elecSim ${OUTER_FILES} ${ENGINE_FILES})
 target_include_directories(elecSim PRIVATE 
   ${CMAKE_CURRENT_SOURCE_DIR}/engine
 )
-set_target_properties(elecSim PROPERTIES UNITY_BUILD ON)
+#set_target_properties(elecSim PROPERTIES UNITY_BUILD ON)
 target_link_libraries(elecSim PRIVATE libElecSim nfd SFML::Graphics)
-generate_blobs(elecSim ${BLOBBER} ${ASSETS})
-message(STATUS "Generated blob files: ${BLOB_FILES}")
+generate_blobs(elecSim ${BLOBBER} "${ASSETS}")
 if(NOT BLOB_FILES)
   message(FATAL_ERROR "No blob files generated. Ensure the paths are correct and the blobber is working.")
 endif()

@@ -9,20 +9,21 @@
 
 namespace ElecSim {
 
+  enum class TileType : int {
+    Wire,
+    Junction,
+    Emitter,
+    SemiConductor,
+    Button,
+    Inverter,
+    Crossing
+  };
+
+  const std::string_view TileTypeToString(TileType type);
+
 // Base tile class
 // TODO: I want to add a Construct() function that creates a new tile of any
 // type, maybe with templates? A factory?
-// TODO: Maybe we should not store refNum in here, but this is the easiest way
-// right now.
-enum class TileType : int {
-  Wire,
-  Junction,
-  Emitter,
-  SemiConductor,
-  Button,
-  Inverter,
-  Crossing
-};
 class GridTile {
  protected:
   vi2d pos;
@@ -85,8 +86,6 @@ class GridTile {
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }
   bool CanOutputTo(Direction dir) const { return canOutput[dir]; }
 
-  // TODO: Remove this. We now have the TileType enum, which should be used instead.
-  virtual constexpr const char* TileTypeName() const = 0;
   virtual bool IsEmitter() const = 0;
   virtual bool IsDeterministic() const = 0;
   virtual TileType GetTileType() const = 0;
@@ -129,7 +128,7 @@ class LogicTile : public GridTile {
       [[maybe_unused]] const SignalEvent incomingSignal) override {
     throw std::runtime_error(std::format(
         "Preprocessing is not supported for a Logic Tile of type {}",
-        TileTypeName()));
+        TileTypeToString(GetTileType())));
   }
 };
 

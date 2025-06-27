@@ -4,6 +4,27 @@
 
 namespace ElecSim {
 
+const std::string_view TileTypeToString(TileType type) {
+  switch (type) {
+    case TileType::Wire:
+      return "Wire";
+    case TileType::Junction:
+      return "Junction";
+    case TileType::Emitter:
+      return "Emitter";
+    case TileType::SemiConductor:
+      return "SemiConductor";
+    case TileType::Button:
+      return "Button";
+    case TileType::Inverter:
+      return "Inverter";
+    case TileType::Crossing:
+      return "Crossing";
+    default:
+      return "Unknown";
+  }
+}
+
 // --- GridTile Implementation ---
 
 GridTile::GridTile(vi2d pos, Direction facing,
@@ -104,7 +125,7 @@ void GridTile::SetFacing(Direction newFacing) {
 std::string GridTile::GetTileInformation() const {
   std::stringstream stream;
   // All in one line
-  stream << "Tile Type: " << TileTypeName() << ", "
+  stream << "Tile Type: " << TileTypeToString(GetTileType()) << ", "
          << "Position: (" << pos.x << ", " << pos.y << "), "
          << "Facing: " << DirectionToString(facing) << ", "
          << "Activated Sides: [";

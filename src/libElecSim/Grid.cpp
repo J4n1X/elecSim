@@ -21,7 +21,7 @@ std::size_t SignalEdgeHash::operator()(const SignalEdge& edge) const {
 }
 
 void Grid::QueueUpdate(std::shared_ptr<GridTile> tile,
-                       const SignalEvent& event) {
+                       const SignalEvent& event) noexcept {
   updateQueue.push(UpdateEvent(tile, event, currentTick));
 }
 
@@ -65,6 +65,15 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
 }
 
 int Grid::Simulate() {
+  if (fieldIsDirty) {
+#ifdef DEBUG
+    std::println(std::cout,
+                 "Grid is dirty on attempted simulation step, resetting "
+                 "simulation.");
+#endif
+    ResetSimulation();
+  }
+
   int updatesProcessed = 0;
   currentTick++;  // Increment the tick counter
 
@@ -258,7 +267,17 @@ void ElecSim::Grid::SetTile(vi2d pos, std::shared_ptr<GridTile> tile) {
 //}
 //
 
-vi2d Grid::AlignToGrid(const vf2d& pos) {
+void Grid::InteractWithTile(vi2d pos) noexcept {
+  if (std::optional tileOpt = GetTile(pos)) {
+    auto tile = tileOpt.value();
+    auto newSignals = tile->Interact();
+    for (const auto& signal : newSignals) {
+      QueueUpdate(tile, signal);
+    }
+  }
+}
+
+vi2d Grid::AlignToGrid(const vf2d& pos) noexcept {
   return vi2d(static_cast<int>(std::floor(pos.x)),
               static_cast<int>(std::floor(pos.y)));
 }

@@ -38,10 +38,10 @@ function(generate_blobs target_name program paths)
   if(NOT EXISTS ${program})
     message(FATAL_ERROR "Program needed for blobbing does not exist: ${program}")
   endif()
-  
+
   foreach(path IN LISTS paths)
     _generate_blob(${target_name} ${program} ${path})
-    set(BLOB_FILES ${blob_files} ${BLOB_PATH})
+    set(BLOB_FILES ${BLOB_FILES} ${BLOB_PATH})
   endforeach()
 
   set(CUSTOM_TARGET_NAME "${target_name}_BLOBS")

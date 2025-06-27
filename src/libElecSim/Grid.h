@@ -26,7 +26,6 @@ struct SignalEdgeHash {
   std::size_t operator()(const SignalEdge& edge) const;
 };
 
-// TODO: Solve the tile lookup speed problem or find a way around it.
 class Grid {
  private:
   using TileField =
@@ -54,7 +53,7 @@ class Grid {
   ~Grid() = default;
 
   // Core simulation functions
-  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event);
+  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event) noexcept;
   int Simulate();
   void ResetSimulation();
 
@@ -87,11 +86,12 @@ class Grid {
     }
   }
 
+  void InteractWithTile(vi2d pos) noexcept;
+
   // Utility functions
-  [[nodiscard]] vi2d AlignToGrid(const vf2d& pos);
+  [[nodiscard]] vi2d AlignToGrid(const vf2d& pos) noexcept;
 
   // Getters
-  // TODO: Implement with std::expect
   [[nodiscard]] std::optional<std::shared_ptr<GridTile> const> GetTile(vi2d pos);
   [[nodiscard]] std::optional<std::shared_ptr<GridTile> const> GetTile(int x, int y) {
     return GetTile(vi2d(x, y));

@@ -43,7 +43,7 @@ The compiled binaries can be found in the newly created "bin" directory.
 ## Using the program
 
 The controls are as follows: 
-  - 1-7: Select your tile. The order is: Wire, Junction, Emitter, Semiconductor, Button, Inverter, Crossing
+  - 1-7: Select your tile. The order is: Wire, Junction, Emitter, Semiconductor, Button, Inverter, Crossing. Replaces the buffer.
   - Up, Down, Left, Right (Or WASD): Move the camera
   - Mousewheel Up: Zoom in
   - Mousewheel Down: Zoom out
@@ -56,14 +56,14 @@ The controls are as follows:
   - R: Change the facing of the tile you are about to place
   - P: Clear the tile buffer
   - Space: Toggle between build and simulation mode
-  - Left Mouse Button (while the simulation is paused): Place a tile
+  - Left Mouse Button (while the simulation is paused): Place the buffer at the current position
   - Left Mouse Button (while the simulation is running): Interact with certain tiles (Button, Semiconductor and Emitter)
   - Right Mouse Button (while the simulation is paused): Erase a tile
   - Middle Mouse Button: Pan the camera around.
   - Ctrl (hold): Start a selection
   - Ctrl+C: Copy the tiles within the selection into the buffer
   - Ctrl+X: Cut the tiles within the selection into the buffer
-  - Ctrl+V: Paste the tiles in the buffer onto the grid
+  - Ctrl+V: Paste the tiles in the buffer onto the grid based on the mouse's position (So it does the same thing as LMB)
   - Escape: Close the game
 
 ### Tile behavior

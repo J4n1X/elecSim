@@ -2,6 +2,7 @@
 
 #include "GridTileTypes.h"
 #include "TileChunk.h"
+#include "meshes.h"
 #include "nfd.hpp"
 
 // This binary blob contains the "Bahnschrift" font that we are using.
@@ -10,7 +11,9 @@
 #include <iostream>
 #include <ranges>
 
+#include "ArrowTile_mesh_blob.h"
 #include "BAHNSCHRIFT_TTF_blob.h"
+#include "CrossingTile_mesh_blob.h"
 
 std::optional<std::string> OpenSaveDialog() {
   constexpr nfdfilteritem_t filterItem[] = {
@@ -57,12 +60,11 @@ Game::Game()
       gridView(sf::FloatRect(
           {0.f, 0.f}, sf::Vector2f(initialWindowSize) / defaultZoomFactor)),
       guiView(sf::FloatRect({0.f, 0.f}, sf::Vector2f(initialWindowSize))),
-      gridVertexBuffer(sf::PrimitiveType::Triangles,
-                       sf::VertexBuffer::Usage::Dynamic),
+      gridVertices(sf::PrimitiveType::Triangles),
       grid{},
       highlighter{{{0.f, 0.f},
-                   {Engine::BasicTileDrawable::DEFAULT_SIZE,
-                    Engine::BasicTileDrawable::DEFAULT_SIZE}}},
+                   {Engine::TileDrawable::DEFAULT_SIZE,
+                    Engine::TileDrawable::DEFAULT_SIZE}}},
       mouseWheelDelta(0.f),
       panStartPos(0, 0),
       cameraVelocity(0.f, 0.f),
@@ -86,6 +88,24 @@ void Game::Initialize() {
     std::cerr << "Error: Could not load font from memory.\n";
     throw std::runtime_error("Failed to load font");
   }
+
+  // Load meshes
+  MeshLoader meshLoader;
+  meshLoader.LoadMeshFromString(
+      std::string((const char*)ArrowTile_mesh_data, ArrowTile_mesh_len));
+  meshLoader.LoadMeshFromString(
+      std::string((const char*)CrossingTile_mesh_data, CrossingTile_mesh_len));
+  meshTemplates = meshLoader.GetMeshes();
+
+  constexpr static size_t EXPECTED_MESH_COUNT = ElecSim::GRIDTILE_COUNT * 2;
+  if (meshTemplates.size() < EXPECTED_MESH_COUNT) {
+    std::cerr << std::format(
+        "Error: Not enough meshes loaded for all tile types. Expected {}, got "
+        "{}.\n",
+        EXPECTED_MESH_COUNT, meshTemplates.size());
+    throw std::runtime_error("Not enough meshes loaded");
+  }
+
   keysHeld.reset();
   mouseHeld.reset();
 
@@ -104,7 +124,7 @@ void Game::LoadGrid(std::string const& filename) {
   window.setTitle(std::format("{} - {}", windowTitle, filename));
   ResetViews();
 
-  RegenerateRenderables();
+  RebuildGridVertices();
 }
 
 void Game::ResetViews() {
@@ -123,6 +143,7 @@ int Game::Run(int argc, char* argv[]) {
 
   while (window.isOpen()) {
     fpsTracker.update();
+    frameTimeTracker.update();
     HandleEvents();
     HandleInput();
     Update();
@@ -193,6 +214,11 @@ void Game::HandleInput() {
   const float moveFactor = 1.f / zoomFactor;
   cameraVelocity = sf::Vector2f(0.f, 0.f);
 
+  // Mouse position needs to be recalculated
+  mousePos = AlignToGrid(
+      window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView));
+  highlighter.setPosition(mousePos);
+
   auto currentGridPos = WorldToGrid(mousePos);
   // Tile brush selection (number keys 1-7)
   for (int i = 1; i <= 7; ++i) {
@@ -204,69 +230,74 @@ void Game::HandleInput() {
     }
   }
 
-  // Tile manipulation controls
-  if (keysHeld[Key::R]) {
-    RotateBufferTiles();
-    keysHeld.setReleased(Key::R);
-  }
-
-  // Selection start/stop
-  if (keysPressed[Key::LControl] || keysPressed[Key::RControl]) {
-    selectionActive = true;
-    selectionStartIndex = currentGridPos;
-  }
-  if (keysReleased[Key::LControl] || keysReleased[Key::RControl]) {
-    selectionActive = false;
-  }
-
-  // Copy selection
-  if ((keysHeld[Key::LControl] || keysHeld[Key::RControl]) &&
-      keysHeld[Key::C]) {
-    if (selectionActive) {
-      CopyTiles(selectionStartIndex, currentGridPos);
+  // Building mode controls
+  if (paused) {
+    // Tile manipulation controls
+    if (keysHeld[Key::R]) {
+      RotateBufferTiles();
+      keysHeld.setReleased(Key::R);
     }
-    keysHeld.setReleased(Key::C);
-    keysHeld.setReleased(Key::LControl);
-    keysHeld.setReleased(Key::RControl);
-  }
 
-  // Cut Selection
-  if ((keysHeld[Key::LControl] || keysHeld[Key::RControl]) &&
-      keysHeld[Key::X]) {
-    if (selectionActive) {
-      CutTiles(selectionStartIndex, currentGridPos);
+    // Selection start/stop
+    if (keysPressed[Key::LControl] || keysPressed[Key::RControl]) {
+      selectionActive = true;
+      selectionStartIndex = currentGridPos;
+    }
+    if (keysReleased[Key::LControl] || keysReleased[Key::RControl]) {
       selectionActive = false;
     }
-    keysHeld.setReleased(Key::LControl);
-    keysHeld.setReleased(Key::RControl);
-    keysHeld.setReleased(Key::X);
-  }
 
-  // Paste tiles in buffer
-  if ((keysHeld[Key::LControl] || keysHeld[Key::RControl]) &&
-      keysPressed[Key::V]) {
-    PasteTiles(currentGridPos);
-    keysHeld.setReleased(Key::LControl);
-    keysHeld.setReleased(Key::RControl);
-  }
-
-  if (keysHeld[Key::Z]) {
-    ClearBuffer();
-    keysHeld.setReleased(Key::Z);
-  }
-
-  // Mouse controls
-  if (mouseHeld[Button::Left]) {
-    if (!selectionActive) {
-      if (currentGridPos != lastPlacedPos) {
-        PasteTiles(currentGridPos);
-        lastPlacedPos = currentGridPos;
+    // Copy selection
+    if ((keysHeld[Key::LControl] || keysHeld[Key::RControl]) &&
+        keysHeld[Key::C]) {
+      if (selectionActive) {
+        CopyTiles(selectionStartIndex, currentGridPos);
       }
+      keysHeld.setReleased(Key::C);
+      keysHeld.setReleased(Key::LControl);
+      keysHeld.setReleased(Key::RControl);
     }
-  }
 
-  if (mouseHeld[Button::Right]) {
-    DeleteTiles(currentGridPos);
+    // Cut Selection
+    if ((keysHeld[Key::LControl] || keysHeld[Key::RControl]) &&
+        keysHeld[Key::X]) {
+      if (selectionActive) {
+        CutTiles(selectionStartIndex, currentGridPos);
+        selectionActive = false;
+      }
+      keysHeld.setReleased(Key::LControl);
+      keysHeld.setReleased(Key::RControl);
+      keysHeld.setReleased(Key::X);
+    }
+
+    // Paste tiles in buffer
+    if ((keysHeld[Key::LControl] || keysHeld[Key::RControl]) &&
+        keysPressed[Key::V]) {
+      PasteTiles(currentGridPos);
+      keysHeld.setReleased(Key::LControl);
+      keysHeld.setReleased(Key::RControl);
+    }
+
+    if (keysHeld[Key::Z]) {
+      ClearBuffer();
+      keysHeld.setReleased(Key::Z);
+    }
+
+    // Mouse controls
+    if (mouseHeld[Button::Left] && !selectionActive) {
+      PasteTiles(currentGridPos);
+    }
+
+    if (mouseHeld[Button::Right]) {
+      DeleteTiles(currentGridPos);
+    }
+  } else {  // Simulation controls
+    if (mousePressed[Button::Left]) {
+      // Interact with the tile under the mouse cursor
+      grid.InteractWithTile(WorldToGrid(mousePos));
+    }
+    // TODO: A cool thing would be to select a tile with right click and then
+    // show information about it.
   }
 
   // Camera controls
@@ -282,30 +313,8 @@ void Game::HandleInput() {
   if (keysHeld[Key::D] || keysHeld[Key::Right]) {
     cameraVelocity.x = baseMoveSpeed * moveFactor;
   }
-  if (keysHeld[Key::F]) {
+  if (keysPressed[Key::F]) {
     ResetViews();
-    keysHeld.setReleased(Key::F);  // Disable the key after resetting
-  }
-
-  // Save/Load dialogues
-  if (keysHeld[Key::F2]) {
-    if (auto savePath = OpenSaveDialog()) {
-      SaveGrid(*savePath);
-    }
-    // Disable the key to prevent accidental reloads
-    keysHeld.setReleased(Key::F2);
-  }
-  if (keysHeld[Key::F3]) {
-    if (auto loadPath = OpenLoadDialog()) {
-      LoadGrid(*loadPath);
-    }
-    // Disable the key to prevent accidental reloads
-    keysHeld.setReleased(Key::F3);
-  }
-
-  // Escape key closes the window
-  if (keysHeld[Key::Escape]) {
-    window.close();
   }
 
   // Middle mouse button pans the camera
@@ -333,10 +342,45 @@ void Game::HandleInput() {
     mouseWheelDelta = 0.f;
   }
 
-  // Mouse position needs to be recalculated
-  mousePos = AlignToGrid(
-      window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView));
-  highlighter.setPosition(mousePos);
+  // Save/Load dialogues
+  if (keysPressed[Key::F2]) {
+    if (auto savePath = OpenSaveDialog()) {
+      SaveGrid(*savePath);
+    }
+  }
+  if (keysPressed[Key::F3]) {
+    if (auto loadPath = OpenLoadDialog()) {
+      LoadGrid(*loadPath);
+    }
+  }
+
+  // Escape key closes the window
+  if (keysPressed[Key::Escape]) {
+    window.close();
+  }
+
+  // Space starts or pauses the simulation
+  if (keysPressed[Key::Space]) {
+    paused = !paused;
+    if (paused) {
+      grid.ResetSimulation();
+    } else {
+      // Clear the buffer.
+      // TODO: When proper tile previews are implemented, those should be
+      // disabled instead and the bounding box adjusted.
+      ClearBuffer();
+    }
+  }
+
+  // Comma and period adjust the ticks per second
+  if (keysPressed[Key::Comma]) {  // FASTER!
+    tps += 0.25f;
+    keysPressed.setReleased(Key::Comma);
+  }
+  if (keysPressed[Key::Period]) {  // Slow down...
+    tps = std::max(0.1f, tps - 0.25f);
+    keysPressed.setReleased(Key::Period);
+  }
 }
 
 // --- Tile manipulation methods ---
@@ -345,7 +389,7 @@ void Game::CreateBrushTile() {
   // Clear the current buffer
   tileBuffer.clear();
 
-  auto createTile = [this]() -> std::unique_ptr<ElecSim::GridTile> {
+  auto createTile = [&]() -> std::unique_ptr<ElecSim::GridTile> {
     switch (selectedBrushIndex) {
       case 1:
         return std::make_unique<ElecSim::WireGridTile>();
@@ -489,13 +533,18 @@ void Game::PasteTiles(const vi2d& pastePosition) {
   if (tileBuffer.empty()) return;
 
   for (const auto& tile : tileBuffer) {
+    if (std::optional oldTile = grid.GetTile(pastePosition + tile->GetPos())) {
+      if ((*oldTile)->GetTileType() == tile->GetTileType()) {
+        continue;
+      }
+    }
     auto clonedTile = tile->Clone();
     auto newPos = tile->GetPos() + pastePosition;
     clonedTile->SetPos(newPos);
     grid.SetTile(newPos, std::move(clonedTile));
   }
 
-  RegenerateRenderables();
+  RebuildGridVertices();
 
   unsavedChanges = true;
 }
@@ -517,7 +566,7 @@ void Game::CutTiles(const vi2d& startIndex, const vi2d& endIndex) {
     }
   }
 
-  RegenerateRenderables();
+  RebuildGridVertices();
 
   unsavedChanges = true;
 }
@@ -525,29 +574,21 @@ void Game::CutTiles(const vi2d& startIndex, const vi2d& endIndex) {
 void Game::DeleteTiles(const vi2d& position) {
   grid.EraseTile(position);
 
-  RegenerateRenderables();
-
-  unsavedChanges = true;
-  selectionActive = false;  // Clear selection after deletion
-}
-
-void Game::PlaceTile(const vi2d& position) {
-  if (tileBuffer.empty()) return;
-
-  // Place the first tile from the buffer (for single tile placement)
-  std::shared_ptr<ElecSim::GridTile> clonedTile = tileBuffer[0]->Clone();
-  clonedTile->SetPos(position);
-  auto renderable = CreateTileRenderable(std::move(clonedTile));
-  grid.SetTile(position, clonedTile);
-
-  AddRenderable(std::move(renderable));
+  RebuildGridVertices();
 
   unsavedChanges = true;
 }
 
 void Game::Update() {
+  if (!paused) lastTickElapsedTime += frameTimeTracker.getFrameTime();
   if (cameraVelocity != sf::Vector2f(0.f, 0.f)) {
     gridView.move(cameraVelocity);
+  }
+  // Simulation step
+  while (!paused && lastTickElapsedTime >= (1.f / tps)) {
+    lastTickElapsedTime -= (1.f / tps);
+    grid.Simulate();
+    RebuildGridVertices();
   }
 }
 
@@ -557,18 +598,19 @@ void Game::Render() {
 
   sf::FloatRect viewBounds(gridView.getCenter() - gridView.getSize() / 2.f,
                            gridView.getSize());
-  // The old approach. Turns out that filtering this is useless with our new rendering approach, because the GPU already culls what's not in view.
-  //auto viewables =
+  // The old approach. Turns out that filtering this is useless with our new
+  // rendering approach, because the GPU already culls what's not in view.
+  // auto viewables =
   //    renderables | std::views::filter([viewBounds](const auto& tile) {
-  //      return viewBounds.findIntersection(tile->getGlobalBounds()).has_value();
+  //      return
+  //      viewBounds.findIntersection(tile->getGlobalBounds()).has_value();
   //    });
   // for (const auto& tile : viewables) {
   //   tile->UpdateVisualState();
   //   window.draw(*tile);
   // }
 
-  window.draw(gridVertexBuffer);
-
+  window.draw(gridVertices);
   // Draw selection rectangle if active
   if (selectionActive) {
     auto currentGridPos = WorldToGrid(mousePos);
@@ -632,7 +674,7 @@ void Game::Render() {
   // Draw UI
   std::string brushName = "None";
   if (!tileBuffer.empty()) {
-    brushName = std::string(tileBuffer[0]->TileTypeName());
+    brushName = std::string(TileTypeToString(tileBuffer[0]->GetTileType()));
   }
 
   std::string facingName =
@@ -642,12 +684,12 @@ void Game::Render() {
                                                           : "Left";
 
   text.setString(std::format(
-      "FPS: {}; Grid Position: ({}, {}); Zoom: "
-      "{:.2f}\n"
+      "FPS: {}; Simulation: {}; Grid Position: ({}, {}); TPS: {:.2f}\n"
       "Brush: {} ({}); Facing: {}; Buffer: {} tiles; Selection: {}\n"
       "Total Tiles: {}",
-      fpsTracker.getFPS(), WorldToGrid(mousePos).x, WorldToGrid(mousePos).y,
-      zoomFactor, selectedBrushIndex, brushName, facingName, tileBuffer.size(),
+      fpsTracker.getFPS(), (paused ? "Paused" : "Running"),
+      WorldToGrid(mousePos).x, WorldToGrid(mousePos).y, tps, selectedBrushIndex,
+      brushName, facingName, tileBuffer.size(),
       selectionActive ? "Active" : "None", grid.GetTileCount()));
   window.setView(guiView);
   window.draw(text);
@@ -670,34 +712,30 @@ vi2d Game::WorldToGrid(const sf::Vector2f& pos) const {
 
 void Engine::Game::AddRenderables(
     std::vector<std::unique_ptr<Engine::TileDrawable>> tiles) {
-      (void)tiles;
-    }
+  (void)tiles;
+}
 
-void Game::AddRenderable(std::unique_ptr<Engine::TileDrawable>tilePtr) {
+void Game::AddRenderable(std::unique_ptr<Engine::TileDrawable> tilePtr) {
   (void)tilePtr;  // This is to avoid unused variable warning
   // unused for now
 }
 
-// TODO: Maybe keep this as a view so it's lazy, or do it differently.
-void Game::RegenerateRenderables() {
-  renderables =
-      grid.GetTiles() | std::views::values |
-      std::views::transform(
-          [](const auto& tile) { return Engine::CreateTileRenderable(tile); }) |
-      std::ranges::to<std::vector<std::unique_ptr<Engine::TileDrawable>>>();
+std::shared_ptr<sf::VertexArray> Game::GetMeshTemplate(ElecSim::TileType type,
+                                                       bool activation) const {
+  return meshTemplates.at(static_cast<int>(type) * 2 +
+                          static_cast<int>(activation));
+}
 
-  auto vArrayChunks = renderables | std::views::transform([](const auto& tile) {
-                        return tile->GetVertexArray();
-                      }) |
-                      std::views::join |
-                      std::ranges::to<std::vector<sf::Vertex>>();
-
-  if (!gridVertexBuffer.create(vArrayChunks.size())) {
-    throw std::runtime_error("Failed to create vertex buffer");
-  }
-  if (!vArrayChunks.empty()) {
-    if (!gridVertexBuffer.update(vArrayChunks.data(), vArrayChunks.size(), 0)) {
-      throw std::runtime_error("Failed to update vertex buffer");
+// The extreme option. Rebuilds every single vertex in the grid.
+void Game::RebuildGridVertices() {
+  gridVertices.clear();
+  for (const auto& [pos, tile] : grid.GetTiles()) {
+    auto transform = Engine::GetTileTransform(tile);
+    auto& mesh = *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
+    for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
+      sf::Vertex vertex = mesh[i];
+      vertex.position = transform.transformPoint(vertex.position);
+      gridVertices.append(vertex);
     }
   }
 }

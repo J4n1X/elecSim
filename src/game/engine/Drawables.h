@@ -8,6 +8,7 @@
 #include "SFML/Graphics/Drawable.hpp"
 #include "SFML/Graphics/Rect.hpp"
 #include "SFML/Graphics/Transformable.hpp"
+#include "meshes.h"
 #include "v2d.h"
 
 namespace Engine {
@@ -22,22 +23,15 @@ class TileDrawable : public sf::Drawable, public sf::Transformable {
  public:
   static constexpr float DEFAULT_SIZE = 1.f;
 
-  explicit TileDrawable(std::shared_ptr<ElecSim::GridTile> tilePtr)
-      : tilePtr(std::move(tilePtr)) {}
-  virtual ~TileDrawable() = default;
+  explicit TileDrawable(
+      std::shared_ptr<ElecSim::GridTile> tilePtr,
+      std::array<std::shared_ptr<sf::VertexArray>, 2> vArrays);
+  ~TileDrawable() = default;
 
   // Updates the drawable based on the current tile state
-  virtual void UpdateVisualState() = 0;
+  // virtual void UpdateVisualState() = 0;
 
-  [[nodiscard]] std::vector<sf::Vertex> GetVertexArray() const {
-    std::vector<sf::Vertex> vertices;
-    vertices.reserve(vArray.getVertexCount());
-    for(size_t i = 0; i < vArray.getVertexCount(); ++i) {
-      vertices.emplace_back(getTransform().transformPoint(
-          vArray[i].position), vArray[i].color);
-    }
-    return vertices;
-  }
+  [[nodiscard]] std::vector<sf::Vertex> GetVertexArray() const;
 
   // Gets the tile this drawable represents
   [[nodiscard]] std::shared_ptr<ElecSim::GridTile> GetTile() const noexcept {
@@ -49,50 +43,16 @@ class TileDrawable : public sf::Drawable, public sf::Transformable {
         sf::FloatRect({0.f, 0.f}, {size, size}));
   }
 
-  // Pure virtual clone method - must be implemented by all derived classes
-  [[nodiscard]] virtual std::unique_ptr<TileDrawable> Clone() const = 0;
+  [[nodiscard]] virtual std::unique_ptr<TileDrawable> Clone() const {
+    return std::make_unique<TileDrawable>(*this);
+  }
 
- protected:
+ private:
+  void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
   float size = DEFAULT_SIZE;
-  sf::VertexArray vArray;
+  // 0 is always inactive, 1 is always active.
   std::shared_ptr<ElecSim::GridTile> tilePtr;
-  [[nodiscard]] virtual sf::VertexArray CreateVertexArray() const = 0;
-};
-
-// Basic tile drawable for most tile types - uses square + triangle
-class BasicTileDrawable : public TileDrawable {
- public:
-  BasicTileDrawable(std::shared_ptr<ElecSim::GridTile> tilePtr,
-                    sf::Color activeColor, sf::Color inactiveColor);
-
-  void UpdateVisualState() override;
-  [[nodiscard]] std::unique_ptr<TileDrawable> Clone() const override;
-
- private:
-  [[nodiscard]] sf::VertexArray CreateVertexArray() const override;
-  virtual void draw(sf::RenderTarget& target,
-                    sf::RenderStates states) const override;
-
-  sf::Color activeColor;
-  sf::Color inactiveColor;
-};
-
-// Specialized drawable for crossing tiles
-class CrossingTileDrawable : public TileDrawable {
- public:
-  explicit CrossingTileDrawable(
-      std::shared_ptr<ElecSim::CrossingGridTile> initialPtr);
-  CrossingTileDrawable(std::shared_ptr<ElecSim::GridTile> initialPtr);
-
-  void UpdateVisualState() final override;
-  [[nodiscard]] std::unique_ptr<TileDrawable> Clone() const final override;
-
- private:
-  void Setup();
-  constexpr static sf::Color color = sf::Color(0, 0, 128);
-  [[nodiscard]] sf::VertexArray CreateVertexArray() const final override;
-  void draw(sf::RenderTarget& target,
-            sf::RenderStates states) const final override;
+  std::array<std::shared_ptr<sf::VertexArray>, 2> vArrays;
 };
 
 class Highlighter : public sf::Drawable, public sf::Transformable {
@@ -133,6 +93,10 @@ class Highlighter : public sf::Drawable, public sf::Transformable {
 
 // Factory function to create appropriate drawable for any tile type
 std::unique_ptr<TileDrawable> CreateTileRenderable(
-    std::shared_ptr<ElecSim::GridTile> tilePtr);
+    std::shared_ptr<ElecSim::GridTile> tilePtr,
+    const std::vector<std::shared_ptr<sf::VertexArray>>& vArrays);
+
+sf::Transform GetTileTransform(
+    std::shared_ptr<ElecSim::GridTile> const& tilePtr);
 
 }  // namespace Engine

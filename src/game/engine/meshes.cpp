@@ -1,6 +1,8 @@
 #include "meshes.h"
-#include <stdexcept>
+
 #include <fstream>
+#include <stdexcept>
+#include <ranges>
 
 namespace Engine {
 
@@ -26,22 +28,38 @@ std::vector<sf::Vertex> TileModel::GetVertices(sf::Transform transform,
   return result;
 }
 
-void MeshLoader::LoadMeshFromFile(
-    const std::filesystem::path& filePath) {
+void MeshLoader::LoadMeshFromFile(const std::filesystem::path& filePath) {
   // Open the file
   std::ifstream fileStream(filePath);
   if (!fileStream.is_open()) {
     throw std::runtime_error("Could not open file: " + filePath.string());
   }
   // Parse the mesh from the stream
-  auto vertexArrays = ParseMeshFromStream(fileStream);
+  auto vertexArrays = ParseMesh(fileStream) | std::views::transform(
+      [](sf::VertexArray& array) {
+        return std::make_shared<sf::VertexArray>(std::move(array));
+      });
   fileStream.close();
-  
-  meshes.assign(vertexArrays.begin(), vertexArrays.end());
+
+  // Append to meshes
+  meshes.insert(meshes.end(), std::make_move_iterator(vertexArrays.begin()),
+                std::make_move_iterator(vertexArrays.end()));
 }
 
-std::vector<sf::VertexArray> MeshLoader::ParseMeshFromStream(
-    std::istream& stream) {
+void MeshLoader::LoadMeshFromString(const std::string& fileContent) {
+  // Turn the string into a stream and pass it to the existing function
+  std::istringstream stream(fileContent);
+  auto vertexArrays = ParseMesh(stream) | std::views::transform(
+      [](sf::VertexArray& array) {
+        return std::make_shared<sf::VertexArray>(std::move(array));
+      });
+  // Append to meshes
+  meshes.insert(meshes.end(), std::make_move_iterator(vertexArrays.begin()),
+                std::make_move_iterator(vertexArrays.end()));
+}
+
+std::vector<sf::VertexArray> MeshLoader::ParseMesh(
+    std::istream& stream) const {
   std::vector<sf::VertexArray> result;
   std::string line;
 
@@ -54,19 +72,10 @@ std::vector<sf::VertexArray> MeshLoader::ParseMeshFromStream(
   std::string typeKeyword;
   std::string primitiveTypeStr;
 
-  // Skip over comments (if there are any) at the start of the line
-  while (typeStream.peek() == '#') {
-    std::getline(typeStream, line);
-    if (!std::getline(stream, line)) {
-      throw std::runtime_error("Empty input stream - no primitive type found");
-    }
-    typeStream.clear();
-    typeStream.str(line);
-  }
-
   if (!(typeStream >> typeKeyword >> primitiveTypeStr) ||
       typeKeyword != "type") {
-    throw std::runtime_error("Invalid format: expected 'type <PrimitiveType>' on first line");
+    throw std::runtime_error(
+        "Invalid format: expected 'type <PrimitiveType>' on first line");
   }
 
   sf::PrimitiveType primitiveType;
@@ -100,26 +109,26 @@ std::vector<sf::VertexArray> MeshLoader::ParseMeshFromStream(
     if (!(vertexStream >> token)) {
       continue;  // Skip empty lines
     }
-    
+
     // Skip comment lines that begin with '#'
     if (token[0] == '#') {
       continue;
     }
-    
+
     if (token != "v") {
-      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) + 
-                              ": expected 'v' but got '" + token + "'");
+      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) +
+                               ": expected 'v' but got '" + token + "'");
     }
 
     float x, y;
     if (!(vertexStream >> x >> y)) {
-      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) + 
-                              ": could not parse vertex coordinates");
+      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) +
+                               ": could not parse vertex coordinates");
     }
 
     if (!(vertexStream >> token) || token != "c") {
-      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) + 
-                              ": expected 'c' for color data");
+      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) +
+                               ": expected 'c' for color data");
     }
 
     std::vector<sf::Color> colors;
@@ -139,8 +148,8 @@ std::vector<sf::VertexArray> MeshLoader::ParseMeshFromStream(
     }
 
     if (colors.empty()) {
-      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) + 
-                              ": no valid colors found after 'c'");
+      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) +
+                               ": no valid colors found after 'c'");
     }
 
     // Initialize vertex arrays on first vertex
@@ -149,10 +158,10 @@ std::vector<sf::VertexArray> MeshLoader::ParseMeshFromStream(
       colorCount = colors.size();
       vertexArrays.resize(colorCount);
     } else if (colors.size() != colorCount) {
-      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) + 
-                              ": inconsistent color count (expected " + 
-                              std::to_string(colorCount) + ", got " + 
-                              std::to_string(colors.size()) + ")");
+      throw std::runtime_error("Invalid line " + std::to_string(lineNumber) +
+                               ": inconsistent color count (expected " +
+                               std::to_string(colorCount) + ", got " +
+                               std::to_string(colors.size()) + ")");
     }
 
     // Add vertex to each color variant
@@ -171,6 +180,13 @@ std::vector<sf::VertexArray> MeshLoader::ParseMeshFromStream(
   }
 
   return result;
+}
+
+std::shared_ptr<sf::VertexArray> const& MeshLoader::GetMesh(size_t index) const {
+  if (index >= meshes.size()) {
+    throw std::out_of_range("Mesh index out of range");
+  }
+  return meshes[index];
 }
 
 }  // namespace Engine

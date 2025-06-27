@@ -142,30 +142,33 @@ class TileModel {
                                                     bool activated) const;
 };
 
+// clang-format off
 constexpr const static TileTypeIndexable<std::array<TileColors, 7>>
     TILE_COLORS = {
-        {sf::Color(128, 128, 000, 255), sf::Color(255, 255, 255, 255)},
-        {sf::Color(255, 255, 000, 255), sf::Color(192, 192, 192, 255)},
-        {sf::Color(000, 255, 255, 255), sf::Color(000, 128, 128, 255)},
-        {sf::Color(000, 255, 000, 255), sf::Color(000, 128, 000, 255)},
-        {sf::Color(255, 000, 000, 255), sf::Color(128, 000, 000, 255)},
-        {sf::Color(255, 000, 255, 255), sf::Color(128, 000, 128, 255)},
-        {sf::Color(000, 000, 128, 255), sf::Color(000, 000, 000, 000)}};
+      {sf::Color(128, 128, 000, 255), sf::Color(255, 255, 255, 255)},
+      {sf::Color(255, 255, 000, 255), sf::Color(192, 192, 192, 255)},
+      {sf::Color(000, 255, 255, 255), sf::Color(000, 128, 128, 255)},
+      {sf::Color(000, 255, 000, 255), sf::Color(000, 128, 000, 255)},
+      {sf::Color(255, 000, 000, 255), sf::Color(128, 000, 000, 255)},
+      {sf::Color(255, 000, 255, 255), sf::Color(128, 000, 128, 255)},
+      {sf::Color(000, 000, 128, 255), sf::Color(000, 000, 000, 000)}
+    };
+// clang-format on
 
-constexpr const static float TILE_SIZE =
-    1.f;  // Size of each tile in world units
+// Size of each tile in world units
+constexpr const static float TILE_SIZE = 1.f;
 
+// clang-format off
 constexpr const static std::array<std::array<sf::Vector2f, 3>, 3>
-    _TILE_WITH_ARROW_MODEL = {
-        {// Triangle one (inactive by default)
-         {sf::Vector2f(0.f, 0.f), sf::Vector2f(TILE_SIZE / 2.f, 0.f),
-          sf::Vector2f(0.f, TILE_SIZE)},
-         // Triangle two (active by default)
-         {sf::Vector2f(TILE_SIZE / 2.f, 0.f),
-          sf::Vector2f(TILE_SIZE, TILE_SIZE), sf::Vector2f(0.f, TILE_SIZE)},
-         // Triangle three (inactive by default)
-         {sf::Vector2f(TILE_SIZE / 2.f, 0.f), sf::Vector2f(TILE_SIZE, 0.f),
-          sf::Vector2f(TILE_SIZE, TILE_SIZE)}}};
+    _TILE_WITH_ARROW_MODEL = {{
+      // Triangle one (inactive by default)
+      {sf::Vector2f(0.f, 0.f), sf::Vector2f(TILE_SIZE / 2.f, 0.f),sf::Vector2f(0.f, TILE_SIZE)},
+      // Triangle two (active by default)
+      {sf::Vector2f(TILE_SIZE / 2.f, 0.f),sf::Vector2f(TILE_SIZE, TILE_SIZE), sf::Vector2f(0.f, TILE_SIZE)},
+      // Triangle three (inactive by default)
+      {sf::Vector2f(TILE_SIZE / 2.f, 0.f), sf::Vector2f(TILE_SIZE, 0.f),sf::Vector2f(TILE_SIZE, TILE_SIZE)}
+    }};
+// clang-format on
 
 #define trenchSize (1.f / 8.f)
 #define squareSize ((TILE_SIZE - trenchSize) / 2.f)
@@ -190,21 +193,18 @@ constexpr const static std::array<std::array<sf::Vector2f, 3>, 8>
 #undef trenchSize
 #undef squareSize
 
+// clang-format off
 constexpr static TileTypeIndexable<
     std::array<TileModel, ElecSim::GRIDTILE_COUNT>>
     TILE_MODELS = {
         TileModel(_TILE_WITH_ARROW_MODEL, TILE_COLORS[ElecSim::TileType::Wire]),
-        TileModel(_TILE_WITH_ARROW_MODEL,
-                  TILE_COLORS[ElecSim::TileType::Junction]),
-        TileModel(_TILE_WITH_ARROW_MODEL,
-                  TILE_COLORS[ElecSim::TileType::Emitter]),
-        TileModel(_TILE_WITH_ARROW_MODEL,
-                  TILE_COLORS[ElecSim::TileType::SemiConductor]),
-        TileModel(_TILE_WITH_ARROW_MODEL,
-                  TILE_COLORS[ElecSim::TileType::Button]),
-        TileModel(_TILE_WITH_ARROW_MODEL,
-                  TILE_COLORS[ElecSim::TileType::Inverter]),
-        TileModel(_CROSSING_MODEL, TILE_COLORS[ElecSim::TileType::Crossing])};
+        TileModel(_TILE_WITH_ARROW_MODEL, TILE_COLORS[ElecSim::TileType::Junction]),
+        TileModel(_TILE_WITH_ARROW_MODEL, TILE_COLORS[ElecSim::TileType::Emitter]),
+        TileModel(_TILE_WITH_ARROW_MODEL, TILE_COLORS[ElecSim::TileType::SemiConductor]),
+        TileModel(_TILE_WITH_ARROW_MODEL, TILE_COLORS[ElecSim::TileType::Button]),
+        TileModel(_TILE_WITH_ARROW_MODEL, TILE_COLORS[ElecSim::TileType::Inverter]),
+        TileModel(_CROSSING_MODEL,        TILE_COLORS[ElecSim::TileType::Crossing])};
+// clang-format on
 
 // Behavior:
 // Expect primitive type in this format at the first line: type <type>,
@@ -220,14 +220,29 @@ constexpr static TileTypeIndexable<
 //
 // There is no support for textures right now. Maybe later. The user can still
 // map the textures on their own if they want to.
+// Honestly, I could pour hours into this thing, making a smart parser with
+// variables and whatnot, but I just want it to work right now.
 class MeshLoader {
  public:
   // Opens the file (Which must be ascii text) and calls parse on it.
   void LoadMeshFromFile(const std::filesystem::path& filePath);
+  void LoadMeshFromString(const std::string& fileContent);
+  [[nodiscard]] std::vector<std::shared_ptr<sf::VertexArray>> const& GetMeshes()
+      const {
+    return meshes;
+  }
+  [[nodiscard]] std::shared_ptr<sf::VertexArray> const& GetMesh(
+      size_t index) const;
+  // [] operator
+  [[nodiscard]] std::shared_ptr<sf::VertexArray> const& operator[](
+      size_t index) const {
+    return GetMesh(index);
+  }
+  [[nodiscard]] size_t GetMeshCount() const noexcept { return meshes.size(); }
 
  private:
-  std::vector<sf::VertexArray> meshes;
-  std::vector<sf::VertexArray> ParseMeshFromStream(std::istream& stream);
-  std::vector<sf::VertexArray> ParseMeshFromString(std::string& fileContent);
+  std::vector<std::shared_ptr<sf::VertexArray>> meshes;
+  [[nodiscard]] std::vector<sf::VertexArray> ParseMesh(
+      std::istream& stream) const;
 };
 }  // namespace Engine
