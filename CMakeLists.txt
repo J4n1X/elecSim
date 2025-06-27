@@ -77,7 +77,10 @@ if(EARLY_BUILD)
 endif()
 
 # Prepare needed tools for the project's build step
-find_program(BLOBBER blobber PATHS ${TOOLS_DIR})
+find_program(BLOBBER blobber PATHS ${TOOLS_DIR} PATH_SUFFIXES Debug Release)
+if(WIN32 AND NOT BLOBBER)
+  find_program(BLOBBER blobber.exe PATHS ${TOOLS_DIR} PATH_SUFFIXES Debug Release)
+endif()
 if(NOT BLOBBER_FOUND)
   message(STATUS "Preparing configuration step tools")
   set(workdir ${BUILD_DIR}/early_build)

@@ -94,7 +94,7 @@ int generate_texture_atlas() {
     drawable->setPosition(sf::Vector2f(x + 1.f, y) + drawable->getOrigin());
     renderTexture.draw(*drawable);
 
-    std::cout << "Rendered " << tiles[i]->TileTypeName() << " at (" << x << ", "
+    std::cout << "Rendered " << ElecSim::TileTypeToString(tiles[i]->GetTileType()) << " at (" << x << ", "
               << y << ")\n";
   }
 
@@ -116,7 +116,7 @@ int generate_texture_atlas() {
     for (size_t i = 0; i < tiles.size(); ++i) {
       int row = static_cast<int>(i / tilesPerRow);
       int col = static_cast<int>(i % tilesPerRow);
-      std::cout << "  " << tiles[i]->TileTypeName() << ": (" << col << ", "
+      std::cout << "  " << ElecSim::TileTypeToString(tiles[i]->GetTileType()) << ": (" << col << ", "
                 << row << ")\n";
     }
 
