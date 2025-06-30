@@ -73,4 +73,19 @@ sf::Transform GetTileTransform(
   sf::Transform transform = transformable.getTransform();
   return transform;
 }
+sf::Transform GetTileTransform(
+    std::unique_ptr<ElecSim::GridTile> const& tilePtr) {
+  if (!tilePtr) {
+    throw std::invalid_argument("Tile pointer cannot be null.");
+  }
+  // I am too lazy to do math. sf::Transformable does it for us.
+  sf::Transformable transformable;
+  const float origin = TileDrawable::DEFAULT_SIZE / 2.f;
+  transformable.setOrigin({origin, origin});
+  transformable.setPosition(Engine::ToSfmlVector(tilePtr->GetPos() *
+                             TileDrawable::DEFAULT_SIZE) + transformable.getOrigin());
+  transformable.rotate(sf::degrees(static_cast<float>(tilePtr->GetFacing()) * 90.f));
+  sf::Transform transform = transformable.getTransform();
+  return transform;
+}
 }  // namespace Engine

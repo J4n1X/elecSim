@@ -71,7 +71,7 @@ class Game {
   vi2d WorldToGrid(const sf::Vector2f& pos) const;
   void AddRenderables(std::vector<std::unique_ptr<Engine::TileDrawable>> tiles);
   void AddRenderable(std::unique_ptr<Engine::TileDrawable> tile);
-  std::shared_ptr<sf::VertexArray> GetMeshTemplate(ElecSim::TileType type, bool activation) const;
+  std::shared_ptr<const sf::VertexArray> GetMeshTemplate(ElecSim::TileType type, bool activation) const;
   void RebuildGridVertices();
 
   // Tile manipulation methods

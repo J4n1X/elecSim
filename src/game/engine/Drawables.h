@@ -98,5 +98,7 @@ std::unique_ptr<TileDrawable> CreateTileRenderable(
 
 sf::Transform GetTileTransform(
     std::shared_ptr<ElecSim::GridTile> const& tilePtr);
+sf::Transform GetTileTransform(
+    std::unique_ptr<ElecSim::GridTile> const& tilePtr);
 
 }  // namespace Engine

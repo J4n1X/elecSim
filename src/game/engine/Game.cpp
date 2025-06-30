@@ -646,31 +646,29 @@ void Game::Render() {
   // Draw tile buffer preview (for paste preview)
   if (!tileBuffer.empty() && !selectionActive) {
     auto currentGridPos = WorldToGrid(mousePos);
-    auto originalPos = highlighter.getPosition();
-    auto originalSize = highlighter.getSize();
-
-    // TODO: This is temporary. Implement proper.
+    auto previewOffset = sf::Vector2f(static_cast<float>(currentGridPos.x), 
+                                   static_cast<float>(currentGridPos.y)) * Engine::TileDrawable::DEFAULT_SIZE;
+    sf::VertexArray previewArray(sf::PrimitiveType::Triangles);
+    // TODO: Move out of main draw function
     for (const auto& tile : tileBuffer) {
-      vi2d previewPos = tile->GetPos() + currentGridPos;
-      highlighter.setPosition(
-          sf::Vector2f(previewPos.x * Engine::TileDrawable::DEFAULT_SIZE,
-                       previewPos.y * Engine::TileDrawable::DEFAULT_SIZE));
-      highlighter.setSize(sf::Vector2f(Engine::TileDrawable::DEFAULT_SIZE,
-                                       Engine::TileDrawable::DEFAULT_SIZE));
-      highlighter.setColor(sf::Color::Green);
-      highlighter.setFillColor(
-          sf::Color(0, 255, 0, 100));  // Semi-transparent green fill
-
-      // apply a tint to the colors
-      window.draw(highlighter);
+      auto transform = Engine::GetTileTransform(tile);
+      auto& mesh = *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
+      for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
+        sf::Vertex vertex = mesh[i];
+        vertex.position = transform.transformPoint(vertex.position) + previewOffset;
+        vertex.color.a = 128;
+        previewArray.append(vertex);
+      }
     }
-
-    // Restore original highlighter state
-    highlighter.setPosition(originalPos);
-    highlighter.setSize(originalSize);
-    highlighter.setColor(sf::Color(255, 0, 0, 128));
-    highlighter.setFillColor(sf::Color::Transparent);
+    window.draw(previewArray);
+    highlighter.setSize(
+        sf::Vector2f(tileBufferBoxSize.x * Engine::TileDrawable::DEFAULT_SIZE,
+                     tileBufferBoxSize.y * Engine::TileDrawable::DEFAULT_SIZE));
+    highlighter.setPosition(previewOffset);
+    window.draw(highlighter);
   }
+
+  
   // Draw UI
   std::string brushName = "None";
   if (!tileBuffer.empty()) {
@@ -720,7 +718,7 @@ void Game::AddRenderable(std::unique_ptr<Engine::TileDrawable> tilePtr) {
   // unused for now
 }
 
-std::shared_ptr<sf::VertexArray> Game::GetMeshTemplate(ElecSim::TileType type,
+std::shared_ptr<const sf::VertexArray> Game::GetMeshTemplate(ElecSim::TileType type,
                                                        bool activation) const {
   return meshTemplates.at(static_cast<int>(type) * 2 +
                           static_cast<int>(activation));
