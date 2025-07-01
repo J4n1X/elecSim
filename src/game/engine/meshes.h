@@ -127,8 +127,8 @@ class TileModel {
   template <std::size_t N>
   constexpr TileModel(
       const std::array<std::array<sf::Vector2f, 3>, N>& triangles,
-      const TileColors colors)
-      : colors(colors), triangles_data(triangles.data()), triangles_count(N) {
+      const TileColors newColors)
+      : colors(newColors), triangles_data(triangles.data()), triangles_count(N) {
     if (N < 1) {
       throw std::runtime_error("TileModel must have at least one triangle.");
     }

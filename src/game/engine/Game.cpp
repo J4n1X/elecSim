@@ -15,7 +15,7 @@
 #include "BAHNSCHRIFT_TTF_blob.h"
 #include "CrossingTile_mesh_blob.h"
 
-std::optional<std::string> OpenSaveDialog() {
+static std::optional<std::string> OpenSaveDialog() {
   constexpr nfdfilteritem_t filterItem[] = {
       {"Grid files", "grid"},
   };
@@ -30,7 +30,7 @@ std::optional<std::string> OpenSaveDialog() {
   return std::optional(filename);
 }
 
-std::optional<std::string> OpenLoadDialog() {
+static std::optional<std::string> OpenLoadDialog() {
   constexpr nfdfilteritem_t filterItem[] = {
       {"Grid files", "grid"},
   };
@@ -45,7 +45,7 @@ std::optional<std::string> OpenLoadDialog() {
   return std::optional(filename);
 }
 
-void ZoomViewAt(sf::View& view, sf::Vector2i pixel,
+static void ZoomViewAt(sf::View& view, sf::Vector2i pixel,
                 const sf::RenderWindow& window, float zoom) {
   const sf::Vector2f beforeCoord{window.mapPixelToCoords(pixel, view)};
   view.zoom(zoom);
@@ -92,9 +92,9 @@ void Game::Initialize() {
   // Load meshes
   MeshLoader meshLoader;
   meshLoader.LoadMeshFromString(
-      std::string((const char*)ArrowTile_mesh_data, ArrowTile_mesh_len));
+      std::string(reinterpret_cast<const char*>(ArrowTile_mesh_data), ArrowTile_mesh_len));
   meshLoader.LoadMeshFromString(
-      std::string((const char*)CrossingTile_mesh_data, CrossingTile_mesh_len));
+      std::string(reinterpret_cast<const char*>(CrossingTile_mesh_data), CrossingTile_mesh_len));
   meshTemplates = meshLoader.GetMeshes();
 
   constexpr static size_t EXPECTED_MESH_COUNT = ElecSim::GRIDTILE_COUNT * 2;
@@ -720,8 +720,8 @@ void Game::AddRenderable(std::unique_ptr<Engine::TileDrawable> tilePtr) {
 
 std::shared_ptr<const sf::VertexArray> Game::GetMeshTemplate(ElecSim::TileType type,
                                                        bool activation) const {
-  return meshTemplates.at(static_cast<int>(type) * 2 +
-                          static_cast<int>(activation));
+  return meshTemplates.at(static_cast<size_t>(type) * 2 +
+                          static_cast<size_t>(activation));
 }
 
 // The extreme option. Rebuilds every single vertex in the grid.

@@ -27,12 +27,12 @@ const std::string_view TileTypeToString(TileType type) {
 
 // --- GridTile Implementation ---
 
-GridTile::GridTile(vi2d pos, Direction facing,
-                   bool defaultActivation)
-    : pos(pos),
-      facing(facing),
-      activated(defaultActivation),
-      defaultActivation(defaultActivation),
+GridTile::GridTile(vi2d newPos, Direction newFacing,
+                   bool newDefaultActivation)
+    : pos(newPos),
+      facing(newFacing),
+      activated(newDefaultActivation),
+      defaultActivation(newDefaultActivation),
       canReceive{},
       canOutput{},
       inputStates{} {

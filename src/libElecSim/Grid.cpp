@@ -324,7 +324,7 @@ void Grid::Save(const std::string& filename) {
   for (const auto& chunk : serializedTileData) {
     auto chunkData =
         chunk | std::views::join | std::ranges::to<std::vector<char>>();
-    file.write(chunkData.data(), chunkData.size());
+    file.write(chunkData.data(), static_cast<std::streamsize>(chunkData.size()));
     dataSize += chunkData.size();
   }
 #ifdef DEBUG
@@ -351,7 +351,12 @@ void Grid::Load(const std::string& filename) {
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
-    dataSize += file.gcount();
+    if(file.gcount() < 0){
+      throw std::runtime_error(
+          std::format("Error reading from file: {}. Invalid read count: {}", filename,
+                      file.gcount()));
+    }
+    dataSize += static_cast<size_t>(file.gcount());
     if (file.gcount() == 0) break;
 
     std::unique_ptr<GridTile> tile = GridTile::Deserialize(data);

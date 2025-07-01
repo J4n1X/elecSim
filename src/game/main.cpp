@@ -11,13 +11,13 @@
 #include "meshes.h"
 #include "ArrowTile_mesh_blob.h"
 #include "CrossingTile_mesh_blob.h"
-int generate_texture_atlas() {
+static int generate_texture_atlas() {
   std::cout << "Generating texture atlas...\n";
 
 // Load meshes
   Engine::MeshLoader meshLoader;
-  meshLoader.LoadMeshFromString(std::string((const char*)ArrowTile_mesh_data, ArrowTile_mesh_len));
-  meshLoader.LoadMeshFromString(std::string((const char*)CrossingTile_mesh_data, CrossingTile_mesh_len));
+  meshLoader.LoadMeshFromString(std::string(reinterpret_cast<const char*>(ArrowTile_mesh_data), ArrowTile_mesh_len));
+  meshLoader.LoadMeshFromString(std::string(reinterpret_cast<const char*>(CrossingTile_mesh_data), CrossingTile_mesh_len));
 
   // Create instances of all tile types
   std::vector<std::shared_ptr<ElecSim::GridTile>> tiles;

@@ -6,16 +6,15 @@
 #include <vector>
 
 extern "C" {
-  #include "hope.h"
+#include "hope.h"
 }
 #define OLC_PGE_APPLICATION
 #include "Grid.h"
 
-const char* prog_name = "Prober";
 const char* prog_desc = "Prober is a tool for simulating elecSim circuits.";
 const char* prog_version = "0.1";
 
-hope_t initParser(const char* prog_name, const char* prog_desc) {
+static hope_t initParser(const char* prog_name) {
   hope_t hope = hope_init(prog_name, prog_desc);
   hope_set_t paramSet = hope_init_set("Main");
   hope_add_param(&paramSet, hope_init_param("-f", "Grid file to load",
@@ -91,10 +90,8 @@ class TestParser {
   }
 
   std::string GetCommandString(const Command& command) const {
-    return std::format("{} {} {}", 
-                      GetCommandTypeString(command.type), 
-                      vi2d(command.x, command.y), 
-                      command.value);
+    return std::format("{} {} {}", GetCommandTypeString(command.type),
+                       vi2d(command.x, command.y), command.value);
   }
 
   void Parse(const std::string& testFile) {
@@ -145,26 +142,30 @@ class TestParser {
         commands.push_back({CommandType::Read, x, y, v});
         continue;
       }
-    //unknown_read:
-    //  throw std::runtime_error(std::format("Unknown command '{}' at line {}", cmd, lineNum));
+    // unknown_read:
+    //   throw std::runtime_error(std::format("Unknown command '{}' at line {}",
+    //   cmd, lineNum));
     malformed_write:
-      throw std::runtime_error(std::format("Malformed write command at line {}", lineNum));
+      throw std::runtime_error(
+          std::format("Malformed write command at line {}", lineNum));
     malformed_interact:
-      throw std::runtime_error(std::format("Malformed interact command at line {}", lineNum));
+      throw std::runtime_error(
+          std::format("Malformed interact command at line {}", lineNum));
     malformed_read:
-      throw std::runtime_error(std::format("Malformed read command at line {}", lineNum));
+      throw std::runtime_error(
+          std::format("Malformed read command at line {}", lineNum));
     }
   }
   const std::vector<Command>& GetCommands() const { return commands; }
 };
 
-int main([[maybe_unused]]int argc, char** argv) {
-
-  hope_t hope = initParser(prog_name, prog_desc);
+int main([[maybe_unused]] int argc, char** argv) {
+  hope_t hope = initParser(argv[1]);
 
   if (hope_parse_argv(&hope, argv))  // error occurred, print error message
     return 1;
-  if (std::string(hope.used_set_name) == "Help") {  // no need to even check the switch
+  if (std::string(hope.used_set_name) ==
+      "Help") {  // no need to even check the switch
     hope_print_help(&hope, stdout);
     return 0;
   }
@@ -210,8 +211,8 @@ int main([[maybe_unused]]int argc, char** argv) {
         break;
       case TestParser::CommandType::Read:
         std::cout << std::format("Tile at {}:\n  Expected: {}\n  Actual: ",
-                               vi2d(command.x, command.y), 
-                               (command.value ? "active" : "inactive"));
+                                 vi2d(command.x, command.y),
+                                 (command.value ? "active" : "inactive"));
         if (tileMaybe.has_value()) {
           auto tile = tileMaybe.value();
           std::cout << (tile->GetActivation() ? "active" : "inactive");
@@ -227,6 +228,12 @@ int main([[maybe_unused]]int argc, char** argv) {
       case TestParser::CommandType::Comment:
         if (verbose) std::cout << command.comment << std::endl;
         break;
+      default:
+        std::cerr << "Unknown command type: "
+                  << testParser.GetCommandTypeString(command.type)
+                  << " of value: " << static_cast<int>(command.type)
+                  << ", aborting" << std::endl;
+        return 1;
     }
   }
   std::cout << "Test completed successfully." << std::endl;

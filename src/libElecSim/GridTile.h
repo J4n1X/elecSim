@@ -108,10 +108,10 @@ class GridTile {
 // and can be used in deterministic simulations.
 class DeterministicTile : public GridTile {
  public:
-  explicit DeterministicTile(vi2d pos = vi2d(0, 0),
-                             Direction facing = Direction::Top,
-                             bool defaultActivation = false)
-      : GridTile(pos, facing, defaultActivation) {}
+  explicit DeterministicTile(vi2d newPos = vi2d(0, 0),
+                             Direction newFacing = Direction::Top,
+                             bool newDefaultActivation = false)
+      : GridTile(newPos, newFacing, newDefaultActivation) {}
 
   bool IsDeterministic() const override { return true; }
   bool IsEmitter() const override { return false; }
@@ -119,10 +119,10 @@ class DeterministicTile : public GridTile {
 
 class LogicTile : public GridTile {
  public:
-  explicit LogicTile(vi2d pos = vi2d(0, 0),
-                     Direction facing = Direction::Top,
-                     bool defaultActivation = false)
-      : GridTile(pos, facing, defaultActivation) {}
+  explicit LogicTile(vi2d newPos = vi2d(0, 0),
+                     Direction newFacing = Direction::Top,
+                     bool newDefaultActivation = false)
+      : GridTile(newPos, newFacing, newDefaultActivation) {}
   bool IsDeterministic() const override { return false; }
   std::vector<SignalEvent> PreprocessSignal(
       [[maybe_unused]] const SignalEvent incomingSignal) override {

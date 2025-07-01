@@ -32,7 +32,7 @@ class Grid {
       ankerl::unordered_dense::map<vi2d, std::shared_ptr<GridTile>,
                                    PositionHash, PositionEqual>;
 
-  uint32_t currentTick = 0;   // Current game tick (used by emitters)
+  int currentTick = 0;   // Current game tick (used by emitters)
   bool fieldIsDirty = false;  // Flag to indicate if the field has been modified
 
   TileField tiles;

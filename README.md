@@ -118,7 +118,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ### Third-Party Licenses
 
 This project uses third-party software with different licenses. See [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES) for complete license information of all dependencies.
-
-Notable third-party components:
-- **nativefiledialog-extended** - Licensed under zlib License (Copyright Bernard Teo)
-- **olcPixelGameEngine** - Licensed under OLC-3 License (Copyright 2018-2025 OneLoneCoder.com)
