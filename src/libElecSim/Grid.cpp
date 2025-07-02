@@ -9,12 +9,10 @@
 
 namespace ElecSim {
 
-// Implementation of SignalEdge::operator==
 bool SignalEdge::operator==(const SignalEdge& other) const {
   return sourcePos == other.sourcePos && targetPos == other.targetPos;
 }
 
-// Implementation of SignalEdgeHash::operator()
 std::size_t SignalEdgeHash::operator()(const SignalEdge& edge) const {
   using ankerl::unordered_dense::detail::wyhash::hash;
   return hash(&edge, sizeof(SignalEdge));
@@ -64,7 +62,7 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
   }
 }
 
-int Grid::Simulate() {
+Grid::SimulationResult Grid::Simulate() {
   if (fieldIsDirty) {
 #ifdef DEBUG
     std::println(std::cout,
@@ -74,6 +72,7 @@ int Grid::Simulate() {
     ResetSimulation();
   }
 
+  SimulationResult simResult;
   int updatesProcessed = 0;
   currentTick++;  // Increment the tick counter
 
@@ -93,6 +92,8 @@ int Grid::Simulate() {
       // Now using the simpler SignalEvent constructor
       QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
                                     tile->GetActivation()));
+      simResult.affectedTiles.insert(
+          TileStateChange{tile->GetPos(), tile->GetActivation()});
     }
     ++it;
   }
@@ -105,18 +106,14 @@ int Grid::Simulate() {
   while (!updateQueue.empty()) {
     // Safety check - prevent extremely long update chains
     if (updatesProcessed > MAX_UPDATES) {
-      if (!enableEdgeCheck) {
 #ifdef DEBUG
+      if (!enableEdgeCheck) {
         std::cerr
             << "Warning: Maximum update limit reached (" << MAX_UPDATES
             << " updates). Enabling edge check to prevent potential cycle."
             << std::endl;
-#else
-        std::cout << "Update limit reached, enabling edge check to terminate "
-                     "potential cycles."
-                  << std::endl;
-#endif
       }
+#endif
       enableEdgeCheck = true;
     }
 
@@ -126,8 +123,11 @@ int Grid::Simulate() {
     if (enableEdgeCheck) {
       if (currentTickVisitedEdges.contains(
               SignalEdge{update.tile->GetPos(), update.event.sourcePos})) {
-        // This edge has already been processed this tick, skip it
-        continue;
+        throw std::runtime_error(
+            std::format("Cycle detected in signal processing: edge from {} to "
+                        "{}. Offending signal side: {}",
+                        update.tile->GetPos(), update.event.sourcePos,
+                        DirectionToString(update.event.fromDirection)));
       }
     }
 
@@ -135,8 +135,13 @@ int Grid::Simulate() {
     auto simObjMaybe = tileManager.GetSimulationObject(update.tile->GetPos());
     if (simObjMaybe.has_value()) {
       auto simObj = simObjMaybe.value();
-      auto newSignals = simObj->ProcessSignal(update.event);
-      for (const auto& newSignal : newSignals) {
+      auto processResult = simObj->ProcessSignal(update.event);
+
+      // Insert into affected tiles 
+      simResult.affectedTiles.insert(processResult.affectedTiles.begin(),
+                           processResult.affectedTiles.end());
+
+      for (const auto& newSignal : processResult.newSignals) {
         // Queue the new signal events
         auto targetPos = TranslatePosition(
             newSignal.sourcePos, FlipDirection(newSignal.fromDirection));
@@ -162,10 +167,14 @@ int Grid::Simulate() {
           << std::endl;
 #endif
       ProcessUpdateEvent(update);
+      simResult.affectedTiles.insert(
+          TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
     }
 
 #else
     ProcessUpdateEvent(update);
+    affectedTiles.insert(
+          TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
 #endif
     if (enableEdgeCheck) {
       currentTickVisitedEdges.insert(
@@ -174,7 +183,8 @@ int Grid::Simulate() {
 
     updatesProcessed++;
   }
-  return updatesProcessed;
+  simResult.updatesProcessed = updatesProcessed;
+  return simResult;
 }
 
 void Grid::ResetSimulation() {
@@ -204,41 +214,6 @@ void Grid::ResetSimulation() {
 #endif
 }
 
-// int Grid::Draw(olc::PixelGameEngine* renderer) {
-//   if (!renderer) throw std::runtime_error("Grid has no renderer available");
-
-//   // Clear Background
-//   renderer->SetDrawTarget(gameLayer);
-//   renderer->Clear(backgroundColor);
-
-//   // Tiles exclusively render as decals.
-
-//   // Draw tiles
-//   // This spriteSize causes overdraw all the time, but without it, we get
-//   // pixel gaps Update: Now that we use decals, this is a non-issue.
-
-//   auto spriteSize = std::ceil(renderScale);
-//   int drawnTiles = 0;
-
-//   for (const auto& [pos, tile] : tiles) {
-//     if (!tile) throw std::runtime_error("Grid contained entry with empty
-//     tile");
-
-//     olc::vf2d screenPos = WorldToScreenFloating(pos);
-//     // Is this tile even visible?
-//     if (screenPos.x + spriteSize <= 0 || screenPos.x >= renderWindow.x ||
-//         screenPos.y + spriteSize <= 0 || screenPos.y >= renderWindow.y) {
-//       continue;  // If not, why even draw it?
-//     }
-
-//     //tile->Draw(renderer, screenPos, spriteSize);
-//     drawnTiles++;
-//   }
-
-//   // Highlight drawing has been moved to the Game class
-//   return drawnTiles;
-// }
-
 void ElecSim::Grid::SetTile(vi2d pos, std::shared_ptr<GridTile> tile) {
   tile->SetPos(pos);
   auto [mapElement, inserted] = tiles.insert_or_assign(pos, tile);
@@ -247,25 +222,6 @@ void ElecSim::Grid::SetTile(vi2d pos, std::shared_ptr<GridTile> tile) {
   }
   fieldIsDirty = true;  // Mark the field as modified
 }
-
-// TODO: These need to be moved into the game class or somewhere similar, like
-// the RenderManager.
-// olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
-//  return olc::vf2d((pos.x * renderScale) + renderOffset.x,
-//                   (pos.y * renderScale) + renderOffset.y);
-//}
-//
-// olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
-//  auto screenPosFloating = WorldToScreenFloating(pos);
-//  return olc::vi2d(static_cast<int>(std::floor(screenPosFloating.x)),
-//                   static_cast<int>(std::floor(screenPosFloating.y)));
-//}
-//
-// olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
-//  return olc::vf2d((pos.x - renderOffset.x) / renderScale,
-//                   (pos.y - renderOffset.y) / renderScale);
-//}
-//
 
 void Grid::InteractWithTile(vi2d pos) noexcept {
   if (std::optional tileOpt = GetTile(pos)) {
@@ -324,7 +280,8 @@ void Grid::Save(const std::string& filename) {
   for (const auto& chunk : serializedTileData) {
     auto chunkData =
         chunk | std::views::join | std::ranges::to<std::vector<char>>();
-    file.write(chunkData.data(), static_cast<std::streamsize>(chunkData.size()));
+    file.write(chunkData.data(),
+               static_cast<std::streamsize>(chunkData.size()));
     dataSize += chunkData.size();
   }
 #ifdef DEBUG
@@ -351,10 +308,10 @@ void Grid::Load(const std::string& filename) {
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
-    if(file.gcount() < 0){
+    if (file.gcount() < 0) {
       throw std::runtime_error(
-          std::format("Error reading from file: {}. Invalid read count: {}", filename,
-                      file.gcount()));
+          std::format("Error reading from file: {}. Invalid read count: {}",
+                      filename, file.gcount()));
     }
     dataSize += static_cast<size_t>(file.gcount());
     if (file.gcount() == 0) break;

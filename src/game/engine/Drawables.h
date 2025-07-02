@@ -58,11 +58,11 @@ class TileDrawable : public sf::Drawable, public sf::Transformable {
 class Highlighter : public sf::Drawable, public sf::Transformable {
  public:
   explicit Highlighter(const sf::FloatRect& bounds,
-                       sf::Color highlightColor = sf::Color(255, 0, 0, 128))
+                       sf::Color highlightColor = sf::Color(255, 0, 0, 128), sf::Color fillColor = sf::Color(255, 0, 0, 50))
       : color(highlightColor) {
     rectangle.setPosition({0.f, 0.f});
     rectangle.setSize(bounds.size);
-    rectangle.setFillColor(sf::Color::Transparent);
+    rectangle.setFillColor(fillColor);
     rectangle.setOutlineColor(color);
     rectangle.setOutlineThickness(TileDrawable::DEFAULT_SIZE / 8.f);
   }

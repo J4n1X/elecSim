@@ -69,8 +69,6 @@ class Game {
   void Update();
   void Render();  sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
   vi2d WorldToGrid(const sf::Vector2f& pos) const;
-  void AddRenderables(std::vector<std::unique_ptr<Engine::TileDrawable>> tiles);
-  void AddRenderable(std::unique_ptr<Engine::TileDrawable> tile);
   std::shared_ptr<const sf::VertexArray> GetMeshTemplate(ElecSim::TileType type, bool activation) const;
   void RebuildGridVertices();
 
@@ -100,6 +98,7 @@ class Game {
   bool paused = true; // Simulation state
   float tps = 8.f;  // Ticks per second for simulation
   float lastTickElapsedTime = 0.f;  // Time elapsed since last tick
+  ElecSim::Grid::SimulationResult lastSimulationResult;  // Result of the last simulation
 
   // Tile manipulation
   bool selectionActive = false;

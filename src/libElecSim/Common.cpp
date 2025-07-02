@@ -2,16 +2,15 @@
 #include "ankerl/unordered_dense.h"
 
 namespace ElecSim {
-// Implementation of PositionHash::operator()
 std::size_t PositionHash::operator()(const vi2d& pos) const {
   using ankerl::unordered_dense::detail::wyhash::hash;
   return hash(&pos, sizeof(vi2d));
 }
 
-// Implementation of PositionEqual::operator()
-bool PositionEqual::operator()(const vi2d& lhs,
-                               const vi2d& rhs) const {
-  return lhs == rhs;
+std::size_t TileStateChangeHash::operator()(
+    const TileStateChange& change) const {
+  using ankerl::unordered_dense::detail::wyhash::hash;
+  return hash(&change, sizeof(TileStateChange));
 }
 
 

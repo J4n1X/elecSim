@@ -46,7 +46,7 @@ static std::optional<std::string> OpenLoadDialog() {
 }
 
 static void ZoomViewAt(sf::View& view, sf::Vector2i pixel,
-                const sf::RenderWindow& window, float zoom) {
+                       const sf::RenderWindow& window, float zoom) {
   const sf::Vector2f beforeCoord{window.mapPixelToCoords(pixel, view)};
   view.zoom(zoom);
   const sf::Vector2f afterCoord{window.mapPixelToCoords(pixel, view)};
@@ -91,10 +91,11 @@ void Game::Initialize() {
 
   // Load meshes
   MeshLoader meshLoader;
+  meshLoader.LoadMeshFromString(std::string(
+      reinterpret_cast<const char*>(ArrowTile_mesh_data), ArrowTile_mesh_len));
   meshLoader.LoadMeshFromString(
-      std::string(reinterpret_cast<const char*>(ArrowTile_mesh_data), ArrowTile_mesh_len));
-  meshLoader.LoadMeshFromString(
-      std::string(reinterpret_cast<const char*>(CrossingTile_mesh_data), CrossingTile_mesh_len));
+      std::string(reinterpret_cast<const char*>(CrossingTile_mesh_data),
+                  CrossingTile_mesh_len));
   meshTemplates = meshLoader.GetMeshes();
 
   constexpr static size_t EXPECTED_MESH_COUNT = ElecSim::GRIDTILE_COUNT * 2;
@@ -364,11 +365,6 @@ void Game::HandleInput() {
     paused = !paused;
     if (paused) {
       grid.ResetSimulation();
-    } else {
-      // Clear the buffer.
-      // TODO: When proper tile previews are implemented, those should be
-      // disabled instead and the bounding box adjusted.
-      ClearBuffer();
     }
   }
 
@@ -412,7 +408,7 @@ void Game::CreateBrushTile() {
 
   auto newTile = createTile();
 
-  if (!newTile) {
+  if (!newTile) [[unlikely]] {
     return;  // No valid selection
   }
 
@@ -468,7 +464,7 @@ void Game::RotateBufferTiles() {
   ElecSim::Direction newFacing =
       ElecSim::DirectionRotate(selectedBrushFacing, ElecSim::Direction::Right);
 
-  if (selectedBrushFacing == newFacing) {
+  if (selectedBrushFacing == newFacing) [[unlikely]] {
     throw std::runtime_error(
         "New facing should never be the same as the old facing");
   }
@@ -518,7 +514,8 @@ void Game::CopyTiles(const vi2d& startIndex, const vi2d& endIndex) {
 
   // Create actual copies (clones) of the tiles and store them in our buffer
   for (auto& weakTile : weakSelection) {
-    if (weakTile.expired()) continue;
+    if (weakTile.expired()) [[unlikely]]
+      continue;
     if (auto tilePtr = weakTile.lock()) {
       auto retTile = tilePtr->Clone();
       retTile->SetPos(retTile->GetPos() - startIndex);  // Adjust position
@@ -534,7 +531,7 @@ void Game::PasteTiles(const vi2d& pastePosition) {
 
   for (const auto& tile : tileBuffer) {
     if (std::optional oldTile = grid.GetTile(pastePosition + tile->GetPos())) {
-      if ((*oldTile)->GetTileType() == tile->GetTileType()) {
+      if ((*oldTile)->GetTileType() == tile->GetTileType()) [[unlikely]] {
         continue;
       }
     }
@@ -587,7 +584,7 @@ void Game::Update() {
   // Simulation step
   while (!paused && lastTickElapsedTime >= (1.f / tps)) {
     lastTickElapsedTime -= (1.f / tps);
-    grid.Simulate();
+    lastSimulationResult = grid.Simulate();
     RebuildGridVertices();
   }
 }
@@ -612,63 +609,51 @@ void Game::Render() {
 
   window.draw(gridVertices);
   // Draw selection rectangle if active
-  if (selectionActive) {
-    auto currentGridPos = WorldToGrid(mousePos);
-    vi2d topLeft = selectionStartIndex.min(currentGridPos);
-    vi2d bottomRight = selectionStartIndex.max(currentGridPos);
-    vi2d gridSize = bottomRight - topLeft + vi2d(1, 1);
+  if (paused) {
+    if (selectionActive) {
+      auto currentGridPos = WorldToGrid(mousePos);
+      vi2d topLeft = selectionStartIndex.min(currentGridPos);
+      vi2d bottomRight = selectionStartIndex.max(currentGridPos);
+      vi2d gridSize = bottomRight - topLeft + vi2d(1, 1);
 
-    // Temporarily modify highlighter for selection display
-    auto originalPos = highlighter.getPosition();
-    auto originalSize = highlighter.getSize();
-
-    highlighter.setPosition(
-        sf::Vector2f(topLeft.x * Engine::TileDrawable::DEFAULT_SIZE,
-                     topLeft.y * Engine::TileDrawable::DEFAULT_SIZE));
-    highlighter.setSize(
-        sf::Vector2f(gridSize.x * Engine::TileDrawable::DEFAULT_SIZE,
-                     gridSize.y * Engine::TileDrawable::DEFAULT_SIZE));
-    highlighter.setColor(sf::Color::Red);
-    highlighter.setFillColor(
-        sf::Color(255, 0, 0, 50));  // Semi-transparent red fill
-
-    window.draw(highlighter);
-
-    // Restore original highlighter state
-    highlighter.setPosition(originalPos);
-    highlighter.setSize(originalSize);
-    highlighter.setColor(sf::Color(255, 0, 0, 128));
-    highlighter.setFillColor(sf::Color::Transparent);
-  } else {
-    window.draw(highlighter);
-  }
-
-  // Draw tile buffer preview (for paste preview)
-  if (!tileBuffer.empty() && !selectionActive) {
-    auto currentGridPos = WorldToGrid(mousePos);
-    auto previewOffset = sf::Vector2f(static_cast<float>(currentGridPos.x), 
-                                   static_cast<float>(currentGridPos.y)) * Engine::TileDrawable::DEFAULT_SIZE;
-    sf::VertexArray previewArray(sf::PrimitiveType::Triangles);
-    // TODO: Move out of main draw function
-    for (const auto& tile : tileBuffer) {
-      auto transform = Engine::GetTileTransform(tile);
-      auto& mesh = *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
-      for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
-        sf::Vertex vertex = mesh[i];
-        vertex.position = transform.transformPoint(vertex.position) + previewOffset;
-        vertex.color.a = 128;
-        previewArray.append(vertex);
-      }
+      highlighter.setPosition(
+          sf::Vector2f(topLeft.x * Engine::TileDrawable::DEFAULT_SIZE,
+                       topLeft.y * Engine::TileDrawable::DEFAULT_SIZE));
+      highlighter.setSize(
+          sf::Vector2f(gridSize.x * Engine::TileDrawable::DEFAULT_SIZE,
+                       gridSize.y * Engine::TileDrawable::DEFAULT_SIZE));
+      window.draw(highlighter);
     }
-    window.draw(previewArray);
-    highlighter.setSize(
-        sf::Vector2f(tileBufferBoxSize.x * Engine::TileDrawable::DEFAULT_SIZE,
-                     tileBufferBoxSize.y * Engine::TileDrawable::DEFAULT_SIZE));
-    highlighter.setPosition(previewOffset);
-    window.draw(highlighter);
+
+    // Draw tile buffer preview (for paste preview)
+    if (!tileBuffer.empty() && !selectionActive) {
+      auto currentGridPos = WorldToGrid(mousePos);
+      auto previewOffset = sf::Vector2f(static_cast<float>(currentGridPos.x),
+                                        static_cast<float>(currentGridPos.y)) *
+                           Engine::TileDrawable::DEFAULT_SIZE;
+      sf::VertexArray previewArray(sf::PrimitiveType::Triangles);
+      // TODO: Move out of main draw function
+      for (const auto& tile : tileBuffer) {
+        auto transform = Engine::GetTileTransform(tile);
+        auto& mesh =
+            *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
+        for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
+          sf::Vertex vertex = mesh[i];
+          vertex.position =
+              transform.transformPoint(vertex.position) + previewOffset;
+          vertex.color.a = 128;
+          previewArray.append(vertex);
+        }
+      }
+      window.draw(previewArray);
+      highlighter.setSize(sf::Vector2f(
+          tileBufferBoxSize.x * Engine::TileDrawable::DEFAULT_SIZE,
+          tileBufferBoxSize.y * Engine::TileDrawable::DEFAULT_SIZE));
+      highlighter.setPosition(previewOffset);
+      window.draw(highlighter);
+    }
   }
 
-  
   // Draw UI
   std::string brushName = "None";
   if (!tileBuffer.empty()) {
@@ -681,14 +666,22 @@ void Game::Render() {
       : selectedBrushFacing == ElecSim::Direction::Bottom ? "Bottom"
                                                           : "Left";
 
+  static int lastUpdateCount;
+  if (lastSimulationResult.updatesProcessed > 0) {
+    lastUpdateCount = lastSimulationResult.updatesProcessed;
+  } else if (paused) {
+    lastUpdateCount = 0;
+  }
+  // TODO: When we have ImGui, we could use that instead of printing text.
   text.setString(std::format(
       "FPS: {}; Simulation: {}; Grid Position: ({}, {}); TPS: {:.2f}\n"
       "Brush: {} ({}); Facing: {}; Buffer: {} tiles; Selection: {}\n"
-      "Total Tiles: {}",
+      "Total Tiles: {}; Updates: {}",
       fpsTracker.getFPS(), (paused ? "Paused" : "Running"),
       WorldToGrid(mousePos).x, WorldToGrid(mousePos).y, tps, selectedBrushIndex,
       brushName, facingName, tileBuffer.size(),
-      selectionActive ? "Active" : "None", grid.GetTileCount()));
+      selectionActive ? "Active" : "None", grid.GetTileCount(),
+      lastUpdateCount));
   window.setView(guiView);
   window.draw(text);
 
@@ -708,18 +701,8 @@ vi2d Game::WorldToGrid(const sf::Vector2f& pos) const {
               static_cast<int>(aligned.y / Engine::TileDrawable::DEFAULT_SIZE));
 }
 
-void Engine::Game::AddRenderables(
-    std::vector<std::unique_ptr<Engine::TileDrawable>> tiles) {
-  (void)tiles;
-}
-
-void Game::AddRenderable(std::unique_ptr<Engine::TileDrawable> tilePtr) {
-  (void)tilePtr;  // This is to avoid unused variable warning
-  // unused for now
-}
-
-std::shared_ptr<const sf::VertexArray> Game::GetMeshTemplate(ElecSim::TileType type,
-                                                       bool activation) const {
+std::shared_ptr<const sf::VertexArray> Game::GetMeshTemplate(
+    ElecSim::TileType type, bool activation) const {
   return meshTemplates.at(static_cast<size_t>(type) * 2 +
                           static_cast<size_t>(activation));
 }

@@ -19,9 +19,16 @@ struct PositionHash {
   std::size_t operator()(const vi2d& pos) const;
 };
 
-// Equals functor for vi2d
-struct PositionEqual {
-  bool operator()(const vi2d& lhs, const vi2d& rhs) const;
+struct TileStateChange {
+  vi2d pos;
+  bool newState;
+  bool operator==(const TileStateChange& other) const {
+    return pos == other.pos && newState == other.newState;
+  }
+};
+struct TileStateChangeHash {
+  using is_avalanching = void;
+  std::size_t operator()(const TileStateChange& change) const;
 };
 
 // Forward declaration to avoid circular includes

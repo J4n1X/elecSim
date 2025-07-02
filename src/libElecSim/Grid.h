@@ -30,9 +30,11 @@ class Grid {
  private:
   using TileField =
       ankerl::unordered_dense::map<vi2d, std::shared_ptr<GridTile>,
-                                   PositionHash, PositionEqual>;
+                                   PositionHash>;
+  using VisitedEdgesSet =
+      ankerl::unordered_dense::segmented_set<SignalEdge, SignalEdgeHash>;
 
-  int currentTick = 0;   // Current game tick (used by emitters)
+  int currentTick = 0;        // Current game tick (used by emitters)
   bool fieldIsDirty = false;  // Flag to indicate if the field has been modified
 
   TileField tiles;
@@ -42,19 +44,25 @@ class Grid {
   std::vector<std::weak_ptr<GridTile>> emitters;
 
   // Using a segmented set here because we are inserting a lot of things
-  ankerl::unordered_dense::segmented_set<SignalEdge, SignalEdgeHash>
-      currentTickVisitedEdges;
+
+  VisitedEdgesSet currentTickVisitedEdges;
   std::queue<UpdateEvent> updateQueue;
 
   void ProcessUpdateEvent(const UpdateEvent& updateEvent);
 
  public:
+  struct SimulationResult {
+    ankerl::unordered_dense::segmented_set<TileStateChange, TileStateChangeHash> affectedTiles;
+    int updatesProcessed;
+  };
+
   Grid() {};
   ~Grid() = default;
 
   // Core simulation functions
-  void QueueUpdate(std::shared_ptr<GridTile> tile, const SignalEvent& event) noexcept;
-  int Simulate();
+  void QueueUpdate(std::shared_ptr<GridTile> tile,
+                   const SignalEvent& event) noexcept;
+  SimulationResult Simulate();
   void ResetSimulation();
 
   // Grid manipulation
@@ -92,17 +100,16 @@ class Grid {
   [[nodiscard]] vi2d AlignToGrid(const vf2d& pos) noexcept;
 
   // Getters
-  [[nodiscard]] std::optional<std::shared_ptr<GridTile> const> GetTile(vi2d pos);
-  [[nodiscard]] std::optional<std::shared_ptr<GridTile> const> GetTile(int x, int y) {
+  [[nodiscard]] std::optional<std::shared_ptr<GridTile> const> GetTile(
+      vi2d pos);
+  [[nodiscard]] std::optional<std::shared_ptr<GridTile> const> GetTile(int x,
+                                                                       int y) {
     return GetTile(vi2d(x, y));
   }
 
-  [[nodiscard]] const auto& GetTiles() const noexcept {
-    return tiles;
-  }
+  [[nodiscard]] const auto& GetTiles() const noexcept { return tiles; }
 
-  std::vector<std::weak_ptr<GridTile>> GetSelection(vi2d startPos,
-                                                    vi2d endPos);
+  std::vector<std::weak_ptr<GridTile>> GetSelection(vi2d startPos, vi2d endPos);
   std::size_t GetTileCount() { return tiles.size(); }
 
   // Configuration  }

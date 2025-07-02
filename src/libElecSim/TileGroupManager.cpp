@@ -18,16 +18,21 @@ namespace ElecSim {
 //       probing results (gettile console command), but might also slow down
 //       the simulation significantly.
 // UPDATE: This would be really fucking slow. There'll be a better way, later.
-std::vector<SignalEvent> TileGroupManager::SimulationGroup::ProcessSignal(
+TileGroupProcessResult TileGroupManager::SimulationGroup::ProcessSignal(
     const SignalEvent& signal) {
+  std::vector<TileStateChange> affectedTiles;
   auto newSignals = inputTile->ProcessSignal(signal);
   if (newSignals.empty()) {
     return {};  // No new signals produced
   }
+  affectedTiles.push_back(
+      TileStateChange{inputTile->GetPos(), inputTile->GetActivation()});
 
   // Cycle the activation state of all inbetween tiles
   for (const auto& tile : inbetweenTiles) {
     tile->SetActivation(!tile->GetActivation());
+    affectedTiles.push_back(
+        TileStateChange{tile->GetPos(), tile->GetActivation()});
   }
 
   // Now, apply updates to the output tiles
@@ -37,9 +42,12 @@ std::vector<SignalEvent> TileGroupManager::SimulationGroup::ProcessSignal(
                                                output.tile->GetPos());
     auto signalEvent = SignalEvent(output.inputterTile->GetPos(), outputDir,
                                    output.inputterTile->GetActivation());
+    affectedTiles.push_back(
+        TileStateChange{output.tile->GetPos(), output.tile->GetActivation()});
     outputSignals.push_back(signalEvent);
   }
-  return outputSignals;
+  return TileGroupProcessResult{
+      std::move(outputSignals), std::move(affectedTiles)};
 }
 
 std::string TileGroupManager::SimulationGroup::GetObjectInfo() const {

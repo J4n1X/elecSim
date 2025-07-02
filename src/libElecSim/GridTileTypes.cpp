@@ -6,12 +6,12 @@ namespace ElecSim {
 
 // --- WireGridTile Implementation ---
 
-WireGridTile::WireGridTile(vi2d pos, Direction facing)
-    : DeterministicTile(pos, facing, false) {
+WireGridTile::WireGridTile(vi2d newPos, Direction newFacing)
+    : DeterministicTile(newPos, newFacing, false) {
   // Can receive from all directions except facing direction
   for (const auto& dir : AllDirections) {
-    canReceive[dir] = (dir != facing);
-    canOutput[dir] = (dir == facing);
+    canReceive[dir] = (dir != newFacing);
+    canOutput[dir] = (dir == newFacing);
   }
   inputStates.fill(false);
 }
@@ -41,9 +41,9 @@ std::vector<SignalEvent> WireGridTile::PreprocessSignal(
 
 // --- JunctionGridTile Implementation ---
 
-JunctionGridTile::JunctionGridTile(vi2d pos, Direction facing)
-    : DeterministicTile(pos, facing, false) {
-  auto inputDir = FlipDirection(facing);
+JunctionGridTile::JunctionGridTile(vi2d newPos, Direction newFacing)
+    : DeterministicTile(newPos, newFacing, false) {
+  auto inputDir = FlipDirection(newFacing);
   // Can receive from one direction and output to all others
   std::fill(canOutput.begin(), canOutput.end(), true);
   canOutput[inputDir] = false;
@@ -88,14 +88,14 @@ std::vector<SignalEvent> JunctionGridTile::PreprocessSignal(
 
 // --- EmitterGridTile Implementation ---
 
-EmitterGridTile::EmitterGridTile(vi2d pos, Direction facing)
-    : LogicTile(pos, facing, false),
+EmitterGridTile::EmitterGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false),
       enabled(true),
       lastEmitTick(-EMIT_INTERVAL) {
-  canOutput[facing] = true;
+  canOutput[newFacing] = true;
   // Can receive from all directions except facing direction
   for (auto& dir : AllDirections) {
-    canReceive[dir] = (dir != facing);
+    canReceive[dir] = (dir != newFacing);
   }
 }
 
@@ -125,13 +125,13 @@ bool EmitterGridTile::ShouldEmit(int currentTick) const {
 
 // --- SemiConductorGridTile Implementation ---
 
-SemiConductorGridTile::SemiConductorGridTile(vi2d pos, Direction facing)
-    : LogicTile(pos, facing, false) {
+SemiConductorGridTile::SemiConductorGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
   // Only allow input from world directions that, relative to facing, are local
   // Left, Right, or Bottom
   canReceive.fill(true);
-  canOutput[facing] = true;
-  canReceive[facing] = false;
+  canOutput[newFacing] = true;
+  canReceive[newFacing] = false;
   inputStates.fill(false);
 }
 
@@ -162,9 +162,9 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
 
 // --- ButtonGridTile Implementation ---
 
-ButtonGridTile::ButtonGridTile(vi2d pos, Direction facing)
-    : LogicTile(pos, facing, false) {
-  canOutput[facing] = true;
+ButtonGridTile::ButtonGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
+  canOutput[newFacing] = true;
 }
 
 std::vector<SignalEvent> ButtonGridTile::ProcessSignal(
@@ -179,11 +179,11 @@ std::vector<SignalEvent> ButtonGridTile::Interact() {
 
 // --- InverterGridTile Implementation ---
 
-InverterGridTile::InverterGridTile(vi2d pos, Direction facing)
-    : LogicTile(pos, facing, false) {
+InverterGridTile::InverterGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
   for (const auto& dir : AllDirections) {
-    canReceive[dir] = (dir != facing);
-    canOutput[dir] = (dir == facing);
+    canReceive[dir] = (dir != newFacing);
+    canOutput[dir] = (dir == newFacing);
     inputStates[dir] = false;
   }
 }
@@ -212,8 +212,8 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
 
 // --- CrossingGridTile Implementation ---
 
-CrossingGridTile::CrossingGridTile(vi2d pos, Direction facing)
-    : LogicTile(pos, facing, false) {
+CrossingGridTile::CrossingGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
   // Allow receiving and outputting from all directions
   canReceive.fill(true);
   canOutput.fill(true);
