@@ -79,6 +79,8 @@ void Game::Initialize() {
   window.setFramerateLimit(60);
   window.setKeyRepeatEnabled(false);
 
+  textureAtlas = TileTextureAtlas(static_cast<uint32_t>(defaultZoomFactor));
+
   text.setCharacterSize(24);
   text.setFillColor(sf::Color::Black);
   text.setPosition(
@@ -634,7 +636,7 @@ void Game::Render() {
       sf::VertexArray previewArray(sf::PrimitiveType::Triangles);
       // TODO: Move out of main draw function
       for (const auto& tile : tileBuffer) {
-        auto transform = Engine::GetTileTransform(tile);
+        auto transform = Engine::GetTileTransform(tile.get());
         auto& mesh =
             *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
         for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
@@ -695,11 +697,18 @@ sf::Vector2f Game::AlignToGrid(const sf::Vector2f& pos) const {
                           Engine::TileDrawable::DEFAULT_SIZE);
 }
 
-vi2d Game::WorldToGrid(const sf::Vector2f& pos) const {
+vi2d Game::WorldToGrid(const sf::Vector2f& pos) const noexcept {
   auto aligned = AlignToGrid(pos);
   return vi2d(static_cast<int>(aligned.x / Engine::TileDrawable::DEFAULT_SIZE),
               static_cast<int>(aligned.y / Engine::TileDrawable::DEFAULT_SIZE));
 }
+
+sf::Vector2f Game::GridToWorld(const vi2d& gridPos) const noexcept {
+  return sf::Vector2f(
+      static_cast<float>(gridPos.x) * Engine::TileDrawable::DEFAULT_SIZE,
+      static_cast<float>(gridPos.y) * Engine::TileDrawable::DEFAULT_SIZE);
+}
+
 
 std::shared_ptr<const sf::VertexArray> Game::GetMeshTemplate(
     ElecSim::TileType type, bool activation) const {
@@ -711,7 +720,7 @@ std::shared_ptr<const sf::VertexArray> Game::GetMeshTemplate(
 void Game::RebuildGridVertices() {
   gridVertices.clear();
   for (const auto& [pos, tile] : grid.GetTiles()) {
-    auto transform = Engine::GetTileTransform(tile);
+    auto transform = Engine::GetTileTransform(tile.get());
     auto& mesh = *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
     for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
       sf::Vertex vertex = mesh[i];

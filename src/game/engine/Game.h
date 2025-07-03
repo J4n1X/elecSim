@@ -68,8 +68,14 @@ class Game {
   void HandleResize(const sf::Vector2u& newSize);
   void Update();
   void Render();  sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
-  vi2d WorldToGrid(const sf::Vector2f& pos) const;
-  std::shared_ptr<const sf::VertexArray> GetMeshTemplate(ElecSim::TileType type, bool activation) const;
+  [[nodiscard]]vi2d WorldToGrid(const sf::Vector2f& pos) const noexcept;
+  [[nodiscard]]sf::Vector2f GridToWorld(const vi2d& gridPos) const noexcept;
+
+  // TODO: Get rid of these once I have the texture based approach working.
+  [[nodiscard]] std::shared_ptr<const sf::VertexArray> GetMeshTemplate(ElecSim::TileType type, bool activation) const;
+  [[nodiscard]] sf::VertexArray MeshFromTile(const ElecSim::GridTile* tile) const;
+
+  void InitChunks();
   void RebuildGridVertices();
 
   // Tile manipulation methods
@@ -92,7 +98,10 @@ class Game {
   std::string gridFilename;
   ElecSim::Grid grid;
   Highlighter highlighter;
+  // TODO: Get rid of this once I have the texture based approach working.
   std::vector<std::shared_ptr<sf::VertexArray>> meshTemplates;
+
+  TileTextureAtlas textureAtlas; 
 
   // Game state
   bool paused = true; // Simulation state

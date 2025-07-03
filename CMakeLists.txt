@@ -23,8 +23,15 @@ set(TOOLS_DIR ${BUILD_DIR}/early_build/bin)
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -UDEBUG")
 
+
+# These are some options that the user can set
+option(SIM_PREPROCESSING "Enable caching for simulation results" ON)
+option(DISABLE_CCACHE "Disable ccache for builds" OFF)
+option(DISABLE_LTO "Disable LTO for builds" OFF)
+option(ULTRAPEDANTIC "Enable ultrapedantic compiler warnings" OFF)
+
 # Enable comprehensive compiler warnings
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+if(ULTRAPEDANTIC AND (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wcast-align -Wcast-qual -Wctor-dtor-privacy")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wdisabled-optimization -Wformat=2 -Winit-self")
@@ -48,11 +55,6 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang
     
     message(STATUS "Comprehensive compiler warnings enabled")
 endif()
-
-# These are some options that the user can set
-option(SIM_PREPROCESSING "Enable caching for simulation results" ON)
-option(DISABLE_CCACHE "Disable ccache for builds" OFF)
-option(DISABLE_LTO "Disable LTO for builds" OFF)
 
 # Enable ccache if available for faster rebuilds
 find_program(CCACHE_FOUND ccache)

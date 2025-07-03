@@ -92,14 +92,40 @@ class Highlighter : public sf::Drawable, public sf::Transformable {
   sf::Color color;
 };
 
+// Tile Texture Atlas drawer. Meant to be used to render to a rendertexture
+class TileTextureAtlas {
+  public: 
+    explicit TileTextureAtlas() = default;
+    explicit TileTextureAtlas(uint32_t tilePixelSize);
+    [[nodiscard]] inline sf::Texture const& GetTexture() {
+      return renderTarget.getTexture();
+    }
+    [[nodiscard]]inline sf::IntRect GetTextureRect() const noexcept {
+      return sf::IntRect({0, 0}, sf::Vector2i(renderTarget.getSize()));
+    }
+    [[nodiscard]] sf::IntRect GetTileRect(ElecSim::TileType type, bool activation) const;
+    inline void SetTilePixelSize(uint32_t newTilePixelSize) {
+      tilePixelSize = newTilePixelSize;
+      UpdateTextureAtlas();
+    }
+  private:
+    struct TileMesh {
+      sf::VertexArray inactiveMesh;
+      sf::VertexArray activeMesh;
+    };
+
+    void UpdateTextureAtlas();
+
+    sf::RenderTexture renderTarget;
+    uint32_t tilePixelSize = 32; // Size of each tile in pixels
+    std::vector<TileMesh> meshes; 
+};
+
 // Factory function to create appropriate drawable for any tile type
 std::unique_ptr<TileDrawable> CreateTileRenderable(
     std::shared_ptr<ElecSim::GridTile> tilePtr,
     const std::vector<std::shared_ptr<sf::VertexArray>>& vArrays);
 
 sf::Transform GetTileTransform(
-    std::shared_ptr<ElecSim::GridTile> const& tilePtr);
-sf::Transform GetTileTransform(
-    std::unique_ptr<ElecSim::GridTile> const& tilePtr);
-
+    const ElecSim::GridTile * tilePtr);
 }  // namespace Engine

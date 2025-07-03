@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <ranges>
 
+#include "ArrowTile_mesh_blob.h"
+#include "CrossingTile_mesh_blob.h"
+
 // Very basic helper struct
 struct Triangle {
   constexpr static uint32_t VERTEX_COUNT = 3;
@@ -58,34 +61,82 @@ std::unique_ptr<TileDrawable> CreateTileRenderable(
       std::move(tilePtr), std::array{vArrays[index], vArrays[index + 1]});
 }
 
-sf::Transform GetTileTransform(
-    std::shared_ptr<ElecSim::GridTile> const& tilePtr) {
-  if (!tilePtr) {
-    throw std::invalid_argument("Tile pointer cannot be null.");
-  }
+sf::Transform GetTileTransform(const ElecSim::GridTile* tile) {
   // I am too lazy to do math. sf::Transformable does it for us.
   sf::Transformable transformable;
   const float origin = TileDrawable::DEFAULT_SIZE / 2.f;
   transformable.setOrigin({origin, origin});
-  transformable.setPosition(Engine::ToSfmlVector(tilePtr->GetPos() *
-                             TileDrawable::DEFAULT_SIZE) + transformable.getOrigin());
-  transformable.rotate(sf::degrees(static_cast<float>(tilePtr->GetFacing()) * 90.f));
+  transformable.setPosition(
+      Engine::ToSfmlVector(tile->GetPos() * TileDrawable::DEFAULT_SIZE) +
+      transformable.getOrigin());
+  transformable.rotate(
+      sf::degrees(static_cast<float>(tile->GetFacing()) * 90.f));
   sf::Transform transform = transformable.getTransform();
   return transform;
 }
-sf::Transform GetTileTransform(
-    std::unique_ptr<ElecSim::GridTile> const& tilePtr) {
-  if (!tilePtr) {
-    throw std::invalid_argument("Tile pointer cannot be null.");
+
+TileTextureAtlas::TileTextureAtlas(uint32_t initTilePixelSize)
+    : tilePixelSize(initTilePixelSize) {
+  meshes.reserve(ElecSim::GRIDTILE_COUNT * 2);
+  MeshLoader loader;
+  loader.LoadMeshFromString(std::string(
+      reinterpret_cast<const char*>(ArrowTile_mesh_data), ArrowTile_mesh_len));
+  loader.LoadMeshFromString(
+      std::string(reinterpret_cast<const char*>(CrossingTile_mesh_data),
+                  CrossingTile_mesh_len));
+  for (size_t i = 0; i < ElecSim::GRIDTILE_COUNT; ++i) {
+    auto inactiveMesh = loader.GetMesh(i * 2);
+    auto activeMesh = loader.GetMesh(i * 2 + 1);
+    if (!inactiveMesh || !activeMesh) [[unlikely]] {
+      throw std::runtime_error("Failed to load tile meshes.");
+    }
+    meshes.push_back(
+        TileMesh{*inactiveMesh, *activeMesh});  // Copy the vertex arrays
   }
-  // I am too lazy to do math. sf::Transformable does it for us.
-  sf::Transformable transformable;
-  const float origin = TileDrawable::DEFAULT_SIZE / 2.f;
-  transformable.setOrigin({origin, origin});
-  transformable.setPosition(Engine::ToSfmlVector(tilePtr->GetPos() *
-                             TileDrawable::DEFAULT_SIZE) + transformable.getOrigin());
-  transformable.rotate(sf::degrees(static_cast<float>(tilePtr->GetFacing()) * 90.f));
-  sf::Transform transform = transformable.getTransform();
-  return transform;
+  UpdateTextureAtlas();
 }
+
+sf::IntRect TileTextureAtlas::GetTileRect(ElecSim::TileType type,
+                                          bool activation) const {
+  const sf::Vector2i offset{static_cast<int>(type) * tilePixelSize,
+                            activation ? tilePixelSize : 0};
+  const sf::Vector2i rectSize{tilePixelSize, tilePixelSize};
+
+  return sf::IntRect(offset, rectSize);
+}
+
+void TileTextureAtlas::UpdateTextureAtlas() {
+  renderTarget.clear();
+  // We can downcast without worry here. If we really store 4 billion meshes,
+  // the computer's probably on fire anyway.
+  uint32_t atlasLength = tilePixelSize * static_cast<uint32_t>(meshes.size());
+  // And yes, this texture is just a very long strip. Inactive on top, active
+  // on bottom.
+  if (!renderTarget.resize(sf::Vector2u(atlasLength, tilePixelSize * 2))) {
+    throw std::runtime_error("Failed to resize render target for tile atlas.");
+  }
+  const float tileSizeF = static_cast<float>(tilePixelSize);
+  const float requiredScale = tileSizeF / TileDrawable::DEFAULT_SIZE;
+  const sf::Vector2f scaleVector{requiredScale, requiredScale};
+
+  for (const auto& [index, mesh] : meshes | std::views::enumerate) {
+    const float xOffset = static_cast<float>(index) * tileSizeF;
+
+    // Draw inactive mesh at top half
+    sf::Transform inactiveTransform;
+    inactiveTransform.translate({xOffset, 0.f}).scale(scaleVector);
+    renderTarget.draw(mesh.inactiveMesh, inactiveTransform);
+
+    // Draw active mesh at bottom half
+    sf::Transform activeTransform;
+    activeTransform.translate({xOffset, tileSizeF}).scale(scaleVector);
+    renderTarget.draw(mesh.activeMesh, activeTransform);
+  }
+  renderTarget.display();
+  if(!renderTarget.generateMipmap()) {
+    std::cerr << "Failed to generate mipmaps for tile atlas texture."
+              << std::endl;
+  }
+}
+
 }  // namespace Engine

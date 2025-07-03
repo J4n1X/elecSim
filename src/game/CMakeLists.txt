@@ -12,7 +12,6 @@ file(GLOB ENGINE_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/engine/*.cp
 # Blob stuff
 set(ASSETS 
   "${ASSETS_DIR}/BAHNSCHRIFT.TTF"
-  "${ASSETS_DIR}/tile_atlas.png"
   "${ASSETS_DIR}/ArrowTile.mesh"
   "${ASSETS_DIR}/CrossingTile.mesh"
 )
