@@ -2,7 +2,6 @@
 
 #include "GridTileTypes.h"
 #include "TileChunk.h"
-#include "meshes.h"
 #include "nfd.hpp"
 
 // This binary blob contains the "Bahnschrift" font that we are using.
@@ -11,9 +10,7 @@
 #include <iostream>
 #include <ranges>
 
-#include "ArrowTile_mesh_blob.h"
 #include "BAHNSCHRIFT_TTF_blob.h"
-#include "CrossingTile_mesh_blob.h"
 
 static std::optional<std::string> OpenSaveDialog() {
   constexpr nfdfilteritem_t filterItem[] = {
@@ -60,7 +57,6 @@ Game::Game()
       gridView(sf::FloatRect(
           {0.f, 0.f}, sf::Vector2f(initialWindowSize) / defaultZoomFactor)),
       guiView(sf::FloatRect({0.f, 0.f}, sf::Vector2f(initialWindowSize))),
-      gridVertices(sf::PrimitiveType::Triangles),
       grid{},
       highlighter{{{0.f, 0.f},
                    {Engine::TileDrawable::DEFAULT_SIZE,
@@ -79,7 +75,15 @@ void Game::Initialize() {
   window.setFramerateLimit(60);
   window.setKeyRepeatEnabled(false);
 
-  textureAtlas = TileTextureAtlas(static_cast<uint32_t>(defaultZoomFactor));
+  // Check if shaders are available
+  if (!sf::Shader::isAvailable()) {
+    std::cerr << "Warning: Shaders are not available on this system." << std::endl;
+    std::cerr << "Preview rendering may not have transparency effects." << std::endl;
+  }
+
+  textureAtlas = TileTextureAtlas(static_cast<uint32_t>(defaultZoomFactor) * 4);
+  chunkManager = TileChunkManager();
+  previewRenderer.Initialize();
 
   text.setCharacterSize(24);
   text.setFillColor(sf::Color::Black);
@@ -91,23 +95,8 @@ void Game::Initialize() {
     throw std::runtime_error("Failed to load font");
   }
 
-  // Load meshes
-  MeshLoader meshLoader;
-  meshLoader.LoadMeshFromString(std::string(
-      reinterpret_cast<const char*>(ArrowTile_mesh_data), ArrowTile_mesh_len));
-  meshLoader.LoadMeshFromString(
-      std::string(reinterpret_cast<const char*>(CrossingTile_mesh_data),
-                  CrossingTile_mesh_len));
-  meshTemplates = meshLoader.GetMeshes();
-
-  constexpr static size_t EXPECTED_MESH_COUNT = ElecSim::GRIDTILE_COUNT * 2;
-  if (meshTemplates.size() < EXPECTED_MESH_COUNT) {
-    std::cerr << std::format(
-        "Error: Not enough meshes loaded for all tile types. Expected {}, got "
-        "{}.\n",
-        EXPECTED_MESH_COUNT, meshTemplates.size());
-    throw std::runtime_error("Not enough meshes loaded");
-  }
+  keysHeld.reset();
+  mouseHeld.reset();
 
   keysHeld.reset();
   mouseHeld.reset();
@@ -127,7 +116,7 @@ void Game::LoadGrid(std::string const& filename) {
   window.setTitle(std::format("{} - {}", windowTitle, filename));
   ResetViews();
 
-  RebuildGridVertices();
+  InitChunks(); 
 }
 
 void Game::ResetViews() {
@@ -420,6 +409,9 @@ void Game::CreateBrushTile() {
 
   // Add to buffer
   tileBuffer.push_back(std::move(newTile));
+  
+  // Update the preview with the new buffer
+  previewRenderer.UpdatePreview(tileBuffer, textureAtlas);
 }
 
 void Game::CalculateTileBufferBoxSize() {
@@ -429,11 +421,11 @@ void Game::CalculateTileBufferBoxSize() {
     return;
   }
 
-  vi2d minPos = {INT_MAX, INT_MAX};
-  vi2d maxPos = {INT_MIN, INT_MIN};
+  ElecSim::vi2d minPos = {INT_MAX, INT_MAX};
+  ElecSim::vi2d maxPos = {INT_MIN, INT_MIN};
 
   for (const auto& tile : tileBuffer) {
-    vi2d pos = tile->GetPos();
+    ElecSim::vi2d pos = tile->GetPos();
     minPos.x = std::min(minPos.x, pos.x);
     minPos.y = std::min(minPos.y, pos.y);
     maxPos.x = std::max(maxPos.x, pos.x);
@@ -446,21 +438,24 @@ void Game::CalculateTileBufferBoxSize() {
 }
 
 void Game::JustifyBufferTiles() {
-  vi2d minPos =
-      std::ranges::fold_right(tileBuffer, vi2d{INT_MAX, INT_MAX},
-                              [](const auto& tile, const vi2d& acc) {
-                                return vi2d{std::min(acc.x, tile->GetPos().x),
-                                            std::min(acc.y, tile->GetPos().y)};
-                              });
+  if (tileBuffer.empty()) return;
+
+  // Find minimum position across all tiles
+  ElecSim::vi2d minPos = {INT_MAX, INT_MAX};
+  for (const auto& tile : tileBuffer) {
+    ElecSim::vi2d pos = tile->GetPos();
+    minPos.x = std::min(minPos.x, pos.x);
+    minPos.y = std::min(minPos.y, pos.y);
+  }
+
+  // Adjust all tiles to make minPos the origin (0,0)
   for (auto& tile : tileBuffer) {
-    auto clampedMinPos = vi2d{std::max(0, minPos.x), std::max(0, minPos.y)};
-    auto newPos = tile->GetPos() - clampedMinPos;
-    tile->SetPos(newPos);
+    tile->SetPos(tile->GetPos() - minPos);
   }
 }
 
 void Game::RotateBufferTiles() {
-  vi2d maxPos = {INT_MIN, INT_MIN};
+  ElecSim::vi2d maxPos = {INT_MIN, INT_MIN};
 
   // Rotate all tiles in the buffer to the next facing direction
   ElecSim::Direction newFacing =
@@ -473,7 +468,7 @@ void Game::RotateBufferTiles() {
   selectedBrushFacing = newFacing;
 
   for (const auto& tile : tileBuffer) {
-    vi2d pos = tile->GetPos();
+    ElecSim::vi2d pos = tile->GetPos();
     maxPos.x = std::max(maxPos.x, pos.x);
     maxPos.y = std::max(maxPos.y, pos.y);
   }
@@ -483,9 +478,9 @@ void Game::RotateBufferTiles() {
 
   // Apply rotation to each tile
   for (auto& tile : tileBuffer) {
-    vi2d rotatedRelPos = {0, 0};
+    ElecSim::vi2d rotatedRelPos = {0, 0};
     int newX = 0, newY = 0;
-    vi2d relPos = tile->GetPos();
+    ElecSim::vi2d relPos = tile->GetPos();
     newY = relPos.x;
     newX = farOffset - relPos.y;
     rotatedRelPos.x = std::abs(newX);
@@ -497,14 +492,20 @@ void Game::RotateBufferTiles() {
 
   JustifyBufferTiles();
   CalculateTileBufferBoxSize();
+  
+  // Update the preview after rotation
+  previewRenderer.UpdatePreview(tileBuffer, textureAtlas);
 }
 
 void Game::ClearBuffer() {
   tileBuffer.clear();
   CalculateTileBufferBoxSize();
+  
+  // Clear the preview as well
+  previewRenderer.ClearPreview();
 }
 
-void Game::CopyTiles(const vi2d& startIndex, const vi2d& endIndex) {
+void Game::CopyTiles(const ElecSim::vi2d& startIndex, const ElecSim::vi2d& endIndex) {
   // This sets the original facing direction to Top
   selectedBrushFacing = ElecSim::Direction::Top;
 
@@ -526,11 +527,14 @@ void Game::CopyTiles(const vi2d& startIndex, const vi2d& endIndex) {
   }
   JustifyBufferTiles();
   CalculateTileBufferBoxSize();
+  
+  // Update the preview with copied tiles
+  previewRenderer.UpdatePreview(tileBuffer, textureAtlas);
 }
 
-void Game::PasteTiles(const vi2d& pastePosition) {
+void Game::PasteTiles(const ElecSim::vi2d& pastePosition) {
   if (tileBuffer.empty()) return;
-
+  std::vector<ElecSim::GridTile*> placedTiles;
   for (const auto& tile : tileBuffer) {
     if (std::optional oldTile = grid.GetTile(pastePosition + tile->GetPos())) {
       if ((*oldTile)->GetTileType() == tile->GetTileType()) [[unlikely]] {
@@ -540,40 +544,53 @@ void Game::PasteTiles(const vi2d& pastePosition) {
     auto clonedTile = tile->Clone();
     auto newPos = tile->GetPos() + pastePosition;
     clonedTile->SetPos(newPos);
-    grid.SetTile(newPos, std::move(clonedTile));
+    auto tilePtr = std::move(clonedTile);
+    placedTiles.push_back(tilePtr.get());
+    grid.SetTile(newPos, std::move(tilePtr));
   }
 
-  RebuildGridVertices();
+  for(const auto& tile : placedTiles) {
+    chunkManager.SetTile(tile, textureAtlas);           
+  }
 
   unsavedChanges = true;
 }
 
-void Game::CutTiles(const vi2d& startIndex, const vi2d& endIndex) {
+void Game::CutTiles(const ElecSim::vi2d& startIndex, const ElecSim::vi2d& endIndex) {
   // First copy the tiles to buffer
   CopyTiles(startIndex, endIndex);
 
   // Then delete them from the grid
   // Ensure startIndex is actually the top-left corner
-  vi2d topLeft = startIndex.min(endIndex);
-  vi2d bottomRight = startIndex.max(endIndex);
+  ElecSim::vi2d topLeft = startIndex.min(endIndex);
+  ElecSim::vi2d bottomRight = startIndex.max(endIndex);
 
   // Delete all tiles in the selection rectangle
+  std::vector<ElecSim::vi2d> tilesToErase;
+  
   for (int y = topLeft.y; y <= bottomRight.y; y++) {
     for (int x = topLeft.x; x <= bottomRight.x; x++) {
-      vi2d pos(x, y);
-      grid.EraseTile(pos);
+      ElecSim::vi2d pos(x, y);
+      // Check if there's a tile at this position
+      if (grid.GetTile(pos)) {
+        tilesToErase.push_back(pos);
+        grid.EraseTile(pos);
+      }
     }
   }
-
-  RebuildGridVertices();
-
+  
+  // Erase from the chunk manager
+  chunkManager.EraseTiles(tilesToErase);
+  
   unsavedChanges = true;
 }
 
-void Game::DeleteTiles(const vi2d& position) {
-  grid.EraseTile(position);
-
-  RebuildGridVertices();
+void Game::DeleteTiles(const ElecSim::vi2d& position) {
+  // Check if there's a tile at this position
+  if (grid.GetTile(position)) {
+    grid.EraseTile(position);
+    chunkManager.EraseTile(position);
+  }
 
   unsavedChanges = true;
 }
@@ -587,7 +604,12 @@ void Game::Update() {
   while (!paused && lastTickElapsedTime >= (1.f / tps)) {
     lastTickElapsedTime -= (1.f / tps);
     lastSimulationResult = grid.Simulate();
-    RebuildGridVertices();
+    // Update the visual state of tiles that changed in the simulation
+    for (const auto& change : lastSimulationResult.affectedTiles) {
+      if (auto tile = grid.GetTile(change.pos)) {
+        chunkManager.SetTile(tile->get(), textureAtlas);
+      }
+    }
   }
 }
 
@@ -595,28 +617,14 @@ void Game::Render() {
   window.setView(gridView);
   window.clear(sf::Color::Blue);
 
-  sf::FloatRect viewBounds(gridView.getCenter() - gridView.getSize() / 2.f,
-                           gridView.getSize());
-  // The old approach. Turns out that filtering this is useless with our new
-  // rendering approach, because the GPU already culls what's not in view.
-  // auto viewables =
-  //    renderables | std::views::filter([viewBounds](const auto& tile) {
-  //      return
-  //      viewBounds.findIntersection(tile->getGlobalBounds()).has_value();
-  //    });
-  // for (const auto& tile : viewables) {
-  //   tile->UpdateVisualState();
-  //   window.draw(*tile);
-  // }
+  window.draw(chunkManager);
 
-  window.draw(gridVertices);
-  // Draw selection rectangle if active
   if (paused) {
     if (selectionActive) {
       auto currentGridPos = WorldToGrid(mousePos);
-      vi2d topLeft = selectionStartIndex.min(currentGridPos);
-      vi2d bottomRight = selectionStartIndex.max(currentGridPos);
-      vi2d gridSize = bottomRight - topLeft + vi2d(1, 1);
+      ElecSim::vi2d topLeft = selectionStartIndex.min(currentGridPos);
+      ElecSim::vi2d bottomRight = selectionStartIndex.max(currentGridPos);
+      ElecSim::vi2d gridSize = bottomRight - topLeft + ElecSim::vi2d(1, 1);
 
       highlighter.setPosition(
           sf::Vector2f(topLeft.x * Engine::TileDrawable::DEFAULT_SIZE,
@@ -633,21 +641,18 @@ void Game::Render() {
       auto previewOffset = sf::Vector2f(static_cast<float>(currentGridPos.x),
                                         static_cast<float>(currentGridPos.y)) *
                            Engine::TileDrawable::DEFAULT_SIZE;
-      sf::VertexArray previewArray(sf::PrimitiveType::Triangles);
-      // TODO: Move out of main draw function
-      for (const auto& tile : tileBuffer) {
-        auto transform = Engine::GetTileTransform(tile.get());
-        auto& mesh =
-            *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
-        for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
-          sf::Vertex vertex = mesh[i];
-          vertex.position =
-              transform.transformPoint(vertex.position) + previewOffset;
-          vertex.color.a = 128;
-          previewArray.append(vertex);
-        }
-      }
-      window.draw(previewArray);
+      
+        // Just set the position for rendering - the preview content is updated
+      // only when tiles change (in CreateBrushTile, RotateBufferTiles, CopyTiles)
+      previewRenderer.setPosition(previewOffset);
+      
+      // Debug state printout can be enabled for troubleshooting if needed
+      // previewRenderer.DebugPrintState();
+      
+      // Draw the preview
+      window.draw(previewRenderer);
+      
+      // Draw the highlighter rectangle
       highlighter.setSize(sf::Vector2f(
           tileBufferBoxSize.x * Engine::TileDrawable::DEFAULT_SIZE,
           tileBufferBoxSize.y * Engine::TileDrawable::DEFAULT_SIZE));
@@ -668,7 +673,7 @@ void Game::Render() {
       : selectedBrushFacing == ElecSim::Direction::Bottom ? "Bottom"
                                                           : "Left";
 
-  static int lastUpdateCount;
+  constinit static int lastUpdateCount = 0;
   if (lastSimulationResult.updatesProcessed > 0) {
     lastUpdateCount = lastSimulationResult.updatesProcessed;
   } else if (paused) {
@@ -697,36 +702,33 @@ sf::Vector2f Game::AlignToGrid(const sf::Vector2f& pos) const {
                           Engine::TileDrawable::DEFAULT_SIZE);
 }
 
-vi2d Game::WorldToGrid(const sf::Vector2f& pos) const noexcept {
+ElecSim::vi2d Game::WorldToGrid(const sf::Vector2f& pos) const noexcept {
   auto aligned = AlignToGrid(pos);
-  return vi2d(static_cast<int>(aligned.x / Engine::TileDrawable::DEFAULT_SIZE),
+  return ElecSim::vi2d(static_cast<int>(aligned.x / Engine::TileDrawable::DEFAULT_SIZE),
               static_cast<int>(aligned.y / Engine::TileDrawable::DEFAULT_SIZE));
 }
 
-sf::Vector2f Game::GridToWorld(const vi2d& gridPos) const noexcept {
+sf::Vector2f Game::GridToWorld(const ElecSim::vi2d& gridPos) const noexcept {
   return sf::Vector2f(
       static_cast<float>(gridPos.x) * Engine::TileDrawable::DEFAULT_SIZE,
       static_cast<float>(gridPos.y) * Engine::TileDrawable::DEFAULT_SIZE);
 }
 
-
-std::shared_ptr<const sf::VertexArray> Game::GetMeshTemplate(
-    ElecSim::TileType type, bool activation) const {
-  return meshTemplates.at(static_cast<size_t>(type) * 2 +
-                          static_cast<size_t>(activation));
-}
-
-// The extreme option. Rebuilds every single vertex in the grid.
-void Game::RebuildGridVertices() {
-  gridVertices.clear();
-  for (const auto& [pos, tile] : grid.GetTiles()) {
-    auto transform = Engine::GetTileTransform(tile.get());
-    auto& mesh = *GetMeshTemplate(tile->GetTileType(), tile->GetActivation());
-    for (size_t i = 0; i < mesh.getVertexCount(); ++i) {
-      sf::Vertex vertex = mesh[i];
-      vertex.position = transform.transformPoint(vertex.position);
-      gridVertices.append(vertex);
-    }
+void Game::InitChunks() {
+  chunkManager.clear();
+  
+  // We can't directly use UpdateTiles here because Grid::GetTiles returns a map,
+  // not a vector of unique_ptr<GridTile>. We would need to convert the data structure.
+  // For now, using the direct approach
+  for(const auto& tile : grid.GetTiles() | std::views::values) {
+    chunkManager.SetTile(tile.get(), textureAtlas);
   }
+  
+  // TODO: Consider adding a method to Grid to get tiles as a vector of pointers,
+  // which would allow us to use the UpdateTiles method here
 }
+
+
+
+
 }  // namespace Engine

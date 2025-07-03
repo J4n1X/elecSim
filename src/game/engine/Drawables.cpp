@@ -98,10 +98,23 @@ TileTextureAtlas::TileTextureAtlas(uint32_t initTilePixelSize)
 
 sf::IntRect TileTextureAtlas::GetTileRect(ElecSim::TileType type,
                                           bool activation) const {
-  const sf::Vector2i offset{static_cast<int>(type) * tilePixelSize,
-                            activation ? tilePixelSize : 0};
-  const sf::Vector2i rectSize{tilePixelSize, tilePixelSize};
+  int typeInt = static_cast<int>(type);
+  int tilePixelSizeInt = static_cast<int>(tilePixelSize);
+  int xOffset = typeInt * tilePixelSizeInt;
+  int yOffset = activation ? tilePixelSizeInt : 0;
+  const sf::Vector2i offset{xOffset, yOffset};
+  const sf::Vector2i rectSize(tilePixelSizeInt, tilePixelSizeInt);
+  return sf::IntRect(offset, rectSize);
+}
 
+sf::IntRect TileTextureAtlas::GetDefaultTileRect(ElecSim::TileType type,
+                                               bool activation) {
+  constexpr int DEFAULT_TILE_SIZE = 32; // Default pixel size for tiles
+  int typeInt = static_cast<int>(type);
+  int xOffset = typeInt * DEFAULT_TILE_SIZE;
+  int yOffset = activation ? DEFAULT_TILE_SIZE : 0;
+  const sf::Vector2i offset{xOffset, yOffset};
+  const sf::Vector2i rectSize(DEFAULT_TILE_SIZE, DEFAULT_TILE_SIZE);
   return sf::IntRect(offset, rectSize);
 }
 

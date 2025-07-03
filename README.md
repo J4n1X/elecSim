@@ -97,8 +97,9 @@ Sorted in order of how important I deem them to the proper function of the game.
   - Add a crossing tile to allow for more flexible building. (DONE!)
   - Implement Signal Path Preprocessing (DONE!)
   - Write more tests (DONE!)
-  - Detach libElecSim from the PixelGameEngine.
-  - Draw Sprites for the tiles instead of just drawing them out of primitives
+  - Detach libElecSim from the PixelGameEngine. (DONE!)
+  - Draw Sprites for the tiles instead of just drawing them out of primitives (DONE! Actually, we draw tilemap chunks now.)
+  - Stop using shared pointers everywhere
   - Dispatch game logic to another thread so there's more time to render for more tiles
   - Implement compression for save files
 

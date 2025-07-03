@@ -1,4 +1,3 @@
-#include <iostream>
 #include <string>
 
 #include "Drawables.h"
@@ -6,6 +5,7 @@
 #include "Grid.h"
 #include "SFML/Graphics.hpp"
 #include "v2d.h"
+#include "Common.h"
 
 #ifdef DEBUG
 #include "meshes.h"
@@ -21,12 +21,11 @@ int atlasWidth = atlasImage.getSize().x;
 int atlasHeight = atlasImage.getSize().y;
 
 if (atlasImage.saveToFile("tile_atlas.png")) {
-  std::cout << "Texture atlas saved as 'tile_atlas.png'\n";
-  std::cout << "Atlas size: " << atlasWidth << "x" << atlasHeight
-            << " pixels\n";
-  std::cout << "Tile size: " << tileSize << "x" << tileSize << " pixels\n";
+  DebugPrint("Texture atlas saved as 'tile_atlas.png'");
+  DebugPrint("Atlas size: {}x{} pixels", atlasWidth, atlasHeight);
+  DebugPrint("Tile size: {}x{} pixels", tileSize, tileSize);
 } else {
-  std::cerr << "Failed to save texture atlas!\n";
+  DebugPrint("Failed to save texture atlas!");
   return -1;
 }
 

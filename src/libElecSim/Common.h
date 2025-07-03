@@ -4,12 +4,24 @@
 #include <initializer_list>
 #include <memory>
 #include <tuple>
+#include <format>
+#include <iostream>
 
 #include "v2d.h"
 
 // Check if constraint is satisfied for all these types.
 template<typename T, typename... Ts>
 concept SameAsAny = (... || std::same_as<T, Ts>);
+
+// Debug print function in global namespace
+// In debug builds, this forwards the formatted message to std::cout
+// In release builds, this is optimized away completely
+template<typename... Args>
+inline void DebugPrint([[maybe_unused]]std::format_string<Args...> fmt, [[maybe_unused]]Args&&... args) {
+#ifdef DEBUG
+    std::cout << std::format(fmt, std::forward<Args>(args)...) << std::endl;
+#endif
+}
 
 namespace ElecSim {
 

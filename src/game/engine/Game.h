@@ -12,6 +12,8 @@
 #include "SFML/Graphics.hpp"
 #include "SFML/System/Clock.hpp"
 #include "v2d.h"
+#include "TileChunkManager.h"
+#include "TilePreviewRenderer.h"
 
 namespace Engine {
 
@@ -67,16 +69,14 @@ class Game {
   void HandleInput();
   void HandleResize(const sf::Vector2u& newSize);
   void Update();
-  void Render();  sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
-  [[nodiscard]]vi2d WorldToGrid(const sf::Vector2f& pos) const noexcept;
-  [[nodiscard]]sf::Vector2f GridToWorld(const vi2d& gridPos) const noexcept;
+  void Render();  
+  [[nodiscard]]sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
+  [[nodiscard]]ElecSim::vi2d WorldToGrid(const sf::Vector2f& pos) const noexcept;
+  [[nodiscard]]sf::Vector2f GridToWorld(const ElecSim::vi2d& gridPos) const noexcept;
 
-  // TODO: Get rid of these once I have the texture based approach working.
-  [[nodiscard]] std::shared_ptr<const sf::VertexArray> GetMeshTemplate(ElecSim::TileType type, bool activation) const;
-  [[nodiscard]] sf::VertexArray MeshFromTile(const ElecSim::GridTile* tile) const;
+  // Updates the tile preview at the given position
 
   void InitChunks();
-  void RebuildGridVertices();
 
   // Tile manipulation methods
   void CreateBrushTile();
@@ -84,24 +84,24 @@ class Game {
   void JustifyBufferTiles();
   void RotateBufferTiles();
   void ClearBuffer();
-  void CopyTiles(const vi2d& startIndex, const vi2d& endIndex);
-  void PasteTiles(const vi2d& pastePosition);
-  void CutTiles(const vi2d& startIndex, const vi2d& endIndex);
-  void DeleteTiles(const vi2d& position);
+  void CopyTiles(const ElecSim::vi2d& startIndex, const ElecSim::vi2d& endIndex);
+  void PasteTiles(const ElecSim::vi2d& pastePosition);
+  void CutTiles(const ElecSim::vi2d& startIndex, const ElecSim::vi2d& endIndex);
+  void DeleteTiles(const ElecSim::vi2d& position);
 
   // Window and rendering
   sf::RenderWindow window;
   sf::View gridView;
   sf::View guiView;
-  sf::VertexArray gridVertices;
   constexpr static std::string_view windowTitle = "ElecSim";  // Game state
   std::string gridFilename;
   ElecSim::Grid grid;
   Highlighter highlighter;
-  // TODO: Get rid of this once I have the texture based approach working.
-  std::vector<std::shared_ptr<sf::VertexArray>> meshTemplates;
 
   TileTextureAtlas textureAtlas; 
+  TileChunkManager chunkManager;
+  TilePreviewRenderer previewRenderer;  // Used for rendering tile previews
+
 
   // Game state
   bool paused = true; // Simulation state
@@ -112,9 +112,9 @@ class Game {
   // Tile manipulation
   bool selectionActive = false;
   bool unsavedChanges = false;
-  vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
+  ElecSim::vi2d selectionStartIndex = {0, 0};  // Start tile index for selection
   std::vector<std::unique_ptr<ElecSim::GridTile>> tileBuffer;  // Selected tiles for operations
-  vi2d tileBufferBoxSize = {0, 0};  // Size of the tile buffer box
+  ElecSim::vi2d tileBufferBoxSize = {0, 0};  // Size of the tile buffer box
   int selectedBrushIndex = 1;
   ElecSim::Direction selectedBrushFacing = ElecSim::Direction::Top;
 
@@ -145,5 +145,7 @@ class Game {
   sf::Font font;
   sf::Text text;
   sf::Vector2f mousePos;
+
+
 };
 }  // namespace Engine

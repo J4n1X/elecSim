@@ -91,7 +91,7 @@ class TestParser {
 
   std::string GetCommandString(const Command& command) const {
     return std::format("{} {} {}", GetCommandTypeString(command.type),
-                       vi2d(command.x, command.y), command.value);
+                       ElecSim::vi2d(command.x, command.y), command.value);
   }
 
   void Parse(const std::string& testFile) {
@@ -211,7 +211,7 @@ int main([[maybe_unused]] int argc, char** argv) {
         break;
       case TestParser::CommandType::Read:
         std::cout << std::format("Tile at {}:\n  Expected: {}\n  Actual: ",
-                                 vi2d(command.x, command.y),
+                                 ElecSim::vi2d(command.x, command.y),
                                  (command.value ? "active" : "inactive"));
         if (tileMaybe.has_value()) {
           auto tile = tileMaybe.value();

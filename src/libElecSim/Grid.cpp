@@ -6,6 +6,7 @@
 #include <iostream>
 #include <ranges>
 #include <stdexcept>
+#include "Common.h"
 
 namespace ElecSim {
 
@@ -64,11 +65,7 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
 
 Grid::SimulationResult Grid::Simulate() {
   if (fieldIsDirty) {
-#ifdef DEBUG
-    std::println(std::cout,
-                 "Grid is dirty on attempted simulation step, resetting "
-                 "simulation.");
-#endif
+    DebugPrint("Grid is dirty on attempted simulation step, resetting simulation.");
     ResetSimulation();
   }
 
@@ -106,14 +103,10 @@ Grid::SimulationResult Grid::Simulate() {
   while (!updateQueue.empty()) {
     // Safety check - prevent extremely long update chains
     if (updatesProcessed > MAX_UPDATES) {
-#ifdef DEBUG
       if (!enableEdgeCheck) {
-        std::cerr
-            << "Warning: Maximum update limit reached (" << MAX_UPDATES
-            << " updates). Enabling edge check to prevent potential cycle."
-            << std::endl;
+        DebugPrint("Warning: Maximum update limit reached ({} updates). Enabling edge check to prevent potential cycle.", 
+                  MAX_UPDATES);
       }
-#endif
       enableEdgeCheck = true;
     }
 
@@ -157,15 +150,10 @@ Grid::SimulationResult Grid::Simulate() {
         }
       }
     } else {
-// It's just a single object (probably a logic tile, but not necessarily)
-#ifdef DEBUG
-      std::cout
-          << std::format(
-                 "Warning: Processing update for unprocessed tile: {}->{}",
-                 update.tile->GetPos(),
-                 update.event.isActive ? "Active" : "Inactive")
-          << std::endl;
-#endif
+      // It's just a single object (probably a logic tile, but not necessarily)
+      DebugPrint("Warning: Processing update for unprocessed tile: {}->{}",
+               update.tile->GetPos(),
+               update.event.isActive ? "Active" : "Inactive");
       ProcessUpdateEvent(update);
       simResult.affectedTiles.insert(
           TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
@@ -262,9 +250,7 @@ std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(vi2d startPos,
 void Grid::Save(const std::string& filename) {
   std::ofstream file(filename, std::ios::binary);
   if (!file) {
-#ifdef DEBUG
-    std::cerr << "Error opening file for writing: " << filename << std::endl;
-#endif
+    DebugPrint("Error opening file for writing: {}", filename);
     return;
   }
 
@@ -284,22 +270,15 @@ void Grid::Save(const std::string& filename) {
                static_cast<std::streamsize>(chunkData.size()));
     dataSize += chunkData.size();
   }
-#ifdef DEBUG
-  std::cout << std::format("Saved {} bytes to {}, total tiles: {}", dataSize,
-                           filename, tiles.size())
-            << std::endl;
-#else
-  (void)dataSize;
-#endif
+  DebugPrint("Saved {} bytes to {}, total tiles: {}", dataSize, filename, tiles.size());
+  (void)dataSize; // Silence unused variable warning in release mode
   file.close();
 }
 
 void Grid::Load(const std::string& filename) {
   std::ifstream file(filename, std::ios::binary);
   if (!file) {
-#ifdef DEBUG
-    std::cerr << "Error opening file for reading: " << filename << std::endl;
-#endif
+    DebugPrint("Error opening file for reading: {}", filename);
     return;
   }
 
@@ -324,13 +303,8 @@ void Grid::Load(const std::string& filename) {
   }
 
   file.close();
-#ifdef DEBUG
-  std::cout << std::format("Loaded {} bytes from {}, total {} tiles", dataSize,
-                           filename, tiles.size())
-            << std::endl;
-#else
-  (void)dataSize;
-#endif
+  DebugPrint("Loaded {} bytes from {}, total {} tiles", dataSize, filename, tiles.size());
+  (void)dataSize; // Silence unused variable warning in release mode
   fieldIsDirty = true;  // Mark the field as modified
   ResetSimulation();    // So that this preprocesses the tiles
 }

@@ -15,7 +15,7 @@ namespace Engine {
 
 template <typename T>
   requires std::is_arithmetic_v<T>
-sf::Vector2<T> ToSfmlVector(const v2d<T>& vec) {
+sf::Vector2<T> ToSfmlVector(const ElecSim::v2d<T>& vec) {
   return sf::Vector2<T>(vec.x, vec.y);
 }
 // Base class for all tile drawables - polymorphic approach
@@ -104,6 +104,15 @@ class TileTextureAtlas {
       return sf::IntRect({0, 0}, sf::Vector2i(renderTarget.getSize()));
     }
     [[nodiscard]] sf::IntRect GetTileRect(ElecSim::TileType type, bool activation) const;
+    
+    /**
+     * @brief Get the default texture rectangle for a tile type and activation state
+     * @param type Tile type
+     * @param activation Activation state
+     * @return IntRect with the default texture coordinates
+     */
+    static sf::IntRect GetDefaultTileRect(ElecSim::TileType type, bool activation);
+    
     inline void SetTilePixelSize(uint32_t newTilePixelSize) {
       tilePixelSize = newTilePixelSize;
       UpdateTextureAtlas();

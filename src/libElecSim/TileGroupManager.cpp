@@ -1,7 +1,6 @@
 #include "TileGroupManager.h"
 
 #include <format>
-#include <iostream>
 #include <ranges>
 
 #include "Common.h"
@@ -194,14 +193,10 @@ void TileGroupManager::ProcessDeterministicTileNeighbors(
     if (inputCount > 1) {
 // Multiple inputs - treat the tile pushing into it as an output tile and
 // push the new tile as a start tile
-#ifdef DEBUG
-      std::cout << std::format(
-                       "TileGroupManager::ProcessDeterministicTileNeighbors: "
-                       "Tile at {} has multiple inputs, treating as output "
-                       "tile with inputter {}.",
-                       neighbor->GetPos(), current->GetPos())
-                << std::endl;
-#endif
+      DebugPrint("TileGroupManager::ProcessDeterministicTileNeighbors: "
+                "Tile at {} has multiple inputs, treating as output "
+                "tile with inputter {}.",
+                neighbor->GetPos(), current->GetPos());
       outputTiles.emplace_back(neighbor, current);
       if (!globalVisited.contains(neighbor)) {
         pendingStartTiles.push(neighbor);
@@ -274,13 +269,8 @@ void TileGroupManager::CreateSimulationObject(
     // Single tile with no deterministic path - create a SimulationTile
     simulationObjects.emplace(inputTile->GetPos(),
                               std::make_unique<SimulationTile>(inputTile));
-#ifdef DEBUG
-    std::cout << std::format(
-                     "Tile at {} has no deterministic path, creating single "
-                     "tile simulation.",
-                     inputTile->GetPos())
-              << std::endl;
-#endif
+    DebugPrint("Tile at {} has no deterministic path, creating single tile simulation.",
+               inputTile->GetPos());
   } else {
     // Create simulation group
     auto simGroup = std::make_unique<SimulationGroup>(
@@ -356,14 +346,12 @@ void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
   // Ensure all remaining tiles are covered
   CoverRemainingTiles(tiles, globalVisited);
 
-#ifdef DEBUG
   for (const auto& [pos, obj] : simulationObjects) {
-    std::cout << obj->GetObjectInfo() << '\n';
+    DebugPrint("{}", obj->GetObjectInfo());
   }
-  std::cout << std::flush;
-  std::cout << "Preprocessing complete, total simulation objects: "
-            << simulationObjects.size() << std::endl;
-#endif
+  
+  DebugPrint("Preprocessing complete, total simulation objects: {}", 
+             simulationObjects.size());
 }
 
 #endif  // SIM_PREPROCESSING

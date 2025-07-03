@@ -10,7 +10,7 @@
 
 // Extracted olc::v_2d so that libelecsim does not have to depend on 
 // olcPixelGameEngine
-
+namespace ElecSim {
 template <class T>
   requires std::is_arithmetic_v<T>
 struct v2d {
@@ -252,8 +252,13 @@ inline constexpr std::ostream& operator<<(std::ostream& os,
   return os;
 }
 
+typedef v2d<float> vf2d;
+typedef v2d<int> vi2d;
+typedef v2d<unsigned int> vu2d;
+}  // namespace ElecSim
+
 template <typename T>
-struct std::formatter<v2d<T>, char> {
+struct std::formatter<ElecSim::v2d<T>, char> {
   int decimals = 0;  // Number of decimal places to format
 
   constexpr std::format_parse_context::iterator parse(
@@ -277,7 +282,7 @@ struct std::formatter<v2d<T>, char> {
     // Return the iterator to the end of the format specifier.
     return it;
   }
-  std::format_context::iterator format(const v2d<T>& vec,
+  std::format_context::iterator format(const ElecSim::v2d<T>& vec,
                                        std::format_context& ctx) const {
     if constexpr (std::is_floating_point_v<T>) {
       if (decimals >= 0) {
@@ -289,8 +294,3 @@ struct std::formatter<v2d<T>, char> {
     }
   }
 };
-
-
-typedef v2d<float> vf2d;
-typedef v2d<int> vi2d;
-typedef v2d<unsigned int> vu2d;
