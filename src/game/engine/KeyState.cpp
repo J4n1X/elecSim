@@ -29,11 +29,11 @@ const bool& KeyState::operator[](sf::Keyboard::Key key) const {
     return keys[code];
 }
 
-void KeyState::reset() {
+void KeyState::Reset() {
     keys.fill(false);
 }
 
-void KeyState::setPressed(sf::Keyboard::Key key) {
+void KeyState::SetPressed(sf::Keyboard::Key key) {
     unsigned int code = static_cast<unsigned int>(key);
     if (code >= sf::Keyboard::KeyCount) {
         std::cerr << std::format(
@@ -44,7 +44,7 @@ void KeyState::setPressed(sf::Keyboard::Key key) {
     keys[code] = true;
 }
 
-void KeyState::setReleased(sf::Keyboard::Key key) {
+void KeyState::SetReleased(sf::Keyboard::Key key) {
     unsigned int code = static_cast<unsigned int>(key);
     if (code >= sf::Keyboard::KeyCount) {
         std::cerr << std::format(
@@ -55,7 +55,7 @@ void KeyState::setReleased(sf::Keyboard::Key key) {
     keys[code] = false;
 }
 
-bool KeyState::isPressed(sf::Keyboard::Key key) const {
+bool KeyState::IsPressed(sf::Keyboard::Key key) const {
     return (*this)[key];
 }
 

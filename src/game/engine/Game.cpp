@@ -95,11 +95,11 @@ void Game::Initialize() {
     throw std::runtime_error("Failed to load font");
   }
 
-  keysHeld.reset();
-  mouseHeld.reset();
+  keysHeld.Reset();
+  mouseHeld.Reset();
 
-  keysHeld.reset();
-  mouseHeld.reset();
+  keysHeld.Reset();
+  mouseHeld.Reset();
 
   CreateBrushTile();  // Initialize tile buffer with default brush tile
 }
@@ -146,10 +146,10 @@ int Game::Run(int argc, char* argv[]) {
 }
 
 void Game::HandleEvents() {
-  keysPressed.reset();
-  keysReleased.reset();
-  mousePressed.reset();
-  mouseReleased.reset();
+  keysPressed.Reset();
+  keysReleased.Reset();
+  mousePressed.Reset();
+  mouseReleased.Reset();
 
   while (const std::optional event = window.pollEvent()) {
     if (event->is<sf::Event::Closed>()) {
@@ -158,27 +158,27 @@ void Game::HandleEvents() {
 
     // Handle keyboard press events
     if (auto keyDownEvent = event->getIf<sf::Event::KeyPressed>()) {
-      keysPressed.setPressed(keyDownEvent->code);
-      keysHeld.setPressed(keyDownEvent->code);
+      keysPressed.SetPressed(keyDownEvent->code);
+      keysHeld.SetPressed(keyDownEvent->code);
     }
 
     if (auto keyUpEvent = event->getIf<sf::Event::KeyReleased>()) {
-      keysHeld.setReleased(keyUpEvent->code);
-      keysReleased.setPressed(keyUpEvent->code);
+      keysHeld.SetReleased(keyUpEvent->code);
+      keysReleased.SetPressed(keyUpEvent->code);
     }
     if (auto mouseWheelEvent = event->getIf<sf::Event::MouseWheelScrolled>()) {
       mouseWheelDelta = mouseWheelEvent->delta;
     }
 
     if (auto mouseButtonEvent = event->getIf<sf::Event::MouseButtonPressed>()) {
-      mouseHeld.setPressed(mouseButtonEvent->button);
-      mousePressed.setPressed(mouseButtonEvent->button);
+      mouseHeld.SetPressed(mouseButtonEvent->button);
+      mousePressed.SetPressed(mouseButtonEvent->button);
     }
 
     if (auto mouseButtonEvent =
             event->getIf<sf::Event::MouseButtonReleased>()) {
-      mouseHeld.setReleased(mouseButtonEvent->button);
-      mouseReleased.setPressed(mouseButtonEvent->button);
+      mouseHeld.SetReleased(mouseButtonEvent->button);
+      mouseReleased.SetPressed(mouseButtonEvent->button);
     }
 
     if (auto resizeEvent = event->getIf<sf::Event::Resized>()) {
@@ -218,7 +218,7 @@ void Game::HandleInput() {
     if (keysHeld[key]) {
       selectedBrushIndex = i;
       CreateBrushTile();
-      keysHeld.setReleased(key);
+      keysHeld.SetReleased(key);
     }
   }
 
@@ -227,7 +227,7 @@ void Game::HandleInput() {
     // Tile manipulation controls
     if (keysHeld[Key::R]) {
       RotateBufferTiles();
-      keysHeld.setReleased(Key::R);
+      keysHeld.SetReleased(Key::R);
     }
 
     // Selection start/stop
@@ -245,9 +245,9 @@ void Game::HandleInput() {
       if (selectionActive) {
         CopyTiles(selectionStartIndex, currentGridPos);
       }
-      keysHeld.setReleased(Key::C);
-      keysHeld.setReleased(Key::LControl);
-      keysHeld.setReleased(Key::RControl);
+      keysHeld.SetReleased(Key::C);
+      keysHeld.SetReleased(Key::LControl);
+      keysHeld.SetReleased(Key::RControl);
     }
 
     // Cut Selection
@@ -257,22 +257,22 @@ void Game::HandleInput() {
         CutTiles(selectionStartIndex, currentGridPos);
         selectionActive = false;
       }
-      keysHeld.setReleased(Key::LControl);
-      keysHeld.setReleased(Key::RControl);
-      keysHeld.setReleased(Key::X);
+      keysHeld.SetReleased(Key::LControl);
+      keysHeld.SetReleased(Key::RControl);
+      keysHeld.SetReleased(Key::X);
     }
 
     // Paste tiles in buffer
     if ((keysHeld[Key::LControl] || keysHeld[Key::RControl]) &&
         keysPressed[Key::V]) {
       PasteTiles(currentGridPos);
-      keysHeld.setReleased(Key::LControl);
-      keysHeld.setReleased(Key::RControl);
+      keysHeld.SetReleased(Key::LControl);
+      keysHeld.SetReleased(Key::RControl);
     }
 
     if (keysHeld[Key::Z]) {
       ClearBuffer();
-      keysHeld.setReleased(Key::Z);
+      keysHeld.SetReleased(Key::Z);
     }
 
     // Mouse controls
@@ -362,11 +362,11 @@ void Game::HandleInput() {
   // Comma and period adjust the ticks per second
   if (keysPressed[Key::Comma]) {  // FASTER!
     tps += 0.25f;
-    keysPressed.setReleased(Key::Comma);
+    keysPressed.SetReleased(Key::Comma);
   }
   if (keysPressed[Key::Period]) {  // Slow down...
     tps = std::max(0.1f, tps - 0.25f);
-    keysPressed.setReleased(Key::Period);
+    keysPressed.SetReleased(Key::Period);
   }
 }
 
@@ -617,7 +617,7 @@ void Game::Render() {
   window.setView(gridView);
   window.clear(sf::Color::Blue);
 
-  window.draw(chunkManager);
+  chunkManager.RenderVisibleChunks(window, sf::RenderStates::Default, gridView, &textureAtlas.GetTexture());
 
   if (paused) {
     if (selectionActive) {

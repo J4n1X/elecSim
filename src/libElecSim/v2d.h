@@ -8,9 +8,17 @@
 #include <type_traits>
 #include <format>
 
-// Extracted olc::v_2d so that libelecsim does not have to depend on 
-// olcPixelGameEngine
 namespace ElecSim {
+
+/**
+ * @struct v2d
+ * @brief Two-dimensional vector template for arithmetic types.
+ * @tparam T Arithmetic type (int, float, double, etc.)
+ * 
+ * Extracted from olc::v_2d to avoid dependency on olcPixelGameEngine.
+ * Provides comprehensive 2D vector operations including arithmetic,
+ * geometric transformations, and utility functions.
+ */
 template <class T>
   requires std::is_arithmetic_v<T>
 struct v2d {

@@ -91,8 +91,12 @@ void TilePreviewRenderer::draw(sf::RenderTarget& target, sf::RenderStates states
         alphaShader->setUniform("alpha", static_cast<float>(previewAlpha) / 255.0f);
     }
     
-    // Draw the preview
-    target.draw(previewChunkManager, states);
+    // Draw the preview chunks without frustum culling (previews are small)
+    // We'll draw all chunks since previews are typically small and local
+    // TileChunk already has the texture set when SetTile was called
+    for (const auto& [chunkPos, chunk] : previewChunkManager.GetChunks()) {
+        target.draw(chunk, states);
+    }
 }
 
 bool TilePreviewRenderer::IsTransparencyAvailable() const {

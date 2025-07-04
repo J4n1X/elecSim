@@ -13,12 +13,24 @@
 
 namespace Engine {
 
+/**
+ * @brief Converts ElecSim::v2d to sf::Vector2.
+ * @tparam T Arithmetic type
+ * @param vec Vector to convert
+ * @return SFML vector
+ */
 template <typename T>
   requires std::is_arithmetic_v<T>
 sf::Vector2<T> ToSfmlVector(const ElecSim::v2d<T>& vec) {
   return sf::Vector2<T>(vec.x, vec.y);
 }
-// Base class for all tile drawables - polymorphic approach
+/**
+ * @class TileDrawable
+ * @brief Base class for all tile drawables using a polymorphic approach.
+ * 
+ * Represents a drawable tile that can be rendered using SFML. Each tile drawable
+ * contains a reference to the underlying GridTile and vertex arrays for different states.
+ */
 class TileDrawable : public sf::Drawable, public sf::Transformable {
  public:
   static constexpr float DEFAULT_SIZE = 1.f;
@@ -28,12 +40,9 @@ class TileDrawable : public sf::Drawable, public sf::Transformable {
       std::array<std::shared_ptr<sf::VertexArray>, 2> vArrays);
   ~TileDrawable() = default;
 
-  // Updates the drawable based on the current tile state
-  // virtual void UpdateVisualState() = 0;
 
   [[nodiscard]] std::vector<sf::Vertex> GetVertexArray() const;
 
-  // Gets the tile this drawable represents
   [[nodiscard]] std::shared_ptr<ElecSim::GridTile> GetTile() const noexcept {
     return tilePtr;
   }
@@ -50,11 +59,17 @@ class TileDrawable : public sf::Drawable, public sf::Transformable {
  private:
   void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
   float size = DEFAULT_SIZE;
-  // 0 is always inactive, 1 is always active.
   std::shared_ptr<ElecSim::GridTile> tilePtr;
-  std::array<std::shared_ptr<sf::VertexArray>, 2> vArrays;
+  std::array<std::shared_ptr<sf::VertexArray>, 2> vArrays;  // 0=inactive, 1=active
 };
 
+/**
+ * @class Highlighter
+ * @brief A visual highlight overlay for tiles or areas.
+ * 
+ * Creates a rectangular highlight with customizable outline and fill colors.
+ * Useful for showing selected areas or providing visual feedback.
+ */
 class Highlighter : public sf::Drawable, public sf::Transformable {
  public:
   explicit Highlighter(const sf::FloatRect& bounds,
@@ -92,12 +107,18 @@ class Highlighter : public sf::Drawable, public sf::Transformable {
   sf::Color color;
 };
 
-// Tile Texture Atlas drawer. Meant to be used to render to a rendertexture
+/**
+ * @class TileTextureAtlas
+ * @brief Manages a texture atlas for efficient tile rendering.
+ * 
+ * Creates and manages a texture atlas containing all tile types in both active
+ * and inactive states. Designed to render to a render texture for optimal performance.
+ */
 class TileTextureAtlas {
   public: 
     explicit TileTextureAtlas() = default;
     explicit TileTextureAtlas(uint32_t tilePixelSize);
-    [[nodiscard]] inline sf::Texture const& GetTexture() {
+    [[nodiscard]] inline sf::Texture const& GetTexture() const {
       return renderTarget.getTexture();
     }
     [[nodiscard]]inline sf::IntRect GetTextureRect() const noexcept {
@@ -106,7 +127,7 @@ class TileTextureAtlas {
     [[nodiscard]] sf::IntRect GetTileRect(ElecSim::TileType type, bool activation) const;
     
     /**
-     * @brief Get the default texture rectangle for a tile type and activation state
+     * @brief Get the default texture rectangle for a tile type and activation state.
      * @param type Tile type
      * @param activation Activation state
      * @return IntRect with the default texture coordinates
@@ -130,11 +151,21 @@ class TileTextureAtlas {
     std::vector<TileMesh> meshes; 
 };
 
-// Factory function to create appropriate drawable for any tile type
+/**
+ * @brief Factory function to create appropriate drawable for any tile type.
+ * @param tilePtr Shared pointer to the tile
+ * @param vArrays Vector of vertex arrays for different states
+ * @return Unique pointer to the created drawable
+ */
 std::unique_ptr<TileDrawable> CreateTileRenderable(
     std::shared_ptr<ElecSim::GridTile> tilePtr,
     const std::vector<std::shared_ptr<sf::VertexArray>>& vArrays);
 
+/**
+ * @brief Creates an SFML transform for positioning and rotating a tile.
+ * @param tilePtr Pointer to the tile
+ * @return Transform for the tile
+ */
 sf::Transform GetTileTransform(
     const ElecSim::GridTile * tilePtr);
 }  // namespace Engine

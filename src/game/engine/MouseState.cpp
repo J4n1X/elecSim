@@ -29,11 +29,11 @@ const bool& MouseState::operator[](sf::Mouse::Button button) const {
     return buttons[code];
 }
 
-void MouseState::reset() {
+void MouseState::Reset() {
     buttons.fill(false);
 }
 
-void MouseState::setPressed(sf::Mouse::Button button) {
+void MouseState::SetPressed(sf::Mouse::Button button) {
     unsigned int code = static_cast<unsigned int>(button);
     if (code >= sf::Mouse::ButtonCount) {
         std::cerr << std::format(
@@ -44,7 +44,7 @@ void MouseState::setPressed(sf::Mouse::Button button) {
     buttons[code] = true;
 }
 
-void MouseState::setReleased(sf::Mouse::Button button) {
+void MouseState::SetReleased(sf::Mouse::Button button) {
     unsigned int code = static_cast<unsigned int>(button);
     if (code >= sf::Mouse::ButtonCount) {
         std::cerr << std::format(
@@ -55,7 +55,7 @@ void MouseState::setReleased(sf::Mouse::Button button) {
     buttons[code] = false;
 }
 
-bool MouseState::isPressed(sf::Mouse::Button button) const {
+bool MouseState::IsPressed(sf::Mouse::Button button) const {
     return (*this)[button];
 }
 

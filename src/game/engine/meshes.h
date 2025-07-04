@@ -13,7 +13,11 @@
 
 namespace Engine {
 
-// Container wrapper that allows indexing by TileType
+/**
+ * @class TileTypeIndexable
+ * @brief Container wrapper that allows indexing by TileType.
+ * @tparam Container The underlying container type
+ */
 template <typename Container>
 class TileTypeIndexable {
  public:
@@ -84,6 +88,10 @@ class TileTypeIndexable {
   Container data;
 };
 
+/**
+ * @class TileColors
+ * @brief Manages active and inactive colors for tiles.
+ */
 class TileColors {
  public:
   constexpr TileColors()
@@ -91,7 +99,6 @@ class TileColors {
   constexpr TileColors(sf::Color active, sf::Color inactive)
       : data{active, inactive} {}
 
-  // Initializer list constructor
   constexpr TileColors(std::initializer_list<sf::Color> colors) {
     if (colors.size() != 2) {
       throw std::runtime_error("TileColors must have exactly 2 colors.");
@@ -114,6 +121,10 @@ class TileColors {
   std::array<sf::Color, 2> data;
 };
 
+/**
+ * @class TileModel
+ * @brief Represents the visual model of a tile with geometry and colors.
+ */
 class TileModel {
  private:
   TileColors colors;
@@ -206,25 +217,18 @@ constexpr static TileTypeIndexable<
         TileModel(_CROSSING_MODEL,        TILE_COLORS[ElecSim::TileType::Crossing])};
 // clang-format on
 
-// Behavior:
-// Expect primitive type in this format at the first line: type <type>,
-// where <type> is one of the PrimitiveType enum values and with any
-// amount of whitespace. between "type" and "<type>". Followed by this are
-// lines which contain normalized two-dimensional vertex coordinates and the
-// vertex colors in the format:
-// v <x:float> <y:float> c <r> <g> <b> <a> | <r> <b> <g> <a> | ...
-// With any amount of whitespace between the values, and one or more color
-// values per vertex (each variant of the color is separated by a pipe '|').
-// The amount of colors must be consistent for all vertices in that mesh.
-// For each color variant, a separate sf::VertexArray is created.
-//
-// There is no support for textures right now. Maybe later. The user can still
-// map the textures on their own if they want to.
-// Honestly, I could pour hours into this thing, making a smart parser with
-// variables and whatnot, but I just want it to work right now.
+/**
+ * @class MeshLoader
+ * @brief Loads mesh data from files or strings and creates SFML vertex arrays.
+ * 
+ * Expected format:
+ * - First line: "type <PrimitiveType>"
+ * - Following lines: "v <x> <y> c <r> <g> <b> <a> | <r> <g> <b> <a> | ..."
+ * 
+ * Multiple color variants per vertex are supported (separated by '|').
+ */
 class MeshLoader {
  public:
-  // Opens the file (Which must be ascii text) and calls parse on it.
   void LoadMeshFromFile(const std::filesystem::path& filePath);
   void LoadMeshFromString(const std::string& fileContent);
   [[nodiscard]] std::vector<std::shared_ptr<sf::VertexArray>> const& GetMeshes()
@@ -233,7 +237,6 @@ class MeshLoader {
   }
   [[nodiscard]] std::shared_ptr<sf::VertexArray> const& GetMesh(
       size_t index) const;
-  // [] operator
   [[nodiscard]] std::shared_ptr<sf::VertexArray> const& operator[](
       size_t index) const {
     return GetMesh(index);

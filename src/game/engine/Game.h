@@ -17,6 +17,10 @@
 
 namespace Engine {
 
+/**
+ * @class FPS
+ * @brief Utility class for tracking and calculating frames per second (FPS).
+ */
 class FPS {
  public:
   FPS() : mFrame(0), mFps(0) {}
@@ -37,6 +41,11 @@ class FPS {
   sf::Clock mClock;
 };
 
+
+/**
+ * @class FrameTime
+ * @brief A utility class for tracking frame time and calculating delta time between frames.
+ */
 class FrameTime {
  public:
   FrameTime() : frameTime(0.f) {}
@@ -53,6 +62,10 @@ class FrameTime {
   float frameTime;
 };
 
+/** 
+ * @class Game
+ * @brief The main game class that handles initialization, event processing, rendering, and game logic.
+ */
 class Game {
  public:
   Game();
@@ -70,23 +83,63 @@ class Game {
   void HandleResize(const sf::Vector2u& newSize);
   void Update();
   void Render();  
+  /**
+   * @brief Aligns a world position to the nearest grid position.
+   * @param pos World position to align
+   * @return Aligned world position
+   */
   [[nodiscard]]sf::Vector2f AlignToGrid(const sf::Vector2f& pos) const;
+  
+  /**
+   * @brief Converts world coordinates to grid coordinates.
+   * @param pos World position
+   * @return Grid coordinates
+   */
   [[nodiscard]]ElecSim::vi2d WorldToGrid(const sf::Vector2f& pos) const noexcept;
+  
+  /**
+   * @brief Converts grid coordinates to world coordinates.
+   * @param gridPos Grid position
+   * @return World coordinates
+   */
   [[nodiscard]]sf::Vector2f GridToWorld(const ElecSim::vi2d& gridPos) const noexcept;
 
-  // Updates the tile preview at the given position
-
+  /**
+   * @brief Initializes the tile chunk system for efficient rendering.
+   */
   void InitChunks();
 
-  // Tile manipulation methods
   void CreateBrushTile();
   void CalculateTileBufferBoxSize();
   void JustifyBufferTiles();
+  
+  /**
+   * @brief Rotates all tiles in the buffer by 90 degrees clockwise.
+   */
   void RotateBufferTiles();
+  
   void ClearBuffer();
+  
+  /**
+   * @brief Copies tiles from the grid within the specified area to the buffer.
+   * @param startIndex Top-left corner of the selection
+   * @param endIndex Bottom-right corner of the selection
+   */
   void CopyTiles(const ElecSim::vi2d& startIndex, const ElecSim::vi2d& endIndex);
+  
+  /**
+   * @brief Pastes tiles from the buffer to the grid at the specified position.
+   * @param pastePosition Position to paste the buffer contents
+   */
   void PasteTiles(const ElecSim::vi2d& pastePosition);
+  
+  /**
+   * @brief Cuts tiles from the grid within the specified area to the buffer.
+   * @param startIndex Top-left corner of the selection
+   * @param endIndex Bottom-right corner of the selection
+   */
   void CutTiles(const ElecSim::vi2d& startIndex, const ElecSim::vi2d& endIndex);
+  
   void DeleteTiles(const ElecSim::vi2d& position);
 
   // Window and rendering
@@ -119,7 +172,6 @@ class Game {
   ElecSim::Direction selectedBrushFacing = ElecSim::Direction::Top;
 
   // Input handling
-  // TODO: Maybe we can bind these together.
   KeyState keysPressed;
   KeyState keysHeld;
   KeyState keysReleased;

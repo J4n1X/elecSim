@@ -12,11 +12,6 @@ namespace ElecSim {
 // Processes the signal of a group. This yields a vector of new signals by
 // only simulating the input tile and simply cycling the state of the tiles
 // inbetween the start and end.
-// TODO: Try out how hard the performance is impacted if we run ProcessSignal
-//       on all tiles inbetween, not just the input tile. Would yield accurate
-//       probing results (gettile console command), but might also slow down
-//       the simulation significantly.
-// UPDATE: This would be really fucking slow. There'll be a better way, later.
 TileGroupProcessResult TileGroupManager::SimulationGroup::ProcessSignal(
     const SignalEvent& signal) {
   std::vector<TileStateChange> affectedTiles;

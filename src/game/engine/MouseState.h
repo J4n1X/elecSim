@@ -5,6 +5,16 @@
 
 namespace Engine {
 
+/**
+ * @class MouseState
+ * @brief Manages the state of mouse buttons.
+ *
+ * This class provides an interface to track and manipulate the pressed/released state
+ * of all mouse buttons supported by SFML. It allows querying, setting, and resetting
+ * the state of each button, as well as convenient indexing using SFML's mouse button enum.
+ *
+ * @note Internally, the state is stored as an array of booleans, one for each button.
+ */
 class MouseState {
 public:
     MouseState();
@@ -14,14 +24,13 @@ public:
     const bool& operator[](sf::Mouse::Button button) const;
     
     // Reset all buttons to released state
-    void reset();
+    void Reset();
     
-    // Set button state
-    void setPressed(sf::Mouse::Button button);
-    void setReleased(sf::Mouse::Button button);
+    void SetPressed(sf::Mouse::Button button);
+    void SetReleased(sf::Mouse::Button button);
     
     // Check if button is pressed
-    bool isPressed(sf::Mouse::Button button) const;
+    bool IsPressed(sf::Mouse::Button button) const;
 
 private:
     std::array<bool, sf::Mouse::ButtonCount> buttons;

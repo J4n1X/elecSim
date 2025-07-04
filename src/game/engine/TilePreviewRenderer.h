@@ -11,19 +11,12 @@
 #include "v2d.h"
 
 namespace Engine {
-// Yes, I let AI generate these comments. Bite me.
-// Anyway!
-// TODO: We could theoretically bind this even closer to the tilebuffer and
-// remove it from the game class entirely.
-
 /**
- * @brief Handles rendering of tile previews with transparency effects
- *
+ * @class TilePreviewRenderer
+ * @brief Handles rendering of tile previews with transparency effects.
+ * 
  * This class manages a separate chunk manager for preview rendering and
- * handles shader-based transparency for preview tiles. It inherits from
- * sf::Drawable and sf::Transformable to provide a standardized interface
- * for transforming and rendering tile previews. Minimal logging is used,
- * limited to initialization and error conditions only.
+ * handles shader-based transparency for preview tiles.
  */
 class TilePreviewRenderer : public sf::Drawable, public sf::Transformable {
  public:

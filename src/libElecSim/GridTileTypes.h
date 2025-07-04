@@ -4,9 +4,10 @@
 
 namespace ElecSim {
 
-// Each derived tile class has its own responsibilities:
-
-// Wire: Basic signal conductor, propagates signals in one direction
+/**
+ * @class WireGridTile
+ * @brief Basic signal conductor that propagates signals in one direction.
+ */
 class WireGridTile : public DeterministicTile {
  public:
   explicit WireGridTile(vi2d pos = vi2d(0, 0),
@@ -20,7 +21,10 @@ class WireGridTile : public DeterministicTile {
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Junction: Multi-directional signal splitter
+/**
+ * @class JunctionGridTile
+ * @brief Multi-directional signal splitter.
+ */
 class JunctionGridTile : public DeterministicTile {
  public:
   explicit JunctionGridTile(vi2d pos = vi2d(0, 0),
@@ -34,12 +38,15 @@ class JunctionGridTile : public DeterministicTile {
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Emitter: Signal source that can be toggled
+/**
+ * @class EmitterGridTile
+ * @brief Signal source that can be toggled and emits periodic signals.
+ */
 class EmitterGridTile : public LogicTile {
  protected:
   bool enabled;
-  static constexpr int EMIT_INTERVAL = 3;  // Emit every 3 ticks
-  int lastEmitTick;                        // Last tick when signal was emitted
+  static constexpr int EMIT_INTERVAL = 3;
+  int lastEmitTick;
 
  public:
   explicit EmitterGridTile(vi2d pos = vi2d(0, 0),
@@ -56,7 +63,10 @@ class EmitterGridTile : public LogicTile {
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// SemiConductor: Logic gate that requires multiple inputs
+/**
+ * @class SemiConductorGridTile
+ * @brief Logic gate that requires multiple inputs to activate.
+ */
 class SemiConductorGridTile : public LogicTile {
  protected:
   int internalState;  // bit 0: side inputs, bit 1: bottom input
@@ -73,7 +83,10 @@ class SemiConductorGridTile : public LogicTile {
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Button: Momentary signal source
+/**
+ * @class ButtonGridTile
+ * @brief Momentary signal source activated by user interaction.
+ */
 class ButtonGridTile : public LogicTile {
  public:
   explicit ButtonGridTile(vi2d pos = vi2d(0, 0),
@@ -88,8 +101,10 @@ class ButtonGridTile : public LogicTile {
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// --- InverterGridTile: Inverts the signal from the base GridTile ---
-
+/**
+ * @class InverterGridTile
+ * @brief Inverts incoming signals.
+ */
 class InverterGridTile : public LogicTile {
  public:
   explicit InverterGridTile(vi2d pos = vi2d(0, 0),
@@ -102,14 +117,15 @@ class InverterGridTile : public LogicTile {
   [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Crossing: Allows signals to cross without interference
+/**
+ * @class CrossingGridTile
+ * @brief Allows signals to cross without interference.
+ */
 class CrossingGridTile : public LogicTile {
  public:
   explicit CrossingGridTile(vi2d pos = vi2d(0, 0),
                   Direction facing = Direction::Top);
 
-  //void Draw(PixelGameEngine* renderer, vf2d screenPos,
-  //          float screenSize, int alpha = 255) override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   
   bool IsEmitter() const override { return false; }

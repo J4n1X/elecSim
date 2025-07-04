@@ -9,13 +9,20 @@
 
 #include "v2d.h"
 
-// Check if constraint is satisfied for all these types.
+/**
+ * @brief Concept that checks if a type T is the same as any of the types Ts.
+ * @tparam T Type to check
+ * @tparam Ts Types to check against
+ */
 template<typename T, typename... Ts>
 concept SameAsAny = (... || std::same_as<T, Ts>);
 
-// Debug print function in global namespace
-// In debug builds, this forwards the formatted message to std::cout
-// In release builds, this is optimized away completely
+/**
+ * @brief Debug print function that outputs formatted messages in debug builds only.
+ * @tparam Args Argument types for formatting
+ * @param fmt Format string
+ * @param args Arguments to format
+ */
 template<typename... Args>
 inline void DebugPrint([[maybe_unused]]std::format_string<Args...> fmt, [[maybe_unused]]Args&&... args) {
 #ifdef DEBUG
@@ -25,7 +32,10 @@ inline void DebugPrint([[maybe_unused]]std::format_string<Args...> fmt, [[maybe_
 
 namespace ElecSim {
 
-// Hash functor for vi2d to use in unordered sets/maps
+/**
+ * @struct PositionHash
+ * @brief Hash functor for vi2d to enable use in unordered containers.
+ */
 struct PositionHash {
   using is_avalanching = void;
   std::size_t operator()(const vi2d& pos) const;
@@ -58,9 +68,12 @@ static constexpr std::array<Direction, static_cast<int>(Direction::Count)>
     AllDirections = {Direction::Top, Direction::Right, Direction::Bottom,
                      Direction::Left};
 
-// Rotate (steps) times. Can be positive or negative.
-// Positive = rotate right.
-// Negative = rotate left.
+/**
+ * @brief Rotates a direction by the specified number of steps.
+ * @param dir Direction to rotate
+ * @param steps Number of steps (positive = clockwise, negative = counterclockwise)
+ * @return Rotated direction
+ */
 constexpr Direction DirectionRotate(Direction dir, int steps) {
   int count = static_cast<int>(Direction::Count);
   int value = (static_cast<int>(dir) + steps + count) % count;
@@ -73,7 +86,10 @@ constexpr Direction DirectionRotate(Direction dir, Direction amount) {
   return DirectionRotate(dir, static_cast<int>(amount));
 }
 
-// This is used only to inform if an update happened or not
+/**
+ * @struct TileSideStates
+ * @brief Manages the state of all four sides of a tile.
+ */
 struct TileSideStates
     : private std::array<bool, static_cast<int>(Direction::Count)> {
  private:
@@ -92,7 +108,11 @@ struct TileSideStates
   const bool& operator[](Direction dir) const;
 };
 
-// Direction utility functions
+/**
+ * @brief Flips a direction to its opposite (e.g., Top becomes Bottom).
+ * @param dir Direction to flip
+ * @return Opposite direction
+ */
 Direction FlipDirection(Direction dir);
 
 struct SignalEvent {
@@ -107,7 +127,10 @@ struct SignalEvent {
   SignalEvent& operator=(const SignalEvent& other);
 };
 
-// Event for the update queue with priority ordering.
+/**
+ * @struct UpdateEvent
+ * @brief Event for the update queue with priority ordering.
+ */
 struct UpdateEvent {
   std::shared_ptr<GridTile> tile;
   SignalEvent event;
@@ -118,7 +141,20 @@ struct UpdateEvent {
   bool operator<(const UpdateEvent& other) const;
 };
 
+/**
+ * @brief Translates a position by one unit in the specified direction.
+ * @param pos Starting position
+ * @param dir Direction to move
+ * @return New position
+ */
 vi2d TranslatePosition(vi2d pos, Direction dir);
+
+/**
+ * @brief Calculates the direction from one position to another.
+ * @param from Starting position
+ * @param to Target position
+ * @return Direction from 'from' to 'to'
+ */
 Direction DirectionFromVectors(vi2d from, vi2d to);
 
 }  // namespace ElecSim

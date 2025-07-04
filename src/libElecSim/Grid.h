@@ -59,10 +59,23 @@ class Grid {
   Grid() {};
   ~Grid() = default;
 
-  // Core simulation functions
+  /**
+   * @brief Queues a tile update for processing in the next simulation step.
+   * @param tile The tile to update
+   * @param event The signal event that triggered the update
+   */
   void QueueUpdate(std::shared_ptr<GridTile> tile,
                    const SignalEvent& event) noexcept;
+  
+  /**
+   * @brief Runs the simulation until all queued updates are processed.
+   * @return SimulationResult containing affected tiles and update count
+   */
   SimulationResult Simulate();
+  
+  /**
+   * @brief Resets the simulation state to initial conditions.
+   */
   void ResetSimulation();
 
   // Grid manipulation
