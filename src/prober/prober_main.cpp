@@ -160,7 +160,7 @@ class TestParser {
 };
 
 int main([[maybe_unused]] int argc, char** argv) {
-  hope_t hope = initParser(argv[1]);
+  hope_t hope = initParser(argv[0]);
 
   if (hope_parse_argv(&hope, argv))  // error occurred, print error message
     return 1;
