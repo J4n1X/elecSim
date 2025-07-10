@@ -14,6 +14,7 @@
 #include "v2d.h"
 #include "TileChunkManager.h"
 #include "TilePreviewRenderer.h"
+#include "ChoiceMessageBox.h"
 
 namespace Engine {
 
@@ -56,6 +57,7 @@ class FrameTime {
   }
 
   float getFrameTime() const { return frameTime; }
+  sf::Time getTime() const { return clock.getElapsedTime(); }
 
  private:
   sf::Clock clock;
@@ -77,12 +79,16 @@ class Game {
   void Initialize();
   void SaveGrid(std::string const& filename);
   void LoadGrid(std::string const& filename);
+  void ShowSaveDialog();
+  void ShowLoadDialog();
+  void AttemptQuit();
   void ResetViews();
   void HandleEvents();
   void HandleInput();
   void HandleResize(const sf::Vector2u& newSize);
   void Update();
   void Render();  
+  void Shutdown();
   /**
    * @brief Aligns a world position to the nearest grid position.
    * @param pos World position to align
@@ -197,6 +203,7 @@ class Game {
   sf::Font font;
   sf::Text text;
   sf::Vector2f mousePos;
+  ChoiceMessageBox unsavedChangesDialog;
 
 
 };

@@ -3,6 +3,8 @@
 #include "GridTileTypes.h"
 #include "TileChunk.h"
 #include "nfd.hpp"
+#include "imgui.h"
+#include "imgui-SFML.h"
 
 // This binary blob contains the "Bahnschrift" font that we are using.
 #include <filesystem>
@@ -75,6 +77,12 @@ void Game::Initialize() {
   window.setFramerateLimit(60);
   window.setKeyRepeatEnabled(false);
 
+  if(!ImGui::SFML::Init(window)){
+    throw std::runtime_error("Failed to initialize ImGui-SFML");
+  }
+  // We're not gonna let the user customize their windows across sessions.
+  ImGui::GetIO().IniFilename = nullptr;  
+
   // Check if shaders are available
   if (!sf::Shader::isAvailable()) {
     std::cerr << "Warning: Shaders are not available on this system." << std::endl;
@@ -98,16 +106,21 @@ void Game::Initialize() {
   keysHeld.Reset();
   mouseHeld.Reset();
 
-  keysHeld.Reset();
-  mouseHeld.Reset();
-
   CreateBrushTile();  // Initialize tile buffer with default brush tile
+}
+
+void Game::Shutdown() {
+  ImGui::SFML::Shutdown();
+  if(window.isOpen()) [[unlikely]] {
+    window.close();
+  }
 }
 
 void Game::SaveGrid(std::string const& filename) {
   grid.Save(filename);
   gridFilename = filename;
   window.setTitle(std::format("{} - {}", windowTitle, filename));
+  unsavedChanges = false;
 }
 
 void Game::LoadGrid(std::string const& filename) {
@@ -115,6 +128,7 @@ void Game::LoadGrid(std::string const& filename) {
   gridFilename = filename;
   window.setTitle(std::format("{} - {}", windowTitle, filename));
   ResetViews();
+  unsavedChanges = false;
 
   InitChunks(); 
 }
@@ -126,6 +140,39 @@ void Game::ResetViews() {
   gridView.setCenter(sf::Vector2f(window.getSize()) / zoomFactor / 2.f);
   guiView.setSize(sf::Vector2f(window.getSize()));
   guiView.setCenter(sf::Vector2f(window.getSize()) / 2.f);
+}
+
+void Game::ShowSaveDialog() {
+  if (auto savePath = OpenSaveDialog()) {
+    SaveGrid(*savePath);
+  }
+}
+
+void Game::ShowLoadDialog() {
+  if (auto loadPath = OpenLoadDialog()) {
+    LoadGrid(*loadPath);
+  }
+}
+
+void Game::AttemptQuit() {
+  if (unsavedChanges) {
+    unsavedChangesDialog.Show("You have unsaved changes. Do you want to save before quitting?");
+    
+    unsavedChangesDialog.SetOnSaveCallback([this]() {
+      ShowSaveDialog();
+      window.close();
+    });
+    
+    unsavedChangesDialog.SetOnProceedCallback([this]() {
+      window.close();
+    });
+    
+    unsavedChangesDialog.SetOnCancelCallback([this]() noexcept {
+      // Do nothing - just close the dialog
+    });
+  } else {
+    window.close();
+  }
 }
 
 int Game::Run(int argc, char* argv[]) {
@@ -141,7 +188,7 @@ int Game::Run(int argc, char* argv[]) {
     Update();
     Render();
   }
-
+  Shutdown();
   return 0;
 }
 
@@ -150,35 +197,39 @@ void Game::HandleEvents() {
   keysReleased.Reset();
   mousePressed.Reset();
   mouseReleased.Reset();
-
   while (const std::optional event = window.pollEvent()) {
+    ImGui::SFML::ProcessEvent(window, *event);
+
     if (event->is<sf::Event::Closed>()) {
-      window.close();
+      AttemptQuit();
     }
 
-    // Handle keyboard press events
-    if (auto keyDownEvent = event->getIf<sf::Event::KeyPressed>()) {
-      keysPressed.SetPressed(keyDownEvent->code);
-      keysHeld.SetPressed(keyDownEvent->code);
-    }
+    // Block input events if dialog is visible (except for ImGui)
+    if (!unsavedChangesDialog.IsVisible()) {
+      // Handle keyboard press events
+      if (auto keyDownEvent = event->getIf<sf::Event::KeyPressed>()) {
+        keysPressed.SetPressed(keyDownEvent->code);
+        keysHeld.SetPressed(keyDownEvent->code);
+      }
 
-    if (auto keyUpEvent = event->getIf<sf::Event::KeyReleased>()) {
-      keysHeld.SetReleased(keyUpEvent->code);
-      keysReleased.SetPressed(keyUpEvent->code);
-    }
-    if (auto mouseWheelEvent = event->getIf<sf::Event::MouseWheelScrolled>()) {
-      mouseWheelDelta = mouseWheelEvent->delta;
-    }
+      if (auto keyUpEvent = event->getIf<sf::Event::KeyReleased>()) {
+        keysHeld.SetReleased(keyUpEvent->code);
+        keysReleased.SetPressed(keyUpEvent->code);
+      }
+      if (auto mouseWheelEvent = event->getIf<sf::Event::MouseWheelScrolled>()) {
+        mouseWheelDelta = mouseWheelEvent->delta;
+      }
 
-    if (auto mouseButtonEvent = event->getIf<sf::Event::MouseButtonPressed>()) {
-      mouseHeld.SetPressed(mouseButtonEvent->button);
-      mousePressed.SetPressed(mouseButtonEvent->button);
-    }
+      if (auto mouseButtonEvent = event->getIf<sf::Event::MouseButtonPressed>()) {
+        mouseHeld.SetPressed(mouseButtonEvent->button);
+        mousePressed.SetPressed(mouseButtonEvent->button);
+      }
 
-    if (auto mouseButtonEvent =
-            event->getIf<sf::Event::MouseButtonReleased>()) {
-      mouseHeld.SetReleased(mouseButtonEvent->button);
-      mouseReleased.SetPressed(mouseButtonEvent->button);
+      if (auto mouseButtonEvent =
+              event->getIf<sf::Event::MouseButtonReleased>()) {
+        mouseHeld.SetReleased(mouseButtonEvent->button);
+        mouseReleased.SetPressed(mouseButtonEvent->button);
+      }
     }
 
     if (auto resizeEvent = event->getIf<sf::Event::Resized>()) {
@@ -210,6 +261,11 @@ void Game::HandleInput() {
   mousePos = AlignToGrid(
       window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView));
   highlighter.setPosition(mousePos);
+  
+  // Block input if dialog is visible
+  if (unsavedChangesDialog.IsVisible()) {
+    return;
+  }
 
   auto currentGridPos = WorldToGrid(mousePos);
   // Tile brush selection (number keys 1-7)
@@ -287,6 +343,7 @@ void Game::HandleInput() {
     if (mousePressed[Button::Left]) {
       // Interact with the tile under the mouse cursor
       grid.InteractWithTile(WorldToGrid(mousePos));
+      unsavedChanges = true;
     }
     // TODO: A cool thing would be to select a tile with right click and then
     // show information about it.
@@ -336,19 +393,32 @@ void Game::HandleInput() {
 
   // Save/Load dialogues
   if (keysPressed[Key::F2]) {
-    if (auto savePath = OpenSaveDialog()) {
-      SaveGrid(*savePath);
-    }
+    ShowSaveDialog();
   }
   if (keysPressed[Key::F3]) {
-    if (auto loadPath = OpenLoadDialog()) {
-      LoadGrid(*loadPath);
+    if (unsavedChanges) {
+      unsavedChangesDialog.Show("You have unsaved changes. Do you want to save before loading?");
+      
+      unsavedChangesDialog.SetOnSaveCallback([this]() {
+        ShowSaveDialog();
+        ShowLoadDialog();
+      });
+      
+      unsavedChangesDialog.SetOnProceedCallback([this]() {
+        ShowLoadDialog();
+      });
+      
+      unsavedChangesDialog.SetOnCancelCallback([this]() noexcept {
+        // Do nothing - just close the dialog
+      });
+    } else {
+      ShowLoadDialog();
     }
   }
 
   // Escape key closes the window
   if (keysPressed[Key::Escape]) {
-    window.close();
+    AttemptQuit();
   }
 
   // Space starts or pauses the simulation
@@ -596,6 +666,8 @@ void Game::DeleteTiles(const ElecSim::vi2d& position) {
 }
 
 void Game::Update() {
+  ImGui::SFML::Update(window, frameTimeTracker.getTime());
+
   if (!paused) lastTickElapsedTime += frameTimeTracker.getFrameTime();
   if (cameraVelocity != sf::Vector2f(0.f, 0.f)) {
     gridView.move(cameraVelocity);
@@ -692,6 +764,10 @@ void Game::Render() {
   window.setView(guiView);
   window.draw(text);
 
+  // Render the unsaved changes dialog if visible
+  unsavedChangesDialog.Render();
+
+  ImGui::SFML::Render(window);
   window.display();
 }
 
