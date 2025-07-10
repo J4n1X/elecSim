@@ -94,6 +94,7 @@ Sorted in order of how important I deem them to the proper function of the game.
   - Write more tests (DONE!)
   - Detach libElecSim from the PixelGameEngine. (DONE!)
   - Draw Sprites for the tiles instead of just drawing them out of primitives (DONE! Actually, we draw tilemap chunks now.)
+  - Rename ElecSim to GridShock, because that name's cooler and there's no other repository with that name.
   - Stop using shared pointers everywhere
   - Dispatch game logic to another thread so there's more time to render for more tiles
   - Implement compression for save files
