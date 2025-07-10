@@ -6,13 +6,10 @@
 #include "imgui.h"
 #include "imgui-SFML.h"
 
-// This binary blob contains the "Bahnschrift" font that we are using.
 #include <filesystem>
 #include <format>
 #include <iostream>
 #include <ranges>
-
-#include "BAHNSCHRIFT_TTF_blob.h"
 
 static std::optional<std::string> OpenSaveDialog() {
   constexpr nfdfilteritem_t filterItem[] = {
@@ -58,7 +55,6 @@ Game::Game()
     : window(sf::VideoMode(initialWindowSize), windowTitle.data()),
       gridView(sf::FloatRect(
           {0.f, 0.f}, sf::Vector2f(initialWindowSize) / defaultZoomFactor)),
-      guiView(sf::FloatRect({0.f, 0.f}, sf::Vector2f(initialWindowSize))),
       grid{},
       highlighter{{{0.f, 0.f},
                    {Engine::TileDrawable::DEFAULT_SIZE,
@@ -67,7 +63,6 @@ Game::Game()
       panStartPos(0, 0),
       cameraVelocity(0.f, 0.f),
       zoomFactor(defaultZoomFactor),
-      text(font),
       mousePos(0.f, 0.f) {
   Initialize();
 }
@@ -92,16 +87,6 @@ void Game::Initialize() {
   textureAtlas = TileTextureAtlas(static_cast<uint32_t>(defaultZoomFactor) * 4);
   chunkManager = TileChunkManager();
   previewRenderer.Initialize();
-
-  text.setCharacterSize(24);
-  text.setFillColor(sf::Color::Black);
-  text.setPosition(
-      sf::Vector2f(10.f, 10.f));  // Position text at top-left with margin
-
-  if (!font.openFromMemory(BAHNSCHRIFT_TTF_data, BAHNSCHRIFT_TTF_len)) {
-    std::cerr << "Error: Could not load font from memory.\n";
-    throw std::runtime_error("Failed to load font");
-  }
 
   keysHeld.Reset();
   mouseHeld.Reset();
@@ -138,8 +123,6 @@ void Game::ResetViews() {
   zoomFactor = defaultZoomFactor;
   gridView.setSize(sf::Vector2f(window.getSize()) / zoomFactor);
   gridView.setCenter(sf::Vector2f(window.getSize()) / zoomFactor / 2.f);
-  guiView.setSize(sf::Vector2f(window.getSize()));
-  guiView.setCenter(sf::Vector2f(window.getSize()) / 2.f);
 }
 
 void Game::ShowSaveDialog() {
@@ -204,8 +187,8 @@ void Game::HandleEvents() {
       AttemptQuit();
     }
 
-    // Block input events if dialog is visible (except for ImGui)
-    if (!unsavedChangesDialog.IsVisible()) {
+    // Block input events if dialog is visible or ImGui wants input (except for ImGui)
+    if (!unsavedChangesDialog.IsVisible() && !ImGui::GetIO().WantCaptureKeyboard) {
       // Handle keyboard press events
       if (auto keyDownEvent = event->getIf<sf::Event::KeyPressed>()) {
         keysPressed.SetPressed(keyDownEvent->code);
@@ -216,19 +199,20 @@ void Game::HandleEvents() {
         keysHeld.SetReleased(keyUpEvent->code);
         keysReleased.SetPressed(keyUpEvent->code);
       }
-      if (auto mouseWheelEvent = event->getIf<sf::Event::MouseWheelScrolled>()) {
-        mouseWheelDelta = mouseWheelEvent->delta;
-      }
+      if (!ImGui::GetIO().WantCaptureMouse) {
+        if (auto mouseWheelEvent = event->getIf<sf::Event::MouseWheelScrolled>()) {
+          mouseWheelDelta = mouseWheelEvent->delta;
+        }
+        if (auto mouseButtonEvent = event->getIf<sf::Event::MouseButtonPressed>()) {
+          mouseHeld.SetPressed(mouseButtonEvent->button);
+          mousePressed.SetPressed(mouseButtonEvent->button);
+        }
 
-      if (auto mouseButtonEvent = event->getIf<sf::Event::MouseButtonPressed>()) {
-        mouseHeld.SetPressed(mouseButtonEvent->button);
-        mousePressed.SetPressed(mouseButtonEvent->button);
-      }
-
-      if (auto mouseButtonEvent =
-              event->getIf<sf::Event::MouseButtonReleased>()) {
-        mouseHeld.SetReleased(mouseButtonEvent->button);
-        mouseReleased.SetPressed(mouseButtonEvent->button);
+        if (auto mouseButtonEvent =
+                event->getIf<sf::Event::MouseButtonReleased>()) {
+          mouseHeld.SetReleased(mouseButtonEvent->button);
+          mouseReleased.SetPressed(mouseButtonEvent->button);
+        }
       }
     }
 
@@ -241,13 +225,6 @@ void Game::HandleEvents() {
 void Game::HandleResize(const sf::Vector2u& newSize) {
   // Update the gridView to match the new window size
   gridView.setSize(sf::Vector2f(newSize) / zoomFactor);
-  guiView.setSize(sf::Vector2f(newSize));
-
-  // Reset the position of the gui view. No need to do it for the grid view.
-  guiView.setCenter(sf::Vector2f(newSize) / 2.f);
-
-  // Keep text at top-left with a small margin
-  text.setPosition(sf::Vector2f(10.f, 10.f));
 }
 
 void Game::HandleInput() {
@@ -262,8 +239,8 @@ void Game::HandleInput() {
       window.mapPixelToCoords(sf::Mouse::getPosition(window), gridView));
   highlighter.setPosition(mousePos);
   
-  // Block input if dialog is visible
-  if (unsavedChangesDialog.IsVisible()) {
+  // Block input if dialog is visible or ImGui wants input
+  if (unsavedChangesDialog.IsVisible() || ImGui::GetIO().WantCaptureKeyboard || ImGui::GetIO().WantCaptureMouse) {
     return;
   }
 
@@ -733,36 +710,7 @@ void Game::Render() {
     }
   }
 
-  // Draw UI
-  std::string brushName = "None";
-  if (!tileBuffer.empty()) {
-    brushName = std::string(TileTypeToString(tileBuffer[0]->GetTileType()));
-  }
-
-  std::string facingName =
-      selectedBrushFacing == ElecSim::Direction::Top      ? "Top"
-      : selectedBrushFacing == ElecSim::Direction::Right  ? "Right"
-      : selectedBrushFacing == ElecSim::Direction::Bottom ? "Bottom"
-                                                          : "Left";
-
-  constinit static int lastUpdateCount = 0;
-  if (lastSimulationResult.updatesProcessed > 0) {
-    lastUpdateCount = lastSimulationResult.updatesProcessed;
-  } else if (paused) {
-    lastUpdateCount = 0;
-  }
-  // TODO: When we have ImGui, we could use that instead of printing text.
-  text.setString(std::format(
-      "FPS: {}; Simulation: {}; Grid Position: ({}, {}); TPS: {:.2f}\n"
-      "Brush: {} ({}); Facing: {}; Buffer: {} tiles; Selection: {}\n"
-      "Total Tiles: {}; Updates: {}",
-      fpsTracker.getFPS(), (paused ? "Paused" : "Running"),
-      WorldToGrid(mousePos).x, WorldToGrid(mousePos).y, tps, selectedBrushIndex,
-      brushName, facingName, tileBuffer.size(),
-      selectionActive ? "Active" : "None", grid.GetTileCount(),
-      lastUpdateCount));
-  window.setView(guiView);
-  window.draw(text);
+  RenderStatusWindow();
 
   // Render the unsaved changes dialog if visible
   unsavedChangesDialog.Render();
@@ -804,7 +752,92 @@ void Game::InitChunks() {
   // which would allow us to use the UpdateTiles method here
 }
 
+// Hacky, but it does prevent storing yet another variable in the class
+static constinit int lastUpdateCount = 0;
+void Game::RenderStatusWindow() {
+  // Prepare status text data
+  std::string brushName = "None";
+  if (!tileBuffer.empty()) {
+    brushName = std::string(TileTypeToString(tileBuffer[0]->GetTileType()));
+  }
 
+  std::string facingName =
+      selectedBrushFacing == ElecSim::Direction::Top      ? "Top"
+      : selectedBrushFacing == ElecSim::Direction::Right  ? "Right"
+      : selectedBrushFacing == ElecSim::Direction::Bottom ? "Bottom"
+                                                          : "Left";
+
+  if (lastSimulationResult.updatesProcessed > 0) {
+    lastUpdateCount = lastSimulationResult.updatesProcessed;
+  } else if (paused) {
+    lastUpdateCount = 0;
+  }
+
+  // Create text strings to measure width
+  std::vector<std::string> textLines = {
+    std::format("FPS: {}", fpsTracker.getFPS()),
+    std::format("Simulation: {}", paused ? "Paused" : "Running"),
+    std::format("Grid Position: ({}, {})", WorldToGrid(mousePos).x, WorldToGrid(mousePos).y),
+    std::format("TPS: {:.2f}", tps),
+    std::format("Brush: {} ({})", selectedBrushIndex, brushName),
+    std::format("Facing: {}", facingName),
+    std::format("Buffer: {} tiles", tileBuffer.size()),
+    std::format("Selection: {}", selectionActive ? "Active" : "None"),
+    std::format("Total Tiles: {}", grid.GetTileCount()),
+    std::format("Updates: {}", lastUpdateCount)
+  };
+
+  // Calculate maximum text width
+  float maxTextWidth = 0.0f;
+  for (const auto& line : textLines) {
+    ImVec2 textSize = ImGui::CalcTextSize(line.c_str());
+    maxTextWidth = std::max(maxTextWidth, textSize.x);
+  }
+
+  // Calculate window size that scales with screen but fits content
+  ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+  float scaleFactor = std::min(displaySize.x / 1280.0f, displaySize.y / 960.0f); // Scale based on reference resolution
+  scaleFactor = std::max(0.8f, std::min(scaleFactor, 2.0f)); // Clamp scaling
+  
+  // Calculate size with scaling
+  float padding = 30.0f * scaleFactor;
+  float windowWidth = maxTextWidth * scaleFactor + padding;
+  float lineHeight = ImGui::GetTextLineHeight() * scaleFactor;
+  float separatorHeight = ImGui::GetStyle().ItemSpacing.y * scaleFactor;
+  float windowHeight = (lineHeight * textLines.size()) + 
+                      (ImGui::GetStyle().ItemSpacing.y * scaleFactor * (textLines.size() - 1)) + 
+                      (ImGui::GetStyle().WindowPadding.y * 2 * scaleFactor) + 
+                      (separatorHeight * 2) + // Account for the 2 separators
+                      (20.f * scaleFactor); // Extra padding for comfort
+  
+  ImGui::SetNextWindowSize(ImVec2(windowWidth, windowHeight), ImGuiCond_Always);
+  ImGui::SetNextWindowPos(ImVec2(10 * scaleFactor, 10 * scaleFactor), ImGuiCond_FirstUseEver);
+  
+  if (ImGui::Begin("Status", nullptr, ImGuiWindowFlags_NoResize)) {
+    // Apply font scaling
+    if (scaleFactor != 1.0f) {
+      ImGui::SetWindowFontScale(scaleFactor);
+    }
+    ImGui::Text("FPS: %d", fpsTracker.getFPS());
+    ImGui::Text("Simulation: %s", paused ? "Paused" : "Running");
+    ImGui::Text("Grid Position: (%d, %d)", WorldToGrid(mousePos).x, WorldToGrid(mousePos).y);
+    ImGui::Text("TPS: %.2f", tps);
+    ImGui::Separator();
+    ImGui::Text("Brush: %d (%s)", selectedBrushIndex, brushName.c_str());
+    ImGui::Text("Facing: %s", facingName.c_str());
+    ImGui::Text("Buffer: %zu tiles", tileBuffer.size());
+    ImGui::Text("Selection: %s", selectionActive ? "Active" : "None");
+    ImGui::Separator();
+    ImGui::Text("Total Tiles: %zu", grid.GetTileCount());
+    ImGui::Text("Updates: %d", lastUpdateCount);
+    
+    // Reset font scaling
+    if (scaleFactor != 1.0f) {
+      ImGui::SetWindowFontScale(1.0f);
+    }
+  }
+  ImGui::End();
+}
 
 
 }  // namespace Engine

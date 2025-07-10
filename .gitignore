@@ -18,3 +18,4 @@ cmake_install.cmake
 /_deps
 /elecSim-cppcheck-build-dir
 CLAUDE.md
+.claude

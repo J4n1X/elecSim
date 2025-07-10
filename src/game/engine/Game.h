@@ -88,6 +88,7 @@ class Game {
   void HandleResize(const sf::Vector2u& newSize);
   void Update();
   void Render();  
+  void RenderStatusWindow();
   void Shutdown();
   /**
    * @brief Aligns a world position to the nearest grid position.
@@ -151,7 +152,6 @@ class Game {
   // Window and rendering
   sf::RenderWindow window;
   sf::View gridView;
-  sf::View guiView;
   constexpr static std::string_view windowTitle = "ElecSim";  // Game state
   std::string gridFilename;
   ElecSim::Grid grid;
@@ -166,7 +166,7 @@ class Game {
   bool paused = true; // Simulation state
   float tps = 8.f;  // Ticks per second for simulation
   float lastTickElapsedTime = 0.f;  // Time elapsed since last tick
-  ElecSim::Grid::SimulationResult lastSimulationResult;  // Result of the last simulation
+  ElecSim::Grid::SimulationResult lastSimulationResult = {};  // Result of the last simulation
 
   // Tile manipulation
   bool selectionActive = false;
@@ -200,8 +200,6 @@ class Game {
   FrameTime frameTimeTracker;
 
   // UI
-  sf::Font font;
-  sf::Text text;
   sf::Vector2f mousePos;
   ChoiceMessageBox unsavedChangesDialog;
 

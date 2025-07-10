@@ -1,7 +1,5 @@
 # Elecsim: A pulse simulation with the goal of creating logic circuits
 
-## TODO: This needs a rewrite before the branch is merged! Also make sure to adjust the third party licenses file!
-
 Elecsim is a tile-based logic simulation, and intended to be game, not an actual electronics simulator. It is written in C++ and is cross-platform compatible.
 
 Below, you can see some of the things you can build with Elecsim.
@@ -47,14 +45,13 @@ The controls are as follows:
   - Up, Down, Left, Right (Or WASD): Move the camera
   - Mousewheel Up: Zoom in
   - Mousewheel Down: Zoom out
-  - F: Reset the Camera to the default position and the default render scale
-  - F1: Open the console (use "help" for a list of available commands) [ONLY WORKS ON VERSION 0.1.0!]
+  - F: Reset the Camera to the default position and the default render scaleds
   - F2: Save file to disk
   - F3: Load file from disk
   - Comma: Speed up the update rate
   - Period: Slow down the update rate
   - R: Change the facing of the tile you are about to place
-  - P: Clear the tile buffer
+  - Z: Clear the tile buffer
   - Space: Toggle between build and simulation mode
   - Left Mouse Button (while the simulation is paused): Place the buffer at the current position
   - Left Mouse Button (while the simulation is running): Interact with certain tiles (Button, Semiconductor and Emitter)
@@ -86,8 +83,6 @@ Crossing: Takes one input from one side, and puts it out the other. This allows 
 There are files in the "examples subdirectory to demonstrate the function of the different components. 
 
 stresstest.grid: Attempts to draw a large amount of tiles. (Does not stresstest simulation speeds)
-
-tests.grid: Contains different small circuits which demonstrate the function of different tile types.
 
 componentGallery.grid: Contains multiple more complex circuits, such as an 8-bit adder, XOR and AND-Gate. (See the image above.)
 
