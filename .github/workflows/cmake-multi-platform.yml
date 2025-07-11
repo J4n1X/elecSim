@@ -70,9 +70,9 @@ jobs:
                          g++-14 \
                          -y
         sudo update-alternatives \
-          --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 
-          --slave /usr/bin/g++ g++ /usr/bin/g++-14
-          --slave /usr/bin/gcov gcov /usr/bin/gcov-14
+          --install /usr/bin/gcc gcc /usr/bin/gcc-14 100 \
+          --slave /usr/bin/g++ g++ /usr/bin/g++-14 \
+          --slave /usr/bin/gcov gcov /usr/bin/gcov-14 
         sudo update-alternatives --set gcc /usr/bin/gcc-14
                          
 

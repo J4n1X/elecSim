@@ -111,6 +111,7 @@ endif()
 
 # Prepare needed tools for the project's build step
 if(WIN32 AND NOT BLOBBER)
+  message(STATUS "Looking for blobber.exe in ${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
   find_program(BLOBBER blobber.exe PATHS "${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
 else() 
   find_program(BLOBBER blobber PATHS ${TOOLS_DIR})
