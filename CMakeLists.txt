@@ -110,12 +110,7 @@ if(EARLY_BUILD)
 endif()
 
 # Prepare needed tools for the project's build step
-if(WIN32)
-  message(STATUS "Looking for blobber.exe in ${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
-  find_program(BLOBBER blobber.exe PATHS "${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
-else() 
-  find_program(BLOBBER blobber PATHS ${TOOLS_DIR})
-endif()
+find_program(BLOBBER blobber PATHS ${TOOLS_DIR} "${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
 if(NOT BLOBBER_FOUND)
   message(STATUS "Preparing configuration step tools")
   set(workdir ${BUILD_DIR}/early_build)
