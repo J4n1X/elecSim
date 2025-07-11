@@ -15,15 +15,15 @@ set(BUILD_DIR ${CMAKE_BINARY_DIR})
 set(ASSETS_DIR ${PROJECT_SOURCE_DIR}/media)
 set(TOOLS_DIR ${BUILD_DIR}/early_build/bin)
 
-# Download cmrc (If we ever need it, I'll uncomment this)
-#file(DOWNLOAD "https://raw.githubusercontent.com/vector-of-bool/cmrc/refs/heads/master/CMakeRC.cmake"
-#"${CMAKE_BINARY_DIR}/CMakeRC.cmake")
-#include("${CMAKE_BINARY_DIR}/CMakeRC.cmake")
+if (WIN32)
+  set(SUBSYSTEM_LINKER_OPTIONS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+else()
+  set(SUBSYSTEM_LINKER_OPTIONS "-mwindows")
+endif()
 
 # Debug and Release configuration options
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -UDEBUG")
-
 
 # These are some options that the user can set
 option(SIM_PREPROCESSING "Enable caching for simulation results" ON)
