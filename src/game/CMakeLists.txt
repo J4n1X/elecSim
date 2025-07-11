@@ -27,6 +27,12 @@ if(NOT BLOB_FILES)
   message(FATAL_ERROR "No blob files generated. Ensure the paths are correct and the blobber is working.")
 endif()
 
+if (WIN32 OR MSVC)
+  set(SUBSYSTEM_LINKER_OPTIONS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
+else()
+  set(SUBSYSTEM_LINKER_OPTIONS "-mwindows")
+endif()
+
 # Warnings
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
   target_compile_options(elecSim PRIVATE -Wall -Wextra -Wpedantic)

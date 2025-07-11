@@ -15,11 +15,6 @@ set(BUILD_DIR ${CMAKE_BINARY_DIR})
 set(ASSETS_DIR ${PROJECT_SOURCE_DIR}/media)
 set(TOOLS_DIR ${BUILD_DIR}/early_build/bin)
 
-if (WIN32)
-  set(SUBSYSTEM_LINKER_OPTIONS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup")
-else()
-  set(SUBSYSTEM_LINKER_OPTIONS "-mwindows")
-endif()
 # Debug and Release configuration options
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -UDEBUG")
