@@ -4,7 +4,7 @@
 #include "Drawables.h"
 
 namespace Engine {
-constexpr static int AlignToChunkGrid(int pos) noexcept {
+static int AlignToChunkGrid(int pos) noexcept {
   const auto [quot, rem] =
       std::div(pos, static_cast<int>(TileChunk::CHUNK_LENGTH));
   return (quot - (rem < 0)) * static_cast<int>(TileChunk::CHUNK_LENGTH);
