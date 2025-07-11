@@ -28,7 +28,7 @@ If you'd like to use the the old way of processing tile updates, pass along ```-
 
 Furthermore, you can turn off LTOs and CCache (if available) by using ```-DDISABLE_LTO=ON``` and ```-DDISABLE_CCACHE=ON```.
 
-If you are using Linux and you are on the debug configuration and want to use the address sanitizer, youc an pass ```-DENABLE_MEMCHECK```
+If you are using Linux and you are on the debug configuration and want to use the address sanitizer, you can pass ```-DENABLE_MEMCHECK```
 
 To compile the project, all you must do after this is issue the following command: 
 
@@ -43,8 +43,8 @@ The compiled binaries can be found in the newly created "bin" directory.
 The controls are as follows: 
   - 1-7: Select your tile. The order is: Wire, Junction, Emitter, Semiconductor, Button, Inverter, Crossing. Replaces the buffer.
   - Up, Down, Left, Right (Or WASD): Move the camera
-  - Mousewheel Up: Zoom in
-  - Mousewheel Down: Zoom out
+  - Mousewheel Up: Zoom out
+  - Mousewheel Down: Zoom in
   - F: Reset the Camera to the default position and the default render scaleds
   - F2: Save file to disk
   - F3: Load file from disk

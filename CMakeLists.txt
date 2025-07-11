@@ -20,7 +20,6 @@ if (WIN32)
 else()
   set(SUBSYSTEM_LINKER_OPTIONS "-mwindows")
 endif()
-
 # Debug and Release configuration options
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -UDEBUG")
