@@ -35,22 +35,28 @@ void TileChunk::SetTile(const ElecSim::GridTile* tile,
   vArray[baseIndex + 0].position =
       localPos + transform.transformPoint({0.f, 0.f});
   vArray[baseIndex + 0].texCoords = textureTopLeft;
+  vArray[baseIndex + 0].color = sf::Color::White;
   vArray[baseIndex + 1].position =
       localPos + transform.transformPoint({1.f, 0.f});
   vArray[baseIndex + 1].texCoords = textureTopRight;
+  vArray[baseIndex + 1].color = sf::Color::White;
   vArray[baseIndex + 2].position =
       localPos + transform.transformPoint({0.f, 1.f});
   vArray[baseIndex + 2].texCoords = textureBottomLeft;
+  vArray[baseIndex + 2].color = sf::Color::White;
 
   vArray[baseIndex + 3].position =
       localPos + transform.transformPoint({1.f, 0.f});
   vArray[baseIndex + 3].texCoords = textureTopRight;
+  vArray[baseIndex + 3].color = sf::Color::White;
   vArray[baseIndex + 4].position =
       localPos + transform.transformPoint({1.f, 1.f});
   vArray[baseIndex + 4].texCoords = textureBottomRight;
+  vArray[baseIndex + 4].color = sf::Color::White;
   vArray[baseIndex + 5].position =
       localPos + transform.transformPoint({0.f, 1.f});
   vArray[baseIndex + 5].texCoords = textureBottomLeft;
+  vArray[baseIndex + 5].color = sf::Color::White;
 }
 
 void TileChunk::draw(sf::RenderTarget& target, sf::RenderStates states) const {
