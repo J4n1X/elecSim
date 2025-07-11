@@ -14,6 +14,8 @@ set(BUILD_DIR ${CMAKE_BINARY_DIR})
 set(ASSETS_DIR ${PROJECT_SOURCE_DIR}/media)
 set(TOOLS_DIR ${BUILD_DIR}/early_build/bin)
 
+message(FATAL_ERROR "${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
+
 # Download cmrc (If we ever need it, I'll uncomment this)
 #file(DOWNLOAD "https://raw.githubusercontent.com/vector-of-bool/cmrc/refs/heads/master/CMakeRC.cmake"
 #"${CMAKE_BINARY_DIR}/CMakeRC.cmake")
