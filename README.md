@@ -43,8 +43,8 @@ The compiled binaries can be found in the newly created "bin" directory.
 The controls are as follows: 
   - 1-7: Select your tile. The order is: Wire, Junction, Emitter, Semiconductor, Button, Inverter, Crossing. Replaces the buffer.
   - Up, Down, Left, Right (Or WASD): Move the camera
-  - Mousewheel Up: Zoom in
-  - Mousewheel Down: Zoom out
+  - Mousewheel Up: Zoom out
+  - Mousewheel Down: Zoom in
   - F: Reset the Camera to the default position and the default render scaleds
   - F2: Save file to disk
   - F3: Load file from disk
