@@ -4,184 +4,134 @@
 
 namespace ElecSim {
 
-// Each derived tile class has its own responsibilities:
-
-// Wire: Basic signal conductor, propagates signals in one direction
+/**
+ * @class WireGridTile
+ * @brief Basic signal conductor that propagates signals in one direction.
+ */
 class WireGridTile : public DeterministicTile {
  public:
-  WireGridTile(olc::vi2d pos = olc::vi2d(0, 0),
-               Direction facing = Direction::Top, float size = 1.0f);
+  explicit WireGridTile(vi2d pos = vi2d(0, 0),
+               Direction facing = Direction::Top);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::vector<SignalEvent> PreprocessSignal(const SignalEvent incomingSignal) override;
-  std::string_view TileTypeName() const override { return "Wire"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 0; }
+  TileType GetTileType() const override { return TileType::Wire; }
   
-  std::unique_ptr<GridTile> Clone() const override {
-    auto clone = std::make_unique<WireGridTile>(GetPos(), GetFacing(), GetSize());
-    clone->SetActivation(GetActivation());
-    clone->SetDefaultActivation(GetDefaultActivation());
-    return clone;
-  }
+  [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Junction: Multi-directional signal splitter
+/**
+ * @class JunctionGridTile
+ * @brief Multi-directional signal splitter.
+ */
 class JunctionGridTile : public DeterministicTile {
  public:
-  JunctionGridTile(olc::vi2d pos = olc::vi2d(0, 0),
-                   Direction facing = Direction::Top, float size = 1.0f);
+  explicit JunctionGridTile(vi2d pos = vi2d(0, 0),
+                   Direction facing = Direction::Top);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::vector<SignalEvent> PreprocessSignal(const SignalEvent incomingSignal) override;
-  std::string_view TileTypeName() const override { return "Junction"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 1; }
+  TileType GetTileType() const override { return TileType::Junction; }
   
-  std::unique_ptr<GridTile> Clone() const override {
-    auto clone = std::make_unique<JunctionGridTile>(GetPos(), GetFacing(), GetSize());
-    clone->SetActivation(GetActivation());
-    clone->SetDefaultActivation(GetDefaultActivation());
-    return clone;
-  }
+  [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Emitter: Signal source that can be toggled
+/**
+ * @class EmitterGridTile
+ * @brief Signal source that can be toggled and emits periodic signals.
+ */
 class EmitterGridTile : public LogicTile {
- private:
+ protected:
   bool enabled;
-  static constexpr int EMIT_INTERVAL = 3;  // Emit every 3 ticks
-  int lastEmitTick;                        // Last tick when signal was emitted
+  static constexpr int EMIT_INTERVAL = 3;
+  int lastEmitTick;
 
  public:
-  EmitterGridTile(olc::vi2d pos = olc::vi2d(0, 0),
-                  Direction facing = Direction::Top, float size = 1.0f);
+  explicit EmitterGridTile(vi2d pos = vi2d(0, 0),
+                  Direction facing = Direction::Top);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::vector<SignalEvent> Interact() override;
   void ResetActivation() override;
   bool ShouldEmit(int currentTick) const;
 
-  std::string_view TileTypeName() const override { return "Emitter"; }
   bool IsEmitter() const override { return true; }
-  int GetTileTypeId() const override { return 2; }
+  TileType GetTileType() const override { return TileType::Emitter; }
   
-  std::unique_ptr<GridTile> Clone() const override {
-    auto clone = std::make_unique<EmitterGridTile>(GetPos(), GetFacing(), GetSize());
-    clone->SetActivation(GetActivation());
-    clone->SetDefaultActivation(GetDefaultActivation());
-    
-    // Copy additional internal state
-    auto* typedClone = static_cast<EmitterGridTile*>(clone.get());
-    typedClone->enabled = this->enabled;
-    typedClone->lastEmitTick = this->lastEmitTick;
-    
-    return clone;
-  }
+  [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// SemiConductor: Logic gate that requires multiple inputs
+/**
+ * @class SemiConductorGridTile
+ * @brief Logic gate that requires multiple inputs to activate.
+ */
 class SemiConductorGridTile : public LogicTile {
- private:
+ protected:
   int internalState;  // bit 0: side inputs, bit 1: bottom input
 
  public:
-  SemiConductorGridTile(olc::vi2d pos = olc::vi2d(0, 0),
-                        Direction facing = Direction::Top, float size = 1.0f);
+  explicit SemiConductorGridTile(vi2d pos = vi2d(0, 0),
+                        Direction facing = Direction::Top);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
 
-  std::string_view TileTypeName() const override { return "Semiconductor"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 3; }
+  TileType GetTileType() const override { return TileType::SemiConductor; }
   
-  std::unique_ptr<GridTile> Clone() const override {
-    auto clone = std::make_unique<SemiConductorGridTile>(GetPos(), GetFacing(), GetSize());
-    clone->SetActivation(GetActivation());
-    clone->SetDefaultActivation(GetDefaultActivation());
-    
-    // Copy additional internal state
-    auto* typedClone = static_cast<SemiConductorGridTile*>(clone.get());
-    typedClone->internalState = this->internalState;
-    
-    return clone;
-  }
+  [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Button: Momentary signal source
+/**
+ * @class ButtonGridTile
+ * @brief Momentary signal source activated by user interaction.
+ */
 class ButtonGridTile : public LogicTile {
  public:
-  ButtonGridTile(olc::vi2d pos = olc::vi2d(0, 0),
-                 Direction facing = Direction::Top, float size = 1.0f);
+  explicit ButtonGridTile(vi2d pos = vi2d(0, 0),
+                 Direction facing = Direction::Top);
 
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   std::vector<SignalEvent> Interact() override;
 
-  std::string_view TileTypeName() const override { return "Button"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 4; }
+  TileType GetTileType() const override { return TileType::Button; }
   
-  std::unique_ptr<GridTile> Clone() const override {
-    auto clone = std::make_unique<ButtonGridTile>(GetPos(), GetFacing(), GetSize());
-    clone->SetActivation(GetActivation());
-    clone->SetDefaultActivation(GetDefaultActivation());
-    return clone;
-  }
+  [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// --- InverterGridTile: Inverts the signal from the base GridTile ---
-
+/**
+ * @class InverterGridTile
+ * @brief Inverts incoming signals.
+ */
 class InverterGridTile : public LogicTile {
  public:
-  InverterGridTile(olc::vi2d pos = olc::vi2d(0, 0),
-                   Direction facing = Direction::Top, float size = .10f)
-      : LogicTile(pos, facing, size, false, olc::DARK_MAGENTA, olc::MAGENTA) {
-    for (auto& dir : AllDirections) {
-      canReceive[dir] = (dir != facing);
-      canOutput[dir] = (dir == facing);
-      inputStates[dir] = false;
-    }
-  }
+  explicit InverterGridTile(vi2d pos = vi2d(0, 0),
+                   Direction facing = Direction::Top);
   std::vector<SignalEvent> Init() override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
-  std::string_view TileTypeName() const override { return "Inverter"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 5; }
+  TileType GetTileType() const override { return TileType::Inverter; }
   
-  std::unique_ptr<GridTile> Clone() const override {
-    auto clone = std::make_unique<InverterGridTile>(GetPos(), GetFacing(), GetSize());
-    clone->SetActivation(GetActivation());
-    clone->SetDefaultActivation(GetDefaultActivation());
-    return clone;
-  }
+  [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
-// Crossing: Allows signals to cross without interference
+/**
+ * @class CrossingGridTile
+ * @brief Allows signals to cross without interference.
+ */
 class CrossingGridTile : public LogicTile {
  public:
-  CrossingGridTile(olc::vi2d pos = olc::vi2d(0, 0),
-                  Direction facing = Direction::Top, float size = 1.0f);
+  explicit CrossingGridTile(vi2d pos = vi2d(0, 0),
+                  Direction facing = Direction::Top);
 
-  void Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
-            float screenSize, int alpha = 255) override;
   std::vector<SignalEvent> ProcessSignal(const SignalEvent& signal) override;
   
-  std::string_view TileTypeName() const override { return "Crossing"; }
   bool IsEmitter() const override { return false; }
-  int GetTileTypeId() const override { return 6; }
+  TileType GetTileType() const override { return TileType::Crossing; }
   
-  std::unique_ptr<GridTile> Clone() const override {
-    auto clone = std::make_unique<CrossingGridTile>(GetPos(), GetFacing(), GetSize());
-    clone->SetActivation(GetActivation());
-    clone->SetDefaultActivation(GetDefaultActivation());
-    
-    // Copy the input states
-    for (auto& dir : AllDirections) {
-      clone->inputStates[dir] = this->inputStates[dir];
-    }
-    
-    return clone;
-  }
+  [[nodiscard]] std::unique_ptr<GridTile> Clone() const override;
 };
 
 }  // namespace ElecSim

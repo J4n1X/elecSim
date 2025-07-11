@@ -1,34 +1,32 @@
 #include "TileGroupManager.h"
 
-#include <algorithm>
 #include <format>
-#include <iostream>
 #include <ranges>
 
 #include "Common.h"
 
 namespace ElecSim {
 
-#ifdef SIM_CACHING
+#ifdef SIM_PREPROCESSING
 
 // Processes the signal of a group. This yields a vector of new signals by
 // only simulating the input tile and simply cycling the state of the tiles
 // inbetween the start and end.
-// TODO: Try out how hard the performance is impacted if we run ProcessSignal
-//       on all tiles inbetween, not just the input tile. Would yield accurate
-//       probing results (gettile console command), but might also slow down
-//       the simulation significantly.
-std::vector<SignalEvent> TileGroupManager::SimulationGroup::ProcessSignal(
+TileGroupProcessResult TileGroupManager::SimulationGroup::ProcessSignal(
     const SignalEvent& signal) {
+  std::vector<TileStateChange> affectedTiles;
   auto newSignals = inputTile->ProcessSignal(signal);
-  // TODO: Better checks.
   if (newSignals.empty()) {
     return {};  // No new signals produced
   }
+  affectedTiles.push_back(
+      TileStateChange{inputTile->GetPos(), inputTile->GetActivation()});
 
   // Cycle the activation state of all inbetween tiles
   for (const auto& tile : inbetweenTiles) {
     tile->SetActivation(!tile->GetActivation());
+    affectedTiles.push_back(
+        TileStateChange{tile->GetPos(), tile->GetActivation()});
   }
 
   // Now, apply updates to the output tiles
@@ -38,9 +36,12 @@ std::vector<SignalEvent> TileGroupManager::SimulationGroup::ProcessSignal(
                                                output.tile->GetPos());
     auto signalEvent = SignalEvent(output.inputterTile->GetPos(), outputDir,
                                    output.inputterTile->GetActivation());
+    affectedTiles.push_back(
+        TileStateChange{output.tile->GetPos(), output.tile->GetActivation()});
     outputSignals.push_back(signalEvent);
   }
-  return outputSignals;
+  return TileGroupProcessResult{
+      std::move(outputSignals), std::move(affectedTiles)};
 }
 
 std::string TileGroupManager::SimulationGroup::GetObjectInfo() const {
@@ -187,14 +188,10 @@ void TileGroupManager::ProcessDeterministicTileNeighbors(
     if (inputCount > 1) {
 // Multiple inputs - treat the tile pushing into it as an output tile and
 // push the new tile as a start tile
-#ifdef DEBUG
-      std::cout << std::format(
-                       "TileGroupManager::ProcessDeterministicTileNeighbors: "
-                       "Tile at {} has multiple inputs, treating as output "
-                       "tile with inputter {}.",
-                       neighbor->GetPos(), current->GetPos())
-                << std::endl;
-#endif
+      DebugPrint("TileGroupManager::ProcessDeterministicTileNeighbors: "
+                "Tile at {} has multiple inputs, treating as output "
+                "tile with inputter {}.",
+                neighbor->GetPos(), current->GetPos());
       outputTiles.emplace_back(neighbor, current);
       if (!globalVisited.contains(neighbor)) {
         pendingStartTiles.push(neighbor);
@@ -267,13 +264,8 @@ void TileGroupManager::CreateSimulationObject(
     // Single tile with no deterministic path - create a SimulationTile
     simulationObjects.emplace(inputTile->GetPos(),
                               std::make_unique<SimulationTile>(inputTile));
-#ifdef DEBUG
-    std::cout << std::format(
-                     "Tile at {} has no deterministic path, creating single "
-                     "tile simulation.",
-                     inputTile->GetPos())
-              << std::endl;
-#endif
+    DebugPrint("Tile at {} has no deterministic path, creating single tile simulation.",
+               inputTile->GetPos());
   } else {
     // Create simulation group
     auto simGroup = std::make_unique<SimulationGroup>(
@@ -311,15 +303,12 @@ void TileGroupManager::CoverRemainingTiles(
 void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
   // Find all potential start tiles
   auto initialStartTiles = FindInitialStartTiles(tiles);
-  std::cout << "Initial start tiles to be processed: "
-            << initialStartTiles.size() << std::endl;
-
   ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>
       globalVisited;
   std::queue<std::shared_ptr<GridTile>> pendingStartTiles;
 
   // Add initial start tiles to processing queue
-  for (auto& tile : initialStartTiles) {
+  for (const auto& tile : initialStartTiles) {
     pendingStartTiles.push(tile);
   }
 
@@ -352,16 +341,14 @@ void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
   // Ensure all remaining tiles are covered
   CoverRemainingTiles(tiles, globalVisited);
 
-#ifdef DEBUG
   for (const auto& [pos, obj] : simulationObjects) {
-    std::cout << obj->GetObjectInfo() << '\n';
+    DebugPrint("{}", obj->GetObjectInfo());
   }
-  std::cout << std::flush;
-#endif
-  std::cout << "Preprocessing complete, total simulation objects: "
-            << simulationObjects.size() << std::endl;
+  
+  DebugPrint("Preprocessing complete, total simulation objects: {}", 
+             simulationObjects.size());
 }
 
-#endif  // SIM_CACHING
+#endif  // SIM_PREPROCESSING
 
 }  // namespace ElecSim

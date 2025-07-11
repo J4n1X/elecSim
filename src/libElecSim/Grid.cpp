@@ -6,37 +6,21 @@
 #include <iostream>
 #include <ranges>
 #include <stdexcept>
-#include <type_traits>
+#include "Common.h"
 
 namespace ElecSim {
 
-// Implementation of SignalEdge::operator==
 bool SignalEdge::operator==(const SignalEdge& other) const {
   return sourcePos == other.sourcePos && targetPos == other.targetPos;
 }
 
-// Implementation of SignalEdgeHash::operator()
 std::size_t SignalEdgeHash::operator()(const SignalEdge& edge) const {
   using ankerl::unordered_dense::detail::wyhash::hash;
   return hash(&edge, sizeof(SignalEdge));
 }
 
-Grid::Grid(olc::vi2d size, float renderScale, olc::vi2d renderOffset,
-           int uiLayer, int gameLayer)
-    : renderWindow(size),
-      uiLayer(uiLayer),
-      gameLayer(gameLayer),
-      renderScale(renderScale),
-      renderOffset(renderOffset) {
-  std::cout << std::format(
-                   "Grid initialized with size: {}x{}, renderScale: {}, "
-                   "renderOffset: {}",
-                   size.x, size.y, renderScale, renderOffset)
-            << std::endl;
-}
-
 void Grid::QueueUpdate(std::shared_ptr<GridTile> tile,
-                       const SignalEvent& event) {
+                       const SignalEvent& event) noexcept {
   updateQueue.push(UpdateEvent(tile, event, currentTick));
 }
 
@@ -79,7 +63,13 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
   }
 }
 
-int Grid::Simulate() {
+Grid::SimulationResult Grid::Simulate() {
+  if (fieldIsDirty) {
+    DebugPrint("Grid is dirty on attempted simulation step, resetting simulation.");
+    ResetSimulation();
+  }
+
+  SimulationResult simResult;
   int updatesProcessed = 0;
   currentTick++;  // Increment the tick counter
 
@@ -99,35 +89,52 @@ int Grid::Simulate() {
       // Now using the simpler SignalEvent constructor
       QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
                                     tile->GetActivation()));
+      simResult.affectedTiles.insert(
+          TileStateChange{tile->GetPos(), tile->GetActivation()});
     }
     ++it;
   }
 
-  // We're now using signal chain tracking with visited positions to detect
-  // circular updates. Each signal keeps track of all positions it has
-  // visited, and we throw a runtime_error when we detect a cycle. However,
-  // we'll still keep a reasonable upper limit as a safety measure:
   constexpr int MAX_UPDATES = 100000;
+
+  // While false by default, if a large amount of updates are processed
+  // this tick, we turn it on to detect potential cycles and terminate them.
+  bool enableEdgeCheck = false;
   while (!updateQueue.empty()) {
     // Safety check - prevent extremely long update chains
     if (updatesProcessed > MAX_UPDATES) {
-      std::cerr << "Warning: Maximum update limit reached (" << MAX_UPDATES
-                << " updates). This may indicate a complex circuit or "
-                   "potential issue."
-                << std::endl;
-      break;
+      if (!enableEdgeCheck) {
+        DebugPrint("Warning: Maximum update limit reached ({} updates). Enabling edge check to prevent potential cycle.", 
+                  MAX_UPDATES);
+      }
+      enableEdgeCheck = true;
     }
 
     auto update = updateQueue.front();
     updateQueue.pop();
     if (!update.tile) continue;
+    if (enableEdgeCheck) {
+      if (currentTickVisitedEdges.contains(
+              SignalEdge{update.tile->GetPos(), update.event.sourcePos})) {
+        throw std::runtime_error(
+            std::format("Cycle detected in signal processing: edge from {} to "
+                        "{}. Offending signal side: {}",
+                        update.tile->GetPos(), update.event.sourcePos,
+                        DirectionToString(update.event.fromDirection)));
+      }
+    }
 
-#ifdef SIM_CACHING
+#ifdef SIM_PREPROCESSING
     auto simObjMaybe = tileManager.GetSimulationObject(update.tile->GetPos());
     if (simObjMaybe.has_value()) {
       auto simObj = simObjMaybe.value();
-      auto newSignals = simObj->ProcessSignal(update.event);
-      for (const auto& newSignal : newSignals) {
+      auto processResult = simObj->ProcessSignal(update.event);
+
+      // Insert into affected tiles 
+      simResult.affectedTiles.insert(processResult.affectedTiles.begin(),
+                           processResult.affectedTiles.end());
+
+      for (const auto& newSignal : processResult.newSignals) {
         // Queue the new signal events
         auto targetPos = TranslatePosition(
             newSignal.sourcePos, FlipDirection(newSignal.fromDirection));
@@ -135,30 +142,37 @@ int Grid::Simulate() {
         if (targetTileIt != tiles.end()) {
           auto& targetTile = targetTileIt->second;
           if (targetTile->CanReceiveFrom(newSignal.fromDirection)) {
-            QueueUpdate(
-                targetTile,
-                SignalEvent(newSignal.sourcePos, FlipDirection(newSignal.fromDirection),
-                            newSignal.isActive));
+            QueueUpdate(targetTile,
+                        SignalEvent(newSignal.sourcePos,
+                                    FlipDirection(newSignal.fromDirection),
+                                    newSignal.isActive));
           }
         }
       }
     } else {
       // It's just a single object (probably a logic tile, but not necessarily)
-      std::cout
-          << std::format(
-                 "Warning: Processing update for unprocessed tile: {}->{}",
-                 update.tile->GetPos(),
-                 update.event.isActive ? "Active" : "Inactive")
-          << std::endl;
+      DebugPrint("Warning: Processing update for unprocessed tile: {}->{}",
+               update.tile->GetPos(),
+               update.event.isActive ? "Active" : "Inactive");
       ProcessUpdateEvent(update);
+      simResult.affectedTiles.insert(
+          TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
     }
 
 #else
     ProcessUpdateEvent(update);
+    affectedTiles.insert(
+          TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
 #endif
+    if (enableEdgeCheck) {
+      currentTickVisitedEdges.insert(
+          SignalEdge{update.tile->GetPos(), update.event.sourcePos});
+    }
+
     updatesProcessed++;
   }
-  return updatesProcessed;
+  simResult.updatesProcessed = updatesProcessed;
+  return simResult;
 }
 
 void Grid::ResetSimulation() {
@@ -179,138 +193,92 @@ void Grid::ResetSimulation() {
       QueueUpdate(tile, event);
     }
   }
-#ifdef SIM_CACHING
-  tileManager.Clear();
-  tileManager.PreprocessTiles(tiles);
+#ifdef SIM_PREPROCESSING
+  if (fieldIsDirty) {
+    tileManager.Clear();
+    tileManager.PreprocessTiles(tiles);
+    fieldIsDirty = false;
+  }
 #endif
 }
 
-int Grid::Draw(olc::PixelGameEngine* renderer) {
-  if (!renderer) throw std::runtime_error("Grid has no renderer available");
+void ElecSim::Grid::SetTile(vi2d pos, std::shared_ptr<GridTile> tile) {
+  tile->SetPos(pos);
+  auto [mapElement, inserted] = tiles.insert_or_assign(pos, tile);
+  if (mapElement->second->IsEmitter()) {
+    emitters.push_back(mapElement->second);
+  }
+  fieldIsDirty = true;  // Mark the field as modified
+}
 
-  // Clear Background
-  renderer->SetDrawTarget(gameLayer);
-  renderer->Clear(backgroundColor);
-
-  // Tiles exclusively render as decals.
-
-  // Draw tiles
-  // This spriteSize causes overdraw all the time, but without it, we get
-  // pixel gaps Update: Now that we use decals, this is a non-issue.
-
-  auto spriteSize = std::ceil(renderScale);
-  int drawnTiles = 0;
-  for (const auto& [pos, tile] : tiles) {
-    if (!tile) throw std::runtime_error("Grid contained entry with empty tile");
-
-    olc::vf2d screenPos = WorldToScreenFloating(pos);
-    // Is this tile even visible?
-    if (screenPos.x + spriteSize <= 0 || screenPos.x >= renderWindow.x ||
-        screenPos.y + spriteSize <= 0 || screenPos.y >= renderWindow.y) {
-      continue;  // If not, why even draw it?
+void Grid::InteractWithTile(vi2d pos) noexcept {
+  if (std::optional tileOpt = GetTile(pos)) {
+    auto tile = tileOpt.value();
+    auto newSignals = tile->Interact();
+    for (const auto& signal : newSignals) {
+      QueueUpdate(tile, signal);
     }
-
-    tile->Draw(renderer, screenPos, spriteSize);
-    drawnTiles++;
-  }
-
-  // Highlight drawing has been moved to the Game class
-  return drawnTiles;
-}
-
-void Grid::SetTile(olc::vf2d pos, std::unique_ptr<GridTile> tile,
-                   bool emitter) {
-  tiles.insert_or_assign(pos, std::move(tile));
-  if (emitter) {
-    emitters.push_back(tiles.at(pos));
-  }
-  auto initSignals = tiles.at(pos)->Init();
-  for (const auto& signal : initSignals) {
-    QueueUpdate(tiles.at(pos), signal);
   }
 }
 
-void Grid::SetSelection(olc::vi2d startPos, olc::vi2d endPos) {
-  // TODO: Implement this function instead of repeatedly calling SetTile
-  (void)startPos;  // Avoid unused variable warning
-  (void)endPos;    // Avoid unused variable warning
+vi2d Grid::AlignToGrid(const vf2d& pos) noexcept {
+  return vi2d(static_cast<int>(std::floor(pos.x)),
+              static_cast<int>(std::floor(pos.y)));
 }
 
-olc::vf2d Grid::WorldToScreenFloating(const olc::vf2d& pos) {
-  return olc::vf2d((pos.x * renderScale) + renderOffset.x,
-                   (pos.y * renderScale) + renderOffset.y);
-}
-
-olc::vi2d Grid::WorldToScreen(const olc::vf2d& pos) {
-  auto screenPosFloating = WorldToScreenFloating(pos);
-  return olc::vi2d(static_cast<int>(std::floor(screenPosFloating.x)),
-                   static_cast<int>(std::floor(screenPosFloating.y)));
-}
-
-olc::vf2d Grid::ScreenToWorld(const olc::vi2d& pos) {
-  return olc::vf2d((pos.x - renderOffset.x) / renderScale,
-                   (pos.y - renderOffset.y) / renderScale);
-}
-
-olc::vi2d Grid::AlignToGrid(const olc::vf2d& pos) {
-  return olc::vf2d(static_cast<int>(std::floor(pos.x)),
-                   static_cast<int>(std::floor(pos.y)));
-}
-
-olc::vf2d Grid::CenterOfSquare(const olc::vf2d& pos) {
-  return olc::vf2d(std::floor(pos.x) + 0.5f, std::floor(pos.y) + 0.5f);
-}
-
-std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(olc::vi2d pos) {
+std::optional<std::shared_ptr<GridTile> const> Grid::GetTile(vi2d pos) {
   auto tileIt = tiles.find(pos);
   return tileIt != tiles.end() ? std::optional{tileIt->second} : std::nullopt;
 }
 
-std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(olc::vi2d startPos,
-                                                        olc::vi2d endPos) {
-  // ensure StartPos is actually the top-left corner
-  olc::vi2d topLeft = startPos.min(endPos);
-  olc::vi2d bottomRight = startPos.max(endPos);
-  // lambda to select tiles in the area
-  auto selectTilesInArea = [&](const auto& pair) {
-    const auto& [pos, tile] = pair;
-    return (pos.x >= topLeft.x && pos.x <= bottomRight.x &&
-            pos.y >= topLeft.y && pos.y <= bottomRight.y);
-  };
-  auto filtered = tiles | std::ranges::views::filter(selectTilesInArea);
-  std::vector<std::weak_ptr<GridTile>> selection = {};
-  for (const auto& [_, tile] : filtered) {
-    (void)_;
-    // cast to weak
-    selection.push_back(std::weak_ptr<GridTile>(tile));
+std::vector<std::weak_ptr<GridTile>> Grid::GetSelection(vi2d startPos,
+                                                        vi2d endPos) {
+  vi2d topLeft = startPos.min(endPos);
+  vi2d bottomRight = startPos.max(endPos);
+
+  // Replace this complex view chain with a simple loop
+  std::vector<std::weak_ptr<GridTile>> result;
+  for (const auto& [pos, tile] : tiles) {
+    if (pos.x >= topLeft.x && pos.x <= bottomRight.x && pos.y >= topLeft.y &&
+        pos.y <= bottomRight.y) {
+      result.emplace_back(tile);
+    }
   }
-  return selection;
+  return result;
 }
 
 void Grid::Save(const std::string& filename) {
   std::ofstream file(filename, std::ios::binary);
   if (!file) {
-    std::cerr << "Error opening file for writing: " << filename << std::endl;
+    DebugPrint("Error opening file for writing: {}", filename);
     return;
   }
 
   size_t dataSize = 0;
-  for (const auto& [pos, tile] : tiles) {
-    auto data = tile->Serialize();
-    dataSize += data.size();
-    file.write(data.data(), data.size());
+  auto serializedTileData =
+      tiles | std::views::values | std::views::transform([](const auto& tile) {
+        return tile->Serialize();
+      }) |
+      std::views::transform([](const auto& data) -> std::vector<char> {
+        return std::vector<char>(data.begin(), data.end());
+      }) |
+      std::views::chunk(1000);
+  for (const auto& chunk : serializedTileData) {
+    auto chunkData =
+        chunk | std::views::join | std::ranges::to<std::vector<char>>();
+    file.write(chunkData.data(),
+               static_cast<std::streamsize>(chunkData.size()));
+    dataSize += chunkData.size();
   }
-
-  std::cout << std::format("Saved {} bytes to {}, total tiles: {}", dataSize,
-                           filename, tiles.size())
-            << std::endl;
+  DebugPrint("Saved {} bytes to {}, total tiles: {}", dataSize, filename, tiles.size());
+  (void)dataSize; // Silence unused variable warning in release mode
   file.close();
 }
 
 void Grid::Load(const std::string& filename) {
   std::ifstream file(filename, std::ios::binary);
   if (!file) {
-    std::cerr << "Error opening file for reading: " << filename << std::endl;
+    DebugPrint("Error opening file for reading: {}", filename);
     return;
   }
 
@@ -319,22 +287,26 @@ void Grid::Load(const std::string& filename) {
   while (file) {
     std::array<char, GRIDTILE_BYTESIZE> data;
     file.read(data.data(), data.size());
-    dataSize += file.gcount();
+    if (file.gcount() < 0) {
+      throw std::runtime_error(
+          std::format("Error reading from file: {}. Invalid read count: {}",
+                      filename, file.gcount()));
+    }
+    dataSize += static_cast<size_t>(file.gcount());
     if (file.gcount() == 0) break;
 
-    std::shared_ptr<GridTile> tile = std::move(GridTile::Deserialize(data));
-    tiles.insert_or_assign(tile->GetPos(), tile);
-    if (tile->IsEmitter()) {
-      emitters.push_back(tile);
+    std::unique_ptr<GridTile> tile = GridTile::Deserialize(data);
+    auto [mapPair, _] = tiles.insert_or_assign(tile->GetPos(), std::move(tile));
+    if (mapPair->second->IsEmitter()) {
+      emitters.push_back(mapPair->second);
     }
   }
 
   file.close();
-
-  std::cout << std::format("Loaded {} bytes from {}, total {} tiles", dataSize,
-                           filename, tiles.size())
-            << std::endl;
-  ResetSimulation();
+  DebugPrint("Loaded {} bytes from {}, total {} tiles", dataSize, filename, tiles.size());
+  (void)dataSize; // Silence unused variable warning in release mode
+  fieldIsDirty = true;  // Mark the field as modified
+  ResetSimulation();    // So that this preprocesses the tiles
 }
 
 }  // namespace ElecSim

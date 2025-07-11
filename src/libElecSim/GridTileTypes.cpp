@@ -1,20 +1,19 @@
 #include "GridTileTypes.h"
 
-#include <cmath>
 #include <ranges>
 
 namespace ElecSim {
 
 // --- WireGridTile Implementation ---
 
-WireGridTile::WireGridTile(olc::vi2d pos, Direction facing, float size)
-    : DeterministicTile(pos, facing, size, false, olc::WHITE, olc::DARK_YELLOW) {
+WireGridTile::WireGridTile(vi2d newPos, Direction newFacing)
+    : DeterministicTile(newPos, newFacing, false) {
   // Can receive from all directions except facing direction
-  for (auto& dir : AllDirections) {
-    canReceive[dir] = (dir != facing);
-    canOutput[dir] = (dir == facing);
-    inputStates[dir] = false;
+  for (const auto& dir : AllDirections) {
+    canReceive[dir] = (dir != newFacing);
+    canOutput[dir] = (dir == newFacing);
   }
+  inputStates.fill(false);
 }
 
 std::vector<SignalEvent> WireGridTile::ProcessSignal(
@@ -22,13 +21,9 @@ std::vector<SignalEvent> WireGridTile::ProcessSignal(
   inputStates[signal.fromDirection] = signal.isActive;
 
   // Check if any input is active (from a direction we can receive from)
-  bool shouldBeActive = false;
-  for (auto& dir : AllDirections) {
-    if (canReceive[dir] && inputStates[dir]) {
-      shouldBeActive = true;
-      break;
-    }
-  }
+  bool shouldBeActive = std::ranges::any_of(
+      AllDirections,
+      [this](Direction dir) { return canReceive[dir] && inputStates[dir]; });
 
   // Only propagate state change if our activation state changes
   if (shouldBeActive != activated) {
@@ -39,15 +34,16 @@ std::vector<SignalEvent> WireGridTile::ProcessSignal(
   return {};
 }
 
-std::vector<SignalEvent> WireGridTile::PreprocessSignal(const SignalEvent incomingSignal){
-    return {SignalEvent(pos, facing, incomingSignal.isActive)};
+std::vector<SignalEvent> WireGridTile::PreprocessSignal(
+    const SignalEvent incomingSignal) {
+  return {SignalEvent(pos, facing, incomingSignal.isActive)};
 }
 
 // --- JunctionGridTile Implementation ---
 
-JunctionGridTile::JunctionGridTile(olc::vi2d pos, Direction facing, float size)
-    : DeterministicTile(pos, facing, size, false, olc::GREY, olc::YELLOW) {
-  auto inputDir = FlipDirection(facing);
+JunctionGridTile::JunctionGridTile(vi2d newPos, Direction newFacing)
+    : DeterministicTile(newPos, newFacing, false) {
+  auto inputDir = FlipDirection(newFacing);
   // Can receive from one direction and output to all others
   std::fill(canOutput.begin(), canOutput.end(), true);
   canOutput[inputDir] = false;
@@ -56,11 +52,12 @@ JunctionGridTile::JunctionGridTile(olc::vi2d pos, Direction facing, float size)
 
 std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
     const SignalEvent& signal) {
-  if (signal.isActive == activated) return {};  // Prevent feedback loops
+  if (signal.isActive == activated) [[unlikely]]
+    return {};  // Prevent feedback loops
   if (!signal.isActive) {
     activated = false;
     std::vector<SignalEvent> events;
-    for (auto& dir : AllDirections) {
+    for (const auto& dir : AllDirections) {
       if (canOutput[dir]) {
         events.push_back(SignalEvent(pos, dir, false));
       }
@@ -78,26 +75,27 @@ std::vector<SignalEvent> JunctionGridTile::ProcessSignal(
   return events;
 }
 
-std::vector<SignalEvent> JunctionGridTile::PreprocessSignal(const SignalEvent incomingSignal) {
-    std::vector<SignalEvent> events;
-    for (const auto& dir : AllDirections) {
-        if (canOutput[dir]) {
-            events.push_back(SignalEvent(pos, dir, incomingSignal.isActive));
-        }
+std::vector<SignalEvent> JunctionGridTile::PreprocessSignal(
+    const SignalEvent incomingSignal) {
+  std::vector<SignalEvent> events;
+  for (const auto& dir : AllDirections) {
+    if (canOutput[dir]) [[likely]] {
+      events.push_back(SignalEvent(pos, dir, incomingSignal.isActive));
     }
-    return events;
+  }
+  return events;
 }
 
 // --- EmitterGridTile Implementation ---
 
-EmitterGridTile::EmitterGridTile(olc::vi2d pos, Direction facing, float size)
-    : LogicTile(pos, facing, size, false, olc::DARK_CYAN, olc::CYAN),
+EmitterGridTile::EmitterGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false),
       enabled(true),
       lastEmitTick(-EMIT_INTERVAL) {
-  canOutput[facing] = true;
+  canOutput[newFacing] = true;
   // Can receive from all directions except facing direction
   for (auto& dir : AllDirections) {
-    canReceive[dir] = (dir != facing);
+    canReceive[dir] = (dir != newFacing);
   }
 }
 
@@ -127,25 +125,29 @@ bool EmitterGridTile::ShouldEmit(int currentTick) const {
 
 // --- SemiConductorGridTile Implementation ---
 
-SemiConductorGridTile::SemiConductorGridTile(olc::vi2d pos, Direction facing,
-                                             float size)
-    : LogicTile(pos, facing, size, false, olc::DARK_GREEN, olc::GREEN) {
+SemiConductorGridTile::SemiConductorGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
   // Only allow input from world directions that, relative to facing, are local
   // Left, Right, or Bottom
   canReceive.fill(true);
-  canOutput[facing] = true;
-  canReceive[facing] = false;
+  canOutput[newFacing] = true;
+  canReceive[newFacing] = false;
+  inputStates.fill(false);
 }
 
 std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
     const SignalEvent& signal) {
-  // Restore previous logic: flip direction for inputStates update
+  // Update input states (indexed by world coordinates)
   inputStates[signal.fromDirection] = signal.isActive;
 
   // Check if both side (left or right) and bottom are active
-  bool sideActive = inputStates[RotateDirection(Direction::Left, facing)] ||
-                    inputStates[RotateDirection(Direction::Right, facing)];
-  bool bottomActive = inputStates[RotateDirection(Direction::Bottom, facing)];
+  // Convert tile-relative directions to world coordinates to check inputStates
+  Direction worldLeft = TileToWorldDirection(Direction::Left);
+  Direction worldRight = TileToWorldDirection(Direction::Right);
+  Direction worldBottom = TileToWorldDirection(Direction::Bottom);
+
+  bool sideActive = inputStates[worldLeft] || inputStates[worldRight];
+  bool bottomActive = inputStates[worldBottom];
 
   if (sideActive && bottomActive) {
     if (activated) return {};  // Prevent feedback loops
@@ -160,9 +162,9 @@ std::vector<SignalEvent> SemiConductorGridTile::ProcessSignal(
 
 // --- ButtonGridTile Implementation ---
 
-ButtonGridTile::ButtonGridTile(olc::vi2d pos, Direction facing, float size)
-    : LogicTile(pos, facing, size, false, olc::DARK_RED, olc::RED) {
-  canOutput[facing] = true;
+ButtonGridTile::ButtonGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
+  canOutput[newFacing] = true;
 }
 
 std::vector<SignalEvent> ButtonGridTile::ProcessSignal(
@@ -177,6 +179,15 @@ std::vector<SignalEvent> ButtonGridTile::Interact() {
 
 // --- InverterGridTile Implementation ---
 
+InverterGridTile::InverterGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
+  for (const auto& dir : AllDirections) {
+    canReceive[dir] = (dir != newFacing);
+    canOutput[dir] = (dir == newFacing);
+    inputStates[dir] = false;
+  }
+}
+
 std::vector<SignalEvent> InverterGridTile::Init() {
   return {SignalEvent(pos, FlipDirection(facing), false)};
 }
@@ -186,13 +197,9 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   inputStates[signal.fromDirection] = signal.isActive;
 
   // Check if any input is active
-  bool shouldBeActive = false;
-  for (auto& dir : AllDirections) {
-    if (canReceive[dir] && inputStates[dir]) {
-      shouldBeActive = true;
-      break;
-    }
-  }
+  bool shouldBeActive = std::ranges::any_of(AllDirections, [&](Direction dir) {
+    return canReceive[dir] && inputStates[dir];
+  });
 
   // Invert the logic for output
   bool inverted = !shouldBeActive;
@@ -203,45 +210,14 @@ std::vector<SignalEvent> InverterGridTile::ProcessSignal(
   return {};
 }
 
-
 // --- CrossingGridTile Implementation ---
 
-CrossingGridTile::CrossingGridTile(olc::vi2d pos, Direction facing, float size)
-    : LogicTile(pos, facing, size, false, olc::DARK_BLUE, olc::BLUE) {
+CrossingGridTile::CrossingGridTile(vi2d newPos, Direction newFacing)
+    : LogicTile(newPos, newFacing, false) {
   // Allow receiving and outputting from all directions
-  for (auto& dir : AllDirections) {
-    canReceive[dir] = true;
-    canOutput[dir] = true;
-    inputStates[dir] = false;
-  }
-}
-
-void CrossingGridTile::Draw(olc::PixelGameEngine* renderer, olc::vf2d screenPos,
-                            float screenSize, int alpha) {
-  // Get colors based on activation state and alpha
-  olc::Pixel activeColor = this->activeColor;
-  olc::Pixel inactiveColor = this->inactiveColor;
-  activeColor.a = alpha;
-  inactiveColor.a = alpha;
-
-  // Draw the base square
-  renderer->FillRectDecal(screenPos, olc::vi2d(screenSize, screenSize),
-                          inactiveColor);
-
-  // Draw crossing lines that touch the edges
-  float lineThickness = screenSize / 10.0f;  // Adjust thickness as needed
-
-  // Horizontal line - top left to bottom right
-  renderer->FillRectDecal(
-      olc::vf2d(screenPos.x, screenPos.y + (screenSize - lineThickness) / 2),
-      olc::vf2d(screenSize, lineThickness),
-      activeColor);
-
-  // Vertical line - top to bottom
-  renderer->FillRectDecal(
-      olc::vf2d(screenPos.x + (screenSize - lineThickness) / 2, screenPos.y),
-      olc::vf2d(lineThickness, screenSize),
-      activeColor);
+  canReceive.fill(true);
+  canOutput.fill(true);
+  inputStates.fill(false);
 }
 
 std::vector<SignalEvent> CrossingGridTile::ProcessSignal(
@@ -257,5 +233,45 @@ std::vector<SignalEvent> CrossingGridTile::ProcessSignal(
   return {SignalEvent(pos, outputDir, signal.isActive)};
 }
 
+// --- Clone Implementations ---
+// I know, this is tedious but really, this is the best way to ensure a clone
+// ends up in the valid state.
 
+std::unique_ptr<GridTile> WireGridTile::Clone() const {
+  auto clone = std::make_unique<WireGridTile>(*this);
+  return clone;
+}
+
+std::unique_ptr<GridTile> JunctionGridTile::Clone() const {
+  auto clone = std::make_unique<JunctionGridTile>(*this);
+  return clone;
+}
+
+std::unique_ptr<GridTile> EmitterGridTile::Clone() const {
+  auto clone = std::make_unique<EmitterGridTile>(*this);
+  // Copy EmitterGridTile-specific state
+  clone->enabled = this->enabled;
+  clone->lastEmitTick = this->lastEmitTick;
+  return clone;
+}
+
+std::unique_ptr<GridTile> SemiConductorGridTile::Clone() const {
+  auto clone = std::make_unique<SemiConductorGridTile>(*this);
+  return clone;
+}
+
+std::unique_ptr<GridTile> ButtonGridTile::Clone() const {
+  auto clone = std::make_unique<ButtonGridTile>(*this);
+  return clone;
+}
+
+std::unique_ptr<GridTile> InverterGridTile::Clone() const {
+  auto clone = std::make_unique<InverterGridTile>(*this);
+  return clone;
+}
+
+std::unique_ptr<GridTile> CrossingGridTile::Clone() const {
+  auto clone = std::make_unique<CrossingGridTile>(*this);
+  return clone;
+}
 }  // namespace ElecSim
