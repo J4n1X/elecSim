@@ -8,13 +8,12 @@ cmake_policy(SET CMP0135 NEW)
 
 include(ProcessorCount)
 ProcessorCount(NUM_PRCESSORS)
+set(CMAKE_BUILD_PARALLEL_LEVEL ${NUM_PRCESSORS})
 
 set(TESTS_DIR ${PROJECT_SOURCE_DIR}/examples/tests)
 set(BUILD_DIR ${CMAKE_BINARY_DIR})
 set(ASSETS_DIR ${PROJECT_SOURCE_DIR}/media)
 set(TOOLS_DIR ${BUILD_DIR}/early_build/bin)
-
-message(FATAL_ERROR "${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
 
 # Download cmrc (If we ever need it, I'll uncomment this)
 #file(DOWNLOAD "https://raw.githubusercontent.com/vector-of-bool/cmrc/refs/heads/master/CMakeRC.cmake"
@@ -112,7 +111,7 @@ if(EARLY_BUILD)
 endif()
 
 # Prepare needed tools for the project's build step
-find_program(BLOBBER blobber PATHS ${TOOLS_DIR} "${TOOLS_DIR}/${CMAKE_BUILD_TYPE}")
+find_program(BLOBBER blobber PATHS ${TOOLS_DIR} PATH_SUFFIXES "${CMAKE_BUILD_TYPE}")
 if(NOT BLOBBER_FOUND)
   message(STATUS "Preparing configuration step tools")
   set(workdir ${BUILD_DIR}/early_build)
@@ -124,9 +123,9 @@ if(NOT BLOBBER_FOUND)
                   -DEARLY_BUILD=ON
                   ${CMAKE_SOURCE_DIR}
                   WORKING_DIRECTORY "${workdir}")
-  execute_process(COMMAND ${CMAKE_COMMAND} --build . -j ${NUM_PRCESSORS}
+  execute_process(COMMAND ${CMAKE_COMMAND} --build . --config ${CMAKE_BUILD_TYPE} -j ${NUM_PRCESSORS}
                   WORKING_DIRECTORY "${workdir}")
-  find_program(BLOBBER blobber PATHS ${TOOLS_DIR})
+  find_program(BLOBBER blobber PATHS ${TOOLS_DIR} PATH_SUFFIXES "${CMAKE_BUILD_TYPE}")
 endif()
 
 # Add the seperate building of tools as a target
