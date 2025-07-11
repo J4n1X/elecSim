@@ -97,6 +97,10 @@ endif()
 
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 
+# -----------------------------------------------------------------------------
+# End of basic configuration
+# -----------------------------------------------------------------------------
+
 if(EARLY_BUILD)
   message(STATUS "Building tools needed to configure the project")
   # Fetch Dependencies
@@ -106,9 +110,10 @@ if(EARLY_BUILD)
 endif()
 
 # Prepare needed tools for the project's build step
-find_program(BLOBBER blobber PATHS ${TOOLS_DIR} PATH_SUFFIXES Debug Release)
 if(WIN32 AND NOT BLOBBER)
-  find_program(BLOBBER blobber.exe PATHS ${TOOLS_DIR} PATH_SUFFIXES Debug Release)
+  find_program(BLOBBER blobber.exe PATHS "${TOOLS_DIR}" PATH_SUFFIXES ${CMAKE_BUILD_TYPE})
+else() 
+  find_program(BLOBBER blobber PATHS ${TOOLS_DIR} PATH_SUFFIXES ${CMAKE_BUILD_TYPE})
 endif()
 if(NOT BLOBBER_FOUND)
   message(STATUS "Preparing configuration step tools")
