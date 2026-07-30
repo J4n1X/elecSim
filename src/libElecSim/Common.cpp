@@ -7,13 +7,6 @@ std::size_t PositionHash::operator()(const vi2d& pos) const {
   return hash(&pos, sizeof(vi2d));
 }
 
-std::size_t TileStateChangeHash::operator()(
-    const TileStateChange& change) const {
-  using ankerl::unordered_dense::detail::wyhash::hash;
-  return hash(&change, sizeof(TileStateChange));
-}
-
-
 const char* DirectionToString(Direction dir) {
   switch (dir) {
     case Direction::Top:

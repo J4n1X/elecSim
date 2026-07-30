@@ -76,6 +76,7 @@ void TileChunk::SetTile(const ElecSim::GridTile* tile,
     v.color = sf::Color::White;
   }
 
+  highWaterMark = std::max(highWaterMark, slot + 1);
   MarkDirty(slot);
 }
 
@@ -105,7 +106,8 @@ void TileChunk::Sync() const {
     auto fresh = std::make_unique<sf::VertexBuffer>(
         sf::PrimitiveType::Triangles, sf::VertexBuffer::Usage::Dynamic);
     if (!fresh->create(VERTEX_COUNT)) return;  // retry next frame
-    if (!fresh->update(vertices.data())) return;
+    if (!fresh->update(vertices.data(), highWaterMark * VERTICES_PER_TILE, 0))
+      return;
     buffer = std::move(fresh);
     ClearDirty();  // the full upload covered everything
     return;
@@ -117,7 +119,8 @@ void TileChunk::Sync() const {
   constexpr std::size_t FULL_UPLOAD_THRESHOLD = CHUNK_TILE_COUNT / 16; 
 
   if(dirtySlots.size() > FULL_UPLOAD_THRESHOLD) {
-    if(!buffer->update(vertices.data())) return;
+    if(!buffer->update(vertices.data(), highWaterMark * VERTICES_PER_TILE, 0))
+      return;
     ClearDirty();
     return;
   }
@@ -153,11 +156,12 @@ void TileChunk::draw(sf::RenderTarget& target, sf::RenderStates states) const {
 
   Sync();
 
+  const std::size_t vertexCount = highWaterMark * VERTICES_PER_TILE;
   if (buffer) {
-    target.draw(*buffer, states);
+    target.draw(*buffer, 0, vertexCount, states);
   } else {
-    target.draw(vertices.data(), vertices.size(),
-                sf::PrimitiveType::Triangles, states);
+    target.draw(vertices.data(), vertexCount, sf::PrimitiveType::Triangles,
+                states);
   }
 }
 

@@ -61,6 +61,17 @@ Grid::SimulationResult Grid::Simulate() {
   // Clear edge tracking for this simulation tick
   currentTickVisitedEdges.clear();
 
+  // Dirty bit on the tile dedups affected tiles without hashing; touchedTiles
+  // remembers who to clear it from below, without a second lookup by pos.
+  std::vector<std::shared_ptr<GridTile>> touchedTiles;
+  auto markAffected = [&simResult, &touchedTiles](const std::shared_ptr<GridTile>& tile) {
+    if (tile->GetDirtyThisTick()) return;
+    tile->SetDirtyThisTick(true);
+    simResult.affectedTiles.push_back(
+        TileStateChange{tile->GetPos(), tile->GetActivation()});
+    touchedTiles.push_back(tile);
+  };
+
   // Queue updates from emitters first
   for (auto it = emitters.begin(); it != emitters.end();) {
     if (it->expired()) {
@@ -74,8 +85,7 @@ Grid::SimulationResult Grid::Simulate() {
       // Now using the simpler SignalEvent constructor
       QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
                                     tile->GetActivation()));
-      simResult.affectedTiles.insert(
-          TileStateChange{tile->GetPos(), tile->GetActivation()});
+      markAffected(tile);
     }
     ++it;
   }
@@ -95,8 +105,7 @@ Grid::SimulationResult Grid::Simulate() {
       enableEdgeCheck = true;
     }
 
-    auto update = updateQueue.front();
-    updateQueue.pop();
+    const auto& update = updateQueue.front();
     if (!update.tile) continue;
     if (enableEdgeCheck) {
       if (currentTickVisitedEdges.contains(
@@ -110,14 +119,14 @@ Grid::SimulationResult Grid::Simulate() {
     }
 
 #ifdef SIM_PREPROCESSING
-    auto simObjMaybe = tileManager.GetSimulationObject(update.tile->GetPos());
-    if (simObjMaybe.has_value()) {
-      auto simObj = simObjMaybe.value();
+    if (auto* simObj = update.tile->GetCachedSimObject()) {
       auto processResult = simObj->ProcessSignal(update.event);
 
-      // Insert into affected tiles 
-      simResult.affectedTiles.insert(processResult.affectedTiles.begin(),
-                           processResult.affectedTiles.end());
+      for (const auto& change : processResult.affectedTiles) {
+        if (auto tileIt = tiles.find(change.pos); tileIt != tiles.end()) {
+          markAffected(tileIt->second);
+        }
+      }
 
       for (const auto& newSignal : processResult.newSignals) {
         // Queue the new signal events
@@ -140,22 +149,24 @@ Grid::SimulationResult Grid::Simulate() {
                update.tile->GetPos(),
                update.event.isActive ? "Active" : "Inactive");
       ProcessUpdateEvent(update);
-      simResult.affectedTiles.insert(
-          TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
+      markAffected(update.tile);
     }
 
 #else
     ProcessUpdateEvent(update);
-    simResult.affectedTiles.insert(
-          TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
+    markAffected(update.tile);
 #endif
     if (enableEdgeCheck) {
       currentTickVisitedEdges.insert(
           SignalEdge{update.tile->GetPos(), update.event.sourcePos});
     }
-
+    updateQueue.pop();
     updatesProcessed++;
   }
+
+  // Dirty bits are only valid for this tick.
+  for (const auto& tile : touchedTiles) tile->SetDirtyThisTick(false);
+
   simResult.updatesProcessed = updatesProcessed;
   return simResult;
 }

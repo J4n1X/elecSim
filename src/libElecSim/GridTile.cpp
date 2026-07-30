@@ -65,6 +65,8 @@ GridTile::GridTile(GridTile&& other) noexcept
   other.canOutput.fill(false);
   other.inputStates.fill(false);
   other.pos = {0, 0};
+  other.cachedSimObject = nullptr;
+  other.dirtyThisTick = false;
 }
 
 GridTile& GridTile::operator=(const GridTile& other) {
@@ -77,6 +79,8 @@ GridTile& GridTile::operator=(const GridTile& other) {
   canReceive = other.canReceive;
   canOutput = other.canOutput;
   inputStates = other.inputStates;
+  cachedSimObject = nullptr;
+  dirtyThisTick = false;
   return *this;
 }
 

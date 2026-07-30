@@ -67,6 +67,10 @@ class TileChunk : public sf::Drawable, public sf::Transformable {
   mutable std::vector<std::uint16_t> dirtySlots;
   mutable std::bitset<CHUNK_TILE_COUNT> slotIsDirty;
 
+  /// A marker of the highest tile slot written to. This is used so 
+  /// that the vertex buffer draw can be partial. 
+  std::size_t highWaterMark = 0;
+
   /// Local tile coordinates within the chunk, correct for negative world
   /// positions.
   [[nodiscard]] static sf::Vector2i LocalCoords(

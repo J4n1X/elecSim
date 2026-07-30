@@ -9,6 +9,8 @@
 
 namespace ElecSim {
 
+class SimulationObject;  // Defined in TileGroupManager.h
+
   enum class TileType : int {
     Wire,
     Junction,
@@ -37,6 +39,13 @@ class GridTile {
   TileSideStates canReceive;
   TileSideStates canOutput;
   TileSideStates inputStates;
+
+  // Non-owning; TileGroupManager rebuilds these on every preprocess pass and
+  // owns the actual objects.
+  SimulationObject* cachedSimObject = nullptr;
+  // Dedup marker for Grid::Simulate()'s affected-tiles pass, cleared by Grid
+  // once the tick's done with it.
+  bool dirtyThisTick = false;
 
  public:
   GridTile(vi2d pos = vi2d(0, 0), Direction facing = Direction::Top,
@@ -91,6 +100,12 @@ class GridTile {
   bool GetDefaultActivation() const { return defaultActivation; }
   const vi2d GetPos() const { return pos; }
   const Direction& GetFacing() const { return facing; }
+
+  SimulationObject* GetCachedSimObject() const noexcept { return cachedSimObject; }
+  void SetCachedSimObject(SimulationObject* simObj) noexcept { cachedSimObject = simObj; }
+
+  bool GetDirtyThisTick() const noexcept { return dirtyThisTick; }
+  void SetDirtyThisTick(bool dirty) noexcept { dirtyThisTick = dirty; }
   std::string GetTileInformation() const;
 
   bool CanReceiveFrom(Direction dir) const { return canReceive[dir]; }

@@ -52,7 +52,7 @@ class Grid {
 
  public:
   struct SimulationResult {
-    ankerl::unordered_dense::segmented_set<TileStateChange, TileStateChangeHash> affectedTiles;
+    std::vector<TileStateChange> affectedTiles;
     int updatesProcessed;
   };
 

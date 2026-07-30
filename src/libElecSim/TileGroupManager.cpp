@@ -262,8 +262,9 @@ void TileGroupManager::CreateSimulationObject(
     std::vector<SimulationGroup::OutputTile> outputTiles) {
   if (pathTiles.empty() && outputTiles.empty()) {
     // Single tile with no deterministic path - create a SimulationTile
-    simulationObjects.emplace(inputTile->GetPos(),
-                              std::make_unique<SimulationTile>(inputTile));
+    auto [it, inserted] = simulationObjects.emplace(
+        inputTile->GetPos(), std::make_unique<SimulationTile>(inputTile));
+    if (inserted) inputTile->SetCachedSimObject(it->second.get());
     DebugPrint("Tile at {} has no deterministic path, creating single tile simulation.",
                inputTile->GetPos());
   } else {
@@ -271,10 +272,12 @@ void TileGroupManager::CreateSimulationObject(
     auto simGroup = std::make_unique<SimulationGroup>(
         inputTile, std::move(pathTiles), std::move(outputTiles));
 
-    auto [_, inserted] =
+    auto [it, inserted] =
         simulationObjects.emplace(inputTile->GetPos(), std::move(simGroup));
 
-    if (!inserted) {
+    if (inserted) {
+      inputTile->SetCachedSimObject(it->second.get());
+    } else {
 #ifdef DEBUG
       std::cerr << "Warning: Tile Group starting at (" << inputTile->GetPos().x
                 << ", " << inputTile->GetPos().y
@@ -293,7 +296,9 @@ void TileGroupManager::CoverRemainingTiles(
     if (!globalVisited.contains(tile) && !simulationObjects.contains(pos)) {
       // This tile wasn't processed in any group - create a single tile
       // simulation object
-      simulationObjects.emplace(pos, std::make_unique<SimulationTile>(tile));
+      auto [it, inserted] =
+          simulationObjects.emplace(pos, std::make_unique<SimulationTile>(tile));
+      tile->SetCachedSimObject(it->second.get());
       globalVisited.insert(tile);
     }
   }
@@ -301,6 +306,13 @@ void TileGroupManager::CoverRemainingTiles(
 
 // Main preprocessing function - now much cleaner and easier to follow
 void TileGroupManager::PreprocessTiles(const TileMap& tiles) {
+  // Clear() (called by whoever triggered this) freed the old SimulationObjects,
+  // so every tile's cached pointer is dangling until we hand out fresh ones below.
+  // So, just to be sure, let's zero them out. 
+  for (const auto& [pos, tile] : tiles) {
+    tile->SetCachedSimObject(nullptr);
+  }
+
   // Find all potential start tiles
   auto initialStartTiles = FindInitialStartTiles(tiles);
   ankerl::unordered_dense::segmented_set<std::shared_ptr<GridTile>>

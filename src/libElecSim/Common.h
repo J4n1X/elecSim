@@ -48,10 +48,6 @@ struct TileStateChange {
     return pos == other.pos && newState == other.newState;
   }
 };
-struct TileStateChangeHash {
-  using is_avalanching = void;
-  std::size_t operator()(const TileStateChange& change) const;
-};
 
 // Forward declaration to avoid circular includes
 class GridTile;

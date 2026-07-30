@@ -20,17 +20,16 @@ struct TileGroupProcessResult {
   std::vector<TileStateChange> affectedTiles;  // Tiles that were affected by the signal
 };
 
-class TileGroupManager {
+class SimulationObject {
  public:
-  class SimulationObject {
-   public:
-    virtual ~SimulationObject() = default;
-    // This function will be called when the simulation is running.
-    // It should return a vector of new signal events to be processed.
-    virtual TileGroupProcessResult ProcessSignal(const SignalEvent& signal) = 0;
-    virtual std::string GetObjectInfo() const = 0;
-  };
+  virtual ~SimulationObject() = default;
+  // This function will be called when the simulation is running.
+  // It should return a vector of new signal events to be processed.
+  virtual TileGroupProcessResult ProcessSignal(const SignalEvent& signal) = 0;
+  virtual std::string GetObjectInfo() const = 0;
+};
 
+class TileGroupManager {
  private:
   class SimulationTile : public SimulationObject {
    public:
@@ -139,14 +138,6 @@ class TileGroupManager {
   void Clear() { simulationObjects.clear(); }
   void PreprocessTiles(const TileMap& tiles);  // This will preprocess all tiles
                                                // and create simulation objects.
-  std::optional<std::shared_ptr<SimulationObject>> const GetSimulationObject(
-      const vi2d& pos) {
-    auto it = simulationObjects.find(pos);
-    if (it != simulationObjects.end()) {
-      return it->second;
-    }
-    return std::nullopt;  // No simulation object found for this position
-  }
   ~TileGroupManager() = default;
 };
 
