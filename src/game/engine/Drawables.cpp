@@ -119,7 +119,6 @@ sf::IntRect TileTextureAtlas::GetDefaultTileRect(ElecSim::TileType type,
 }
 
 void TileTextureAtlas::UpdateTextureAtlas() {
-  renderTarget.clear();
   // We can downcast without worry here. If we really store 4 billion meshes,
   // the computer's probably on fire anyway.
   uint32_t atlasLength = tilePixelSize * static_cast<uint32_t>(meshes.size());
@@ -128,6 +127,8 @@ void TileTextureAtlas::UpdateTextureAtlas() {
   if (!renderTarget.resize(sf::Vector2u(atlasLength, tilePixelSize * 2))) {
     throw std::runtime_error("Failed to resize render target for tile atlas.");
   }
+  renderTarget.clear();
+
   const float tileSizeF = static_cast<float>(tilePixelSize);
   const float requiredScale = tileSizeF / TileDrawable::DEFAULT_SIZE;
   const sf::Vector2f scaleVector{requiredScale, requiredScale};

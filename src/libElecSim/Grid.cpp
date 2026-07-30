@@ -34,21 +34,6 @@ void Grid::ProcessUpdateEvent(const UpdateEvent& updateEvent) {
     // Create signal edge
     SignalEdge edge{signal.sourcePos, targetPos};
 
-    // Check if this edge has been traversed in this tick
-    if (false && currentTickVisitedEdges.contains(edge)) {
-      // This would create a cycle - throw an exception
-      // If we didn't, and just skipped, it would result in false behavior.
-      throw std::runtime_error(std::format(
-          "Cycle detected in signal processing: edge from {} to "
-          "{}. "
-          "Offending signal side: {}; Total processed edges this tick: {}",
-          edge.sourcePos, edge.targetPos,
-          DirectionToString(signal.fromDirection),
-          currentTickVisitedEdges.size()));
-    }
-
-    // Record this edge as visited
-
     auto targetTileIt = tiles.find(targetPos);
     if (targetTileIt == tiles.end()) continue;
 
@@ -71,7 +56,7 @@ Grid::SimulationResult Grid::Simulate() {
 
   SimulationResult simResult;
   int updatesProcessed = 0;
-  currentTick++;  // Increment the tick counter
+  currentTick++;
 
   // Clear edge tracking for this simulation tick
   currentTickVisitedEdges.clear();
@@ -85,7 +70,7 @@ Grid::SimulationResult Grid::Simulate() {
 
     auto tile = std::dynamic_pointer_cast<EmitterGridTile>(it->lock());
     if (tile && tile->ShouldEmit(currentTick)) {
-      tile->SetActivation(!tile->GetActivation());  // Toggle emitter state
+      tile->SetActivation(!tile->GetActivation());
       // Now using the simpler SignalEvent constructor
       QueueUpdate(tile, SignalEvent(tile->GetPos(), tile->GetFacing(),
                                     tile->GetActivation()));
@@ -161,7 +146,7 @@ Grid::SimulationResult Grid::Simulate() {
 
 #else
     ProcessUpdateEvent(update);
-    affectedTiles.insert(
+    simResult.affectedTiles.insert(
           TileStateChange{update.tile->GetPos(), update.tile->GetActivation()});
 #endif
     if (enableEdgeCheck) {
@@ -176,9 +161,7 @@ Grid::SimulationResult Grid::Simulate() {
 }
 
 void Grid::ResetSimulation() {
-  // Reset tick counter
   currentTick = 0;
-  // Clear the update queue
   if (!updateQueue.empty()) {
     updateQueue = std::queue<UpdateEvent>();
   }

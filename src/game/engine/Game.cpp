@@ -150,7 +150,7 @@ void Game::AttemptQuit() {
       window.close();
     });
     
-    unsavedChangesDialog.SetOnCancelCallback([this]() noexcept {
+    unsavedChangesDialog.SetOnCancelCallback([]() noexcept {
       // Do nothing - just close the dialog
     });
   } else {
@@ -385,7 +385,7 @@ void Game::HandleInput() {
         ShowLoadDialog();
       });
       
-      unsavedChangesDialog.SetOnCancelCallback([this]() noexcept {
+      unsavedChangesDialog.SetOnCancelCallback([]() noexcept {
         // Do nothing - just close the dialog
       });
     } else {
@@ -665,6 +665,12 @@ void Game::Update() {
 void Game::Render() {
   window.setView(gridView);
   window.clear(sf::Color::Blue);
+
+  // ImGui::SFML::Render() at the end of the previous frame issues raw OpenGL
+  // calls that bypass SFML's render-state cache. Without this, SFML believes
+  // states (texture bindings, blend func, etc.) are still what it last set
+  // them to, and skips reapplying them here, corrupting our textured draws.
+  window.resetGLStates();
 
   chunkManager.RenderVisibleChunks(window, sf::RenderStates::Default, gridView, &textureAtlas.GetTexture());
 

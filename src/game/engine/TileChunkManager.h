@@ -23,7 +23,8 @@ namespace Engine {
 class TileChunkManager {
  public:
   TileChunkManager() = default;
-  ~TileChunkManager() = default;
+  // No default constructor to retain implicit move constructor and assignment
+  // Needed because we store unique pointers in TileChunks.
   
   /**
    * @brief Sets a tile in the correct chunk with explicit texture rect.

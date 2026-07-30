@@ -24,7 +24,7 @@ TileGroupProcessResult TileGroupManager::SimulationGroup::ProcessSignal(
 
   // Cycle the activation state of all inbetween tiles
   for (const auto& tile : inbetweenTiles) {
-    tile->SetActivation(!tile->GetActivation());
+    tile->SetActivation(inputTile->GetActivation());
     affectedTiles.push_back(
         TileStateChange{tile->GetPos(), tile->GetActivation()});
   }

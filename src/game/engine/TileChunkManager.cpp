@@ -97,7 +97,6 @@ void TileChunkManager::RenderVisibleChunks(sf::RenderTarget& target, sf::RenderS
                                           const sf::View& view, [[maybe_unused]] const sf::Texture* texture) const {
   // Don't override states.texture here since TileChunk manages its own texture
   // The texture parameter is kept for future use or if chunks don't have texture set
-  
   for (const auto& [chunkPos, chunk] : chunks) {
     const sf::Vector2f chunkWorldPos(static_cast<float>(chunkPos.x), static_cast<float>(chunkPos.y));
     
