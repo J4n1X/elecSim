@@ -106,7 +106,10 @@ Grid::SimulationResult Grid::Simulate() {
     }
 
     const auto& update = updateQueue.front();
-    if (!update.tile) continue;
+    if (!update.tile) {
+      updateQueue.pop();
+      continue;
+    }
     if (enableEdgeCheck) {
       if (currentTickVisitedEdges.contains(
               SignalEdge{update.tile->GetPos(), update.event.sourcePos})) {
